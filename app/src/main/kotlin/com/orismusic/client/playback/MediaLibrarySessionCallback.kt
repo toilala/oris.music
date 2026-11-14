@@ -10,6 +10,12 @@ import com.google.common.util.concurrent.ListenableFuture
 import timber.log.Timber
 
 class MediaLibrarySessionCallback : MediaLibrarySessionCallback() {
+    var service: OrisMediaService? = null
+    var toggleLike: ((String, Boolean) -> Unit)? = null
+    var toggleStartRadio: ((String) -> Unit)? = null
+    var toggleLibrary: ((String) -> Unit)? = null
+    var onAutomotiveConnected: (() -> Unit)? = null
+
     override fun onAddMediaItems(
         session: MediaLibrarySession,
         controller: MediaSession.ControllerInfo,
