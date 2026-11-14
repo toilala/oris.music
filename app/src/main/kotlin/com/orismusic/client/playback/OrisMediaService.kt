@@ -514,7 +514,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         setupAudioFocus()
 
         mediaLibrarySessionCallback.apply {
-            // service = this@OrisMediaService
+            service = this@OrisMediaService
         }
         mediaSession =
             MediaLibrarySession.Builder(this, player, mediaLibrarySessionCallback)
