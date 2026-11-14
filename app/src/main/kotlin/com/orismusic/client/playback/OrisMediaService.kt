@@ -449,7 +449,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             } == true
 
             if (hasBluetooth) {
-                if (dataStore.get(ResumeOnBluetoothConnectKey, false)) {
+                if (dataStoreGet(ResumeOnBluetoothConnectKey, false)) {
                     if (player.playbackState == Player.STATE_READY && !player.isPlaying) {
                         player.play()
                     }

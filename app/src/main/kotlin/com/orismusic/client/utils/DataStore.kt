@@ -144,3 +144,13 @@ inline fun <reified T : Enum<T>> rememberEnumPreference(
 
 inline fun <reified T : Enum<T>> String?.toEnum(defaultValue: T): T =
     this?.let { T.valueOf(it) } ?: defaultValue
+
+// Extension functions for Context to easily access DataStore
+fun Context.dataStoreGet(key: androidx.datastore.preferences.core.Preferences.Key<*>): Any? =
+    dataStore[key]
+
+inline fun <reified T> Context.dataStoreGet(key: androidx.datastore.preferences.core.Preferences.Key<T>): T? =
+    dataStore[key]
+
+inline fun <reified T> Context.dataStoreGet(key: androidx.datastore.preferences.core.Preferences.Key<T>, defaultValue: T): T =
+    dataStore[key] ?: defaultValue
