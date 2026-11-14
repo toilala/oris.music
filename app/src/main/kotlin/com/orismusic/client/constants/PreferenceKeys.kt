@@ -97,6 +97,8 @@ fun transitionModeOf(prefs: Preferences): CrossmixMode =
     prefs[CrossmixModeKey]?.let { saved -> runCatching { CrossmixMode.valueOf(saved) }.getOrNull() }
         ?: if (prefs[CrossfadeEnabledKey] == true) CrossmixMode.MANUAL_CROSSFADE else DefaultTransitionMode
 
+val CrossmixAlwaysMixKey = booleanPreferencesKey("crossmixAlwaysMix")
+
 // Volume
 val PlayerVolumeKey = floatPreferencesKey("playerVolume")
 
