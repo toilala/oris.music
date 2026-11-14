@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Binder
 import android.os.Bundle
 import android.os.IBinder
 import androidx.lifecycle.Lifecycle
@@ -49,7 +50,7 @@ class PlayerConnection(
             service.getPlayer()
         } catch (e: Exception) {
             Timber.e(e, "Fatal: player property accessed but not initialized")
-            throw IllegalStateException("MusicService.player not initialized", e)
+            throw IllegalStateException("OrisMediaService.player not initialized", e)
         }
     }
 
