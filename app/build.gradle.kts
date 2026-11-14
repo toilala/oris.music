@@ -152,10 +152,12 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-svg:3.3.0")
     implementation("androidx.datastore:datastore-preferences:1.1.4")
 
-    // Media3 / ExoPlayer - core only
+    // Media3 / ExoPlayer
     implementation("androidx.media3:media3-exoplayer:1.7.1")
     implementation("androidx.media3:media3-session:1.7.1")
     implementation("androidx.media3:media3-ui:1.7.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.7.1")
+    implementation("androidx.media3:media3-datasource-cronet:1.7.1")
 
     // Hilt
     implementation("com.google.dagger:hilt-android:2.60.1")
@@ -164,9 +166,24 @@ dependencies {
     // Kotlinx Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.10.2")
+
+    // Guava for ListenableFuture
+    implementation("com.google.guava:guava:33.3.1-android")
+    implementation("com.google.guava:listenablefuture:1.0")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
+
+    // InnerTube for YouTube API
+    implementation("com.music.innertube:innertube:1.0.0")
+
+    // Ktor for network requests
+    implementation("io.ktor:ktor-client-core:3.0.0")
+    implementation("io.ktor:ktor-client-okhttp:3.0.0")
+    implementation("io.ktor:ktor-client-content-negotiation:3.0.0")
+    implementation("io.ktor:ktor-serialization-json:3.0.0")
+    implementation("io.ktor:ktor-client-cio:3.0.0")
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
