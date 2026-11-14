@@ -35,7 +35,7 @@ enum class AudioQuality {
 
     companion object {
         fun fromString(value: String?): AudioQuality {
-            return value?.let { AudioQuality.entries.find { it.name == it } } ?: AUTO
+            return value?.let { AudioQuality.entries.find { it.name == value } } ?: AUTO
         }
     }
 }

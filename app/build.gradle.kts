@@ -177,6 +177,8 @@ dependencies {
 
     // InnerTube for YouTube API (local module)
     implementation(project(":innertube"))
+    // InnerTubeX for stream extraction with PoToken/cipher support
+    implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
 
     // Ktor for network requests
     implementation("io.ktor:ktor-client-core:2.3.12")
