@@ -80,7 +80,7 @@ fun <T> DataStore<Preferences>.get(
 ): T = PreferencesCache.current(this)[key] ?: defaultValue
 
 inline fun <reified T : Enum<T>> Preferences.Key<T>.getDefault(): T =
-    this.getDefaultValue()
+    T.values().firstOrNull { it.name == this.name } ?: T.values().first()
 
 fun <T> preference(
     context: Context,
@@ -143,7 +143,7 @@ inline fun <reified T : Enum<T>> rememberEnumPreference(
 }
 
 inline fun <reified T : Enum<T>> String?.toEnum(defaultValue: T): T =
-    this?.let { T.valueOf(it) } ?: defaultValue
+    this?.let { T.values().firstOrNull { it.name == it } } ?: defaultValue
 
 // Extension functions for Context to easily access DataStore
 fun Context.dataStoreGet(key: androidx.datastore.preferences.core.Preferences.Key<*>): Any? =

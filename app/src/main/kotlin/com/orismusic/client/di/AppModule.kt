@@ -2,9 +2,15 @@ package com.orismusic.client.di
 
 import android.content.Context
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.database.DatabaseProvider
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +23,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpDataSource(context: Context): DefaultHttpDataSource.Factory {
+    fun provideHttpDataSource(@ApplicationContext context: Context): DefaultHttpDataSource.Factory {
         return DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
             .setAllowCrossProtocolRedirects(true)
@@ -30,6 +36,10 @@ object AppModule {
     fun provideApplicationScope(): CoroutineScope {
         return CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
+
+    @Provides
+    @Singleton
+    fun provideDatabaseProvider(@ApplicationContext context: Context): DatabaseProvider = StandaloneDatabaseProvider(context)
 }
 
 @Module
@@ -38,22 +48,27 @@ object PlaybackModule {
 
     @Provides
     @Singleton
-    fun providePlayerCache(): androidx.media3.datasource.cache.SimpleCache {
-        // TODO: Implement proper cache directory
-        return androidx.media3.datasource.cache.SimpleCache(
-            java.io.File(android.os.Environment.getExternalStorageDirectory(), "OrisMusic/player_cache"),
-            androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024), // 100MB
-            androidx.media3.datasource.cache.CacheDataSource.DEFAULT_CACHE_DATA_SOURCE_FACTORY
+    fun providePlayerCache(
+        @ApplicationContext context: Context,
+        databaseProvider: DatabaseProvider,
+    ): SimpleCache {
+        return SimpleCache(
+            context.filesDir.resolve("exoplayer"),
+            LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024), // 100MB
+            databaseProvider,
         )
     }
 
     @Provides
     @Singleton
-    fun provideDownloadCache(): androidx.media3.datasource.cache.SimpleCache {
-        return androidx.media3.datasource.cache.SimpleCache(
-            java.io.File(android.os.Environment.getExternalStorageDirectory(), "OrisMusic/download_cache"),
-            androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(500 * 1024 * 1024), // 500MB
-            androidx.media3.datasource.cache.CacheDataSource.DEFAULT_CACHE_DATA_SOURCE_FACTORY
+    fun provideDownloadCache(
+        @ApplicationContext context: Context,
+        databaseProvider: DatabaseProvider,
+    ): SimpleCache {
+        return SimpleCache(
+            context.filesDir.resolve("download"),
+            LeastRecentlyUsedCacheEvictor(500 * 1024 * 1024), // 500MB
+            databaseProvider,
         )
     }
 }
