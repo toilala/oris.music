@@ -1,0 +1,10 @@
+# This file is used by Gradle to locate the Android SDK.
+# Copy this file to local.properties and set the sdk.dir to your Android SDK path.
+# On Windows, use double backslashes or forward slashes.
+# Example: sdk.dir=C:\\Users\\username\\AppData\\Local\\Android\\Sdk
+
+sdk.dir=
+
+# Uncomment and add your GitHub OAuth credentials if needed
+# GH_CLIENT_ID=
+# GH_CLIENT_SECRET=

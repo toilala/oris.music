@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <issue id="Instantiatable" severity="ignore" />
+    <issue id="MissingTranslation" severity="ignore" />
+    <issue id="ExtraTranslation" severity="ignore" />
+    <issue id="HardcodedText" severity="ignore" />
+    <issue id="PrivateResource" severity="ignore" />
+    <issue id="InlinedApi" severity="ignore" />
+    <issue id="UnusedResources" severity="warning" />
+    <issue id="RedundantResources" severity="warning" />
+    <issue id="ObsoleteLayoutParam" severity="ignore" />
+    <issue id="UnusedIds" severity="ignore" />
+    <issue id="IconMissingDensityFolder" severity="ignore" />
+    <issue id="IconDensities" severity="ignore" />
+    <issue id="WrongManifestParent" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="GradleCompatible" severity="ignore" />
+    <issue id="OldTargetApi" severity="ignore" />
+    <issue id="MinSdk" severity="ignore" />
+    <issue id="Deprecated" severity="warning" />
+    <issue id="NewApi" severity="warning" />
+    <issue id="KotlinNullness" severity="warning" />
+    <issue id="UnusedProperty" severity="ignore" />
+</lint>

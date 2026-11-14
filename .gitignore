@@ -1,0 +1,80 @@
+# Gradle
+.gradle/
+build/
+*/build/
+*/build.gradle.kts.d/
+
+# Local configuration
+local.properties
+*.keystore
+keystore/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.misc/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Android
+*.apk
+*.ap_
+*.aab
+*.apks
+
+# Kotlin
+*.kt.metadata
+
+# Compose Compiler Metrics
+compose_metrics/
+
+# Test reports
+*.ec
+coverage/
+
+# Mac
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Firebase
+google-services.json
+
+# Hilt generated
+app/build/generated/hilt/
+
+# KSP generated
+app/build/generated/ksp/
+
+# Room generated
+app/build/generated/schemas/
+
+# Proguard
+proguard/
+
+# Screenshots
+screenshots/
+
+# Reference apps (not part of this project)
+echo/
+mochy/
+
+# Profiler dumps
+*.hprof
