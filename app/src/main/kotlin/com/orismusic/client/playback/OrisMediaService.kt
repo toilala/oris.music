@@ -97,9 +97,8 @@ import com.orismusic.client.constants.transitionModeOf
 import com.orismusic.client.constants.CrossmixAlwaysMixKey
 import com.orismusic.client.utils.YTPlayerUtils
 import com.orismusic.client.utils.YTPlayerUtils.PlaybackData
-import com.orismusic.client.utils.dataStore
-import com.orismusic.client.utils.get
-import com.orismusic.client.utils.reportException
+import com.orismusic.client.utils.ReportException.reportException
+import com.orismusic.client.utils.dataStoreGet
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
