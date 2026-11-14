@@ -20,6 +20,9 @@ android {
 
 kotlin {
     jvmToolchain(17)
+    compilerOptions {
+        freeCompilerArgs.add("-Xincremental-compilation=false")
+    }
 }
 
 dependencies {
