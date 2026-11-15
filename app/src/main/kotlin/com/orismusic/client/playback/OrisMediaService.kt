@@ -239,7 +239,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var initialQueueLoading = false
     private var runwayJob: Job? = null
 
-    private var infiniteSource: Any? = null // Queue placeholder
+    private var infiniteSource: queues.Queue? = null
     private val usedInfiniteSeeds = java.util.HashSet<String>()
     private val failedInfiniteSeeds = java.util.HashSet<String>()
 
@@ -250,7 +250,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var autoplayPreviewRetryAt = 0L
 
-    val currentMediaMetadata = MutableStateFlow<Any?>(null) // MediaMetadata placeholder
+    val currentMediaMetadata = MutableStateFlow<androidx.media3.common.MediaMetadata?>(null)
     private val currentSong =
         currentMediaMetadata
             .flatMapLatest { mediaMetadata ->
@@ -283,7 +283,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         preferredDeviceId = deviceId
     }
 
-    lateinit var sleepTimer: Any // SleepTimer placeholder
+    lateinit var sleepTimer: SleepTimer
 
     @Inject
     @PlayerCache
@@ -298,10 +298,10 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private val failedSourcesAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private val moduleStreamHeaders = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
     private val resolvedSourceIds = java.util.concurrent.ConcurrentHashMap<String, String>()
-    private val forcedRoutes = java.util.concurrent.ConcurrentHashMap<String, Any>() // ForcedRoute placeholder
-    private val _playingFrom = MutableStateFlow<Map<String, Any>>(emptyMap())
+    private val forcedRoutes = java.util.concurrent.ConcurrentHashMap<String, ForcedRoute>()
+    private val _playingFrom = MutableStateFlow<Map<String, CustomStreamResult>>(emptyMap())
     val playingFrom = _playingFrom.asStateFlow()
-    val streamFacts = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val streamFacts = MutableStateFlow<Map<String, CustomStreamResult>>(emptyMap())
     private data class DecoderNotice(val text: String, val from: String?)
     private val decoderNotices = java.util.concurrent.ConcurrentHashMap<String, DecoderNotice>()
     private var lastAnnouncedSourceMediaId: String? = null
@@ -318,7 +318,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var prefetchJob: Job? = null
 
     @Volatile private var studioForVideos = false
-    private var fadingLoudnessEnhancer: Any? = null // LoudnessEnhancer placeholder
+    private var fadingLoudnessEnhancer: LoudnessEnhancer? = null
     private var loudnessEnhancerSessionId = C.AUDIO_SESSION_ID_UNSET
     private var promotingCrossmix = false
 
@@ -383,7 +383,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private lateinit var mediaSession: MediaLibrarySession
 
-    private var carLyrics: Any? = null // CarLyrics placeholder
+    private var carLyrics: CarLyrics? = null
 
     val platformSessionToken: android.media.session.MediaSession.Token
         get() = mediaSession.platformToken
@@ -394,19 +394,19 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private val _playerFlow = MutableStateFlow<ExoPlayer?>(null)
     val playerFlow = _playerFlow.asStateFlow()
 
-    private val playerSilenceProcessors = java.util.HashMap<Player, Any>() // SilenceDetectorAudioProcessor
-    private val playerReplayGain = java.util.HashMap<Player, Any>() // ReplayGainTags
-    private val playerEqProcessors = java.util.HashMap<Player, Any>() // CustomEqualizerAudioProcessor
-    private val playerCrossmixProcessors = java.util.HashMap<Player, Any>() // CrossmixTransitionAudioProcessor
-    private val playerSpectra = java.util.WeakHashMap<Player, Any>() // AudioSpectrum
+    private val playerSilenceProcessors = java.util.HashMap<Player, SilenceDetectorAudioProcessor>()
+    private val playerReplayGain = java.util.HashMap<Player, ReplayGainTags>()
+    private val playerEqProcessors = java.util.HashMap<Player, CustomEqualizerAudioProcessor>()
+    private val playerCrossmixProcessors = java.util.HashMap<Player, CrossmixTransitionAudioProcessor>()
+    private val playerSpectra = java.util.WeakHashMap<Player, AudioSpectrum>()
 
-    fun spectrumOf(player: Player): Any? = playerSpectra[player]
+    fun spectrumOf(player: Player): AudioSpectrum? = playerSpectra[player]
 
     private val instantSilenceSkipEnabled = MutableStateFlow(false)
 
     private var isAudioEffectSessionOpened = false
-    private var loudnessEnhancer: Any? = null // LoudnessEnhancer placeholder
-    private var hapticAudioProcessor: Any? = null // HapticAudioProcessor placeholder
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var hapticAudioProcessor: HapticAudioProcessor? = null
 
     private val scrobbleTimer = ScrobbleTimer({ scope }, scrobbler)
 
@@ -438,7 +438,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private val recentlyFailedSongs = java.util.HashSet<String>()
     private var failedSongsClearJob: Job? = null
 
-    var castConnectionHandler: Any? = null // CastConnectionHandler placeholder
+    var castConnectionHandler: CastConnectionHandler? = null
         private set
 
     private val audioDeviceCallback = object : AudioManager.AudioDeviceCallback() {
