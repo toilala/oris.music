@@ -198,7 +198,11 @@ private fun playDemoTrack(connection: PlayerConnection) {
         )
         .build()
 
-    connection.setMediaItem(mediaItem)
+    val queue = com.orismusic.client.playback.queues.ListQueue(
+        title = "Demo",
+        mediaItems = listOf(mediaItem)
+    )
+    connection.playQueue(queue)
 }
 
 @Composable

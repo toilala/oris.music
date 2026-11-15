@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.media3.common.Player
 
 // Playback preferences
 val AudioQualityKey = stringPreferencesKey("audioQuality")
@@ -209,3 +210,34 @@ val LastFMUseSendLikes = booleanPreferencesKey("lastfmUseSendLikes")
 
 // Automix crossfade
 val AutomixCrossfadeKey = booleanPreferencesKey("automixCrossfade")
+
+// Crossmix additional settings
+val CrossmixLengthKey = stringPreferencesKey("crossmixLength")
+val CrossmixTempoMatchKey = stringPreferencesKey("crossmixTempoMatch")
+val CrossmixStyleKey = stringPreferencesKey("crossmixStyle")
+val CrossmixStuntsKey = booleanPreferencesKey("crossmixStunts")
+val CrossmixStartLatencyKey = floatPreferencesKey("crossmixStartLatencyMs")
+
+enum class CrossmixLength(val scale: Float) {
+    SHORT(0.6f),
+    MEDIUM(1f),
+    LONG(1.5f),
+}
+
+enum class CrossmixTempoMatch(val maxSpeedUp: Float) {
+    OFF(0.006f),
+    GENTLE(0.04f),
+    FULL(0.10f),
+}
+
+const val CrossmixStyleAuto = "AUTO"
+
+// Default values
+const val DEFAULT_CROSSFADE_DURATION = 5f
+const val DEFAULT_PLAYER_VOLUME = 1f
+const val DEFAULT_REPEAT_MODE = Player.REPEAT_MODE_OFF
+const val DEFAULT_SCRUBBLE_DELAY_PERCENT = 0.5f
+const val DEFAULT_SCRUBBLE_DELAY_SECONDS = 30
+const val DEFAULT_SCRUBBLE_MIN_SONG_DURATION = 30
+const val DEFAULT_AUDIO_QUALITY = "AUTO"
+const val DEFAULT_IP_VERSION = "AUTO"

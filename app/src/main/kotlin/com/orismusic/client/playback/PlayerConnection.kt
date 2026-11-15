@@ -13,6 +13,7 @@ import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import com.orismusic.client.playback.OrisMediaService.MusicBinder
+import com.orismusic.client.playback.queues.Queue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -32,6 +34,7 @@ import timber.log.Timber
 class PlayerConnection(
     context: Context,
     binder: MusicBinder,
+    val database: com.orismusic.client.di.MusicDatabase,
     parentScope: CoroutineScope,
 ) : Player.Listener {
 
@@ -64,7 +67,7 @@ class PlayerConnection(
     val player: ExoPlayer
         get() = getPlayerSafe()
 
-    private val isPlayerInitialized = MutableStateFlow(service.isPlayerReady.value)
+    val isPlayerInitialized = MutableStateFlow(service.isPlayerReady.value)
 
     val playbackState: MutableStateFlow<Int>
     private val playWhenReady: MutableStateFlow<Boolean>
@@ -112,7 +115,37 @@ class PlayerConnection(
     )
 
     val mediaMetadata = MutableStateFlow<MediaMetadata?>(player.currentMetadata)
+    val currentSong = mediaMetadata.flatMapLatest { database.song(it?.id) }
+    val currentLyrics = mediaMetadata.flatMapLatest { mediaMetadata -> database.lyrics(mediaMetadata?.id) }
+    val currentFormat = mediaMetadata.flatMapLatest { mediaMetadata -> database.format(mediaMetadata?.id) }
 
+    val duration: StateFlow<Long> =
+        combine(mediaMetadata, playbackState) { meta, _ ->
+            val playerDur = try {
+                player.duration
+            } catch (_: Exception) {
+                androidx.media3.common.C.TIME_UNSET
+            }
+            meta?.duration?.times(1_000L) ?: playerDur
+        }.stateIn(scope, SharingStarted.Lazily, 0L)
+
+    val currentPosition: StateFlow<Long> =
+        MutableStateFlow(0L).also { flow ->
+            scope.launch {
+                playerReadinessFlow.first()
+                while (true) {
+                    delay(500)
+                    if (playerReadinessFlow.value) {
+                        flow.value = player.currentPosition
+                    }
+                }
+            }
+        }
+
+    val currentMetadata: StateFlow<MediaMetadata?> = mediaMetadata
+
+    val queueTitle = MutableStateFlow<String?>(null)
+    val queueWindows = MutableStateFlow<List<Timeline.Window>>(emptyList())
     val currentMediaItemIndex = MutableStateFlow(-1)
     val currentWindowIndex = MutableStateFlow(-1)
 
@@ -151,6 +184,14 @@ class PlayerConnection(
                 }
             }
 
+            scope.launch {
+                service.currentMediaMetadata.collect { newMeta ->
+                    if (newMeta != null) {
+                        mediaMetadata.value = newMeta
+                    }
+                }
+            }
+
             if (attachedPlayer == null && service.isPlayerReady.value) {
                  updateAttachedPlayer(player)
             }
@@ -171,15 +212,17 @@ class PlayerConnection(
         playbackState.value = newPlayer.playbackState
         playWhenReady.value = newPlayer.playWhenReady
         mediaMetadata.value = newPlayer.currentMetadata
-        currentMediaItemIndex.value = newPlayer.currentMediaItemIndex
+        queueTitle.value = service.queueTitle
+        queueWindows.value = newPlayer.getQueueWindows()
         currentWindowIndex.value = newPlayer.getCurrentQueueIndex()
+        currentMediaItemIndex.value = newPlayer.currentMediaItemIndex
         shuffleModeEnabled.value = newPlayer.shuffleModeEnabled
         repeatMode.value = newPlayer.repeatMode
 
         Timber.tag(TAG).d("Attached to new player instance: $newPlayer")
     }
 
-    fun playQueue(queue: OrisMediaService.Queue) {
+    fun playQueue(queue: Queue) {
         if (!playerReadinessFlow.value) {
             Timber.tag(TAG).w("playQueue called before player ready; delegating to service")
         }

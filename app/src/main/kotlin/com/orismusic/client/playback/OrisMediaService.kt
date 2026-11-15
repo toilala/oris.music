@@ -77,6 +77,8 @@ import com.orismusic.client.constants.CrossmixStyleAuto
 import com.orismusic.client.constants.CrossmixStyleKey
 import com.orismusic.client.constants.CrossmixTempoMatch
 import com.orismusic.client.constants.CrossmixTempoMatchKey
+import com.orismusic.client.constants.CrossmixLength
+import com.orismusic.client.constants.CrossmixTempoMatch
 import com.orismusic.client.di.CarLyrics
 import com.orismusic.client.di.CastConnectionHandler
 import com.orismusic.client.di.CustomStreamResult

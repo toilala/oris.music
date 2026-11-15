@@ -64,7 +64,15 @@ interface NetworkConnectivityObserver
 
 interface SleepTimer
 
-interface CastConnectionHandler
+interface CastConnectionHandler {
+    val isCasting: kotlinx.coroutines.flow.MutableStateFlow<Boolean>
+    val castIsPlaying: kotlinx.coroutines.flow.MutableStateFlow<Boolean>
+    fun play()
+    fun pause()
+    fun seekTo(position: Long)
+    fun skipToNext()
+    fun skipToPrevious()
+}
 
 interface ForcedRoute
 
@@ -151,7 +159,15 @@ object PlaceholderModule {
 
     @Provides
     @Singleton
-    fun provideCastConnectionHandler(): CastConnectionHandler = object : CastConnectionHandler {}
+    fun provideCastConnectionHandler(): CastConnectionHandler = object : CastConnectionHandler {
+        override val isCasting = kotlinx.coroutines.flow.MutableStateFlow(false)
+        override val castIsPlaying = kotlinx.coroutines.flow.MutableStateFlow(false)
+        override fun play() {}
+        override fun pause() {}
+        override fun seekTo(position: Long) {}
+        override fun skipToNext() {}
+        override fun skipToPrevious() {}
+    }
 }
 
 @Module

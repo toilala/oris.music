@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
+import com.orismusic.client.playback.queues.ListQueue
 import com.orismusic.client.ui.screens.HomeScreen
 import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -64,7 +65,7 @@ class MainActivity : ComponentActivity() {
 
     private fun connectTo(binder: OrisMediaService.MusicBinder) {
         val previous = playerConnection
-        playerConnection = PlayerConnection(this, binder, lifecycleScope).also { connection ->
+        playerConnection = PlayerConnection(this, binder, com.orismusic.client.di.MusicDatabase { }, lifecycleScope).also { connection ->
             lifecycleScope.launch {
                 connection.isPlayerInitialized.collect { ready ->
                     if (ready) {
@@ -130,6 +131,10 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
-        connection.setMediaItem(mediaItem)
+        val queue = ListQueue(
+            title = "Demo",
+            mediaItems = listOf(mediaItem)
+        )
+        connection.playQueue(queue)
     }
 }

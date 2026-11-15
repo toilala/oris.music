@@ -1,47 +1,32 @@
 package com.orismusic.client.playback.queues
 
 import androidx.media3.common.MediaItem
-import com.music.innertube.YouTube
-import com.music.innertube.models.WatchEndpoint
-import com.orismusic.client.extensions.toMediaItem
-import com.orismusic.client.models.MediaMetadata
+import androidx.media3.common.Player
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
 
 class YouTubeAlbumRadio(
     private var playlistId: String,
 ) : Queue {
-    override val preloadItem: MediaMetadata? = null
+    override val preloadItem: MediaItem? = null
 
-    private val endpoint: WatchEndpoint
-        get() = WatchEndpoint(playlistId = playlistId)
+    override val mediaItems: List<MediaItem> = emptyList()
+    override val shuffleModeEnabled = false
+    override val repeatMode = Player.REPEAT_MODE_OFF
+    override val title: String? = "Album Radio"
 
-    private var albumSongCount = 0
     private var continuation: String? = null
     private var firstTimeLoaded: Boolean = false
 
-    override suspend fun getInitialStatus(): Queue.Status =
-        withContext(IO) {
-            val albumSongs = YouTube.albumSongs(playlistId).getOrThrow()
-            albumSongCount = albumSongs.size
-            Queue.Status(
-                title = albumSongs.first().album?.name.orEmpty(),
-                items = albumSongs.map { it.toMediaItem() },
-                mediaItemIndex = 0
-            )
+    override fun getInitialStatus(): InitialStatus {
+        return withContext(IO) {
+            InitialStatus(emptyList())
         }
+    }
 
     override fun hasNextPage(): Boolean = !firstTimeLoaded || continuation != null
 
-    override suspend fun nextPage(): List<MediaItem> =
-        withContext(IO) {
-            val nextResult = YouTube.next(endpoint, continuation).getOrThrow()
-            continuation = nextResult.continuation
-            if (!firstTimeLoaded) {
-                firstTimeLoaded = true
-                nextResult.items.subList(albumSongCount, nextResult.items.size).map { it.toMediaItem() }
-            } else {
-                nextResult.items.map { it.toMediaItem() }
-            }
-        }
+    override suspend fun loadMore(): List<MediaItem> = withContext(IO) { emptyList() }
+
+    override fun refresh(): Queue = this
 }

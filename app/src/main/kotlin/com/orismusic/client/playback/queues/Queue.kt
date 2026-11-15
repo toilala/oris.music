@@ -34,14 +34,15 @@ data class ListQueue(
     override val shuffleModeEnabled = false
     override val repeatMode = Player.REPEAT_MODE_OFF
 
-    override suspend fun loadMore() = emptyList()
+    override suspend fun loadMore(): List<MediaItem> = emptyList()
 
-    override fun refresh() = this
+    override fun refresh(): Queue = this
 
     override fun getInitialStatus(): InitialStatus {
+        val safeIndex = if (mediaItems.isEmpty()) 0 else startIndex.coerceIn(0, mediaItems.lastIndex)
         return InitialStatus(
             items = mediaItems,
-            mediaItemIndex = startIndex.coerceIn(0, mediaItems.lastIndex),
+            mediaItemIndex = safeIndex,
             position = startPosition,
             title = title,
         )
@@ -52,23 +53,10 @@ object EmptyQueue : Queue {
     override val mediaItems = emptyList<MediaItem>()
     override val shuffleModeEnabled = false
     override val repeatMode = Player.REPEAT_MODE_OFF
-    override suspend fun loadMore() = emptyList()
-    override fun refresh() = this
-    override fun getInitialStatus() = InitialStatus(emptyList())
-    override fun hasNextPage() = false
-}
-
-// YouTube queue placeholder
-data class YouTubeQueue(
-    val endpoint: Any, // WatchEndpoint placeholder
-) : Queue {
-    override val mediaItems = emptyList<MediaItem>()
-    override val shuffleModeEnabled = false
-    override val repeatMode = Player.REPEAT_MODE_OFF
-    override suspend fun loadMore() = emptyList()
-    override fun refresh() = this
-    override fun getInitialStatus() = InitialStatus(emptyList())
-    override fun hasNextPage() = true
+    override suspend fun loadMore(): List<MediaItem> = emptyList()
+    override fun refresh(): Queue = this
+    override fun getInitialStatus(): InitialStatus = InitialStatus(emptyList())
+    override fun hasNextPage(): Boolean = false
 }
 
 // Extension functions for filtering
