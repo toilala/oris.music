@@ -1,5 +1,8 @@
+// PoTokenGenerator.kt
+
 package com.orismusic.client.utils.potoken
 
+import android.webkit.CookieManager
 import com.orismusic.client.utils.cipher.CipherDeobfuscator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -21,6 +24,7 @@ class PoTokenGenerator {
         const val MINT_COOLDOWN_MS = 5 * 60 * 1000L
     }
 
+    private val webViewSupported by lazy { runCatching { CookieManager.getInstance() }.isSuccess }
     private var webViewBadImpl = false
 
     /**
@@ -41,6 +45,10 @@ class PoTokenGenerator {
 
     /**
      * Boot the BotGuard engine ahead of playback.
+     *
+     * A cold start costs tens of seconds. Paying that inside the ExoPlayer resolver stalls the
+     * first track, and if it gives up we fall through to a client that can only serve YouTube's
+     * ~32 second preview window - so the cold start itself can look like a playback bug.
      */
     suspend fun preWarm(sessionId: String) {
         if (poTokenFor(PREWARM_VIDEO_ID, sessionId) != null) {
@@ -51,10 +59,11 @@ class PoTokenGenerator {
     }
 
     /**
-     * Suspend entry point. Prefer this on the playback path.
+     * Suspend entry point. Prefer this on the playback path - the blocking variant pins the
+     * ExoPlayer loading thread for however long BotGuard takes.
      */
     suspend fun poTokenFor(videoId: String, sessionId: String): PoTokenResult? {
-        if (webViewBadImpl) return null
+        if (!webViewSupported || webViewBadImpl) return null
         if (System.currentTimeMillis() < mintCooldownUntilMs) {
             Timber.tag(TAG).d("Skipping poToken mint - cooling down after a failure")
             return null
@@ -78,9 +87,9 @@ class PoTokenGenerator {
 
     fun getWebClientPoToken(videoId: String, sessionId: String): PoTokenResult? {
         Timber.tag(TAG).d("getWebClientPoToken called: videoId=$videoId, sessionId=$sessionId")
-        Timber.tag(TAG).d("WebView state: badImpl=$webViewBadImpl")
-        if (webViewBadImpl) {
-            Timber.tag(TAG).d("WebView not available: badImpl=$webViewBadImpl")
+        Timber.tag(TAG).d("WebView state: supported=$webViewSupported, badImpl=$webViewBadImpl")
+        if (!webViewSupported || webViewBadImpl) {
+            Timber.tag(TAG).d("WebView not available: supported=$webViewSupported, badImpl=$webViewBadImpl")
             return null
         }
 
@@ -141,8 +150,10 @@ class PoTokenGenerator {
             poTokenGenerator.generatePoToken(videoId)
         } catch (throwable: Throwable) {
             if (hasBeenRecreated) {
+
                 throw throwable
             } else {
+
                 Timber.tag(TAG).e(throwable, "Failed to obtain poToken, retrying")
                 return getWebClientPoToken(videoId = videoId, sessionId = sessionId, forceRecreate = true)
             }
@@ -157,7 +168,3 @@ class PoTokenGenerator {
         )
     }
 }
-
-class BadWebViewException(message: String) : Exception(message)
-
-class PoTokenException(message: String) : Exception(message)
