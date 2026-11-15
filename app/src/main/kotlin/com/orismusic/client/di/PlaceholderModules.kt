@@ -1,8 +1,7 @@
 package com.orismusic.client.di
 
 import android.content.Context
-import androidx.media3.database.DatabaseProvider
-import androidx.media3.database.StandaloneDatabaseProvider
+import com.orismusic.client.playback.MediaLibrarySessionCallback
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,15 +19,14 @@ import kotlin.annotation.AnnotationTarget.FUNCTION
 import kotlin.annotation.AnnotationTarget.PROPERTY_GETTER
 import kotlin.annotation.AnnotationTarget.PROPERTY_SETTER
 import kotlin.annotation.AnnotationTarget.VALUE_PARAMETER
-import kotlin.annotation.RetentionPolicy.RUNTIME
 
 @Qualifier
-@Retention(RUNTIME)
+@Retention(AnnotationRetention.RUNTIME)
 @Target(FIELD, FUNCTION, PROPERTY_GETTER, PROPERTY_SETTER, VALUE_PARAMETER)
 annotation class PlayerCache
 
 @Qualifier
-@Retention(RUNTIME)
+@Retention(AnnotationRetention.RUNTIME)
 @Target(FIELD, FUNCTION, PROPERTY_GETTER, PROPERTY_SETTER, VALUE_PARAMETER)
 annotation class DownloadCache
 
@@ -76,7 +74,10 @@ interface CastConnectionHandler {
 
 interface ForcedRoute
 
-interface CustomStreamResult
+interface CustomStreamResult {
+    val streamUrl: String get() = ""
+    val cacheKey: String? get() = null
+}
 
 interface LoudnessEnhancer
 
@@ -108,6 +109,10 @@ object PlaceholderModule {
         override fun query(block: () -> Unit) = block()
         override suspend fun updateLyricsOffset(songId: String, offsetMs: Int) {}
     }
+
+    @Provides
+    @Singleton
+    fun provideMediaLibrarySessionCallback(): MediaLibrarySessionCallback = MediaLibrarySessionCallback()
 
     @Provides
     @Singleton
@@ -168,60 +173,4 @@ object PlaceholderModule {
         override fun skipToNext() {}
         override fun skipToPrevious() {}
     }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-object PlaybackModule {
-
-    @Provides
-    @Singleton
-    fun providePlayerCache(
-        @ApplicationContext context: Context,
-        databaseProvider: DatabaseProvider,
-    ): androidx.media3.datasource.cache.SimpleCache {
-        return androidx.media3.datasource.cache.SimpleCache(
-            context.filesDir.resolve("exoplayer"),
-            androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024), // 100MB
-            databaseProvider,
-        )
-    }
-
-    @Provides
-    @Singleton
-    fun provideDownloadCache(
-        @ApplicationContext context: Context,
-        databaseProvider: DatabaseProvider,
-    ): androidx.media3.datasource.cache.SimpleCache {
-        return androidx.media3.datasource.cache.SimpleCache(
-            context.filesDir.resolve("download"),
-            androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(500 * 1024 * 1024), // 500MB
-            databaseProvider,
-        )
-    }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-object AppModule {
-
-    @Provides
-    @Singleton
-    fun provideHttpDataSource(@ApplicationContext context: Context): androidx.media3.datasource.DefaultHttpDataSource.Factory {
-        return androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(20000)
-    }
-
-    @Provides
-    @Singleton
-    fun provideApplicationScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    }
-
-    @Provides
-    @Singleton
-    fun provideDatabaseProvider(@ApplicationContext context: Context): DatabaseProvider = StandaloneDatabaseProvider(context)
 }

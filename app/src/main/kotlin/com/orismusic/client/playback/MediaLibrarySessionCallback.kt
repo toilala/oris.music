@@ -2,15 +2,19 @@ package com.orismusic.client.playback
 
 import android.os.Bundle
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.session.MediaLibrarySession
-import androidx.media3.session.MediaLibrarySessionCallback
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.controller.ControllerInfo
-import androidx.media3.session.MediaSession.ResultCallback
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import com.orismusic.client.constants.MediaSessionConstants
+import com.orismusic.client.playback.queues.ListQueue
 
-class MediaLibrarySessionCallback : MediaLibrarySessionCallback() {
+class MediaLibrarySessionCallback : MediaLibrarySession.Callback {
 
     var service: OrisMediaService? = null
     var toggleLike: (() -> Unit)? = null
@@ -18,110 +22,111 @@ class MediaLibrarySessionCallback : MediaLibrarySessionCallback() {
     var toggleLibrary: (() -> Unit)? = null
     var onAutomotiveConnected: (() -> Unit)? = null
 
-    override fun onConnect(controllerInfo: ControllerInfo, session: MediaLibrarySession): MediaLibrarySession.Callback {
-        if (controllerInfo.packageName in AUTOMOTIVE_PACKAGES) {
+    override fun onConnect(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo
+    ): MediaSession.ConnectionResult {
+        if (controller.packageName in AUTOMOTIVE_PACKAGES) {
             onAutomotiveConnected?.invoke()
         }
-        return super.onConnect(controllerInfo, session)
+        return super.onConnect(session, controller)
     }
 
     override fun onCustomCommand(
         session: MediaSession,
-        controller: ControllerInfo,
-        customCommand: MediaSession.Command,
-        args: Bundle,
-        callback: ResultCallback,
-    ) {
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle
+    ): ListenableFuture<SessionResult> {
         val command = customCommand.customAction
         when (command) {
             MediaSessionConstants.CommandToggleLike -> {
                 toggleLike?.invoke()
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandToggleRepeatMode -> {
                 service?.player?.repeatMode = when (service?.player?.repeatMode) {
-                    androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ONE
-                    androidx.media3.common.Player.REPEAT_MODE_ONE -> androidx.media3.common.Player.REPEAT_MODE_ALL
-                    else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+                    Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+                    else -> Player.REPEAT_MODE_OFF
                 }
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandToggleShuffle -> {
                 service?.player?.shuffleModeEnabled = !(service?.player?.shuffleModeEnabled ?: false)
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandToggleStartRadio -> {
                 toggleStartRadio?.invoke()
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandItemLike -> {
                 val mediaId = args.getString("mediaId")
                 mediaId?.let { service?.toggleLikeForMediaId(it) }
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandItemPlayNext -> {
                 val mediaId = args.getString("mediaId")
                 mediaId?.let { service?.playNextMediaId(it) }
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandItemDismiss -> {
                 val mediaId = args.getString("mediaId")
                 mediaId?.let { service?.dismissFromQueue(it) }
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandItemFollow -> {
                 val mediaId = args.getString("mediaId")
                 mediaId?.let { service?.followArtist(it) }
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandItemUnfollow -> {
                 val mediaId = args.getString("mediaId")
                 mediaId?.let { service?.unfollowArtist(it) }
-                callback.onResult(null)
             }
             MediaSessionConstants.CommandEpisodeSkipBack -> {
-                service?.player?.seekToRelative(-15000)
-                callback.onResult(null)
+                val player = service?.player
+                if (player != null) {
+                    val current = player.currentPosition
+                    player.seekTo((current - 15000).coerceAtLeast(0L))
+                }
             }
             MediaSessionConstants.CommandEpisodeSkipForward -> {
-                service?.player?.seekToRelative(30000)
-                callback.onResult(null)
+                val player = service?.player
+                if (player != null) {
+                    val current = player.currentPosition
+                    player.seekTo(current + 30000)
+                }
             }
             MediaSessionConstants.CommandEpisodeSpeed -> {
                 val speed = args.getFloat("speed", 1f)
-                service?.player?.playbackParameters = androidx.media3.common.PlaybackParameters(speed, 1f)
-                callback.onResult(null)
+                service?.player?.playbackParameters = PlaybackParameters(speed, 1f)
             }
         }
+        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }
 
     override fun onAddMediaItems(
-        session: MediaLibrarySession,
-        controller: ControllerInfo,
-        mediaItems: List<MediaItem>,
-        index: Int,
-    ) {
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        mediaItems: MutableList<MediaItem>
+    ): ListenableFuture<MutableList<MediaItem>> {
         service?.addToQueue(mediaItems)
+        return super.onAddMediaItems(mediaSession, controller, mediaItems)
     }
 
+    @UnstableApi
     override fun onSetMediaItems(
-        session: MediaLibrarySession,
-        controller: ControllerInfo,
-        mediaItems: List<MediaItem>,
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        mediaItems: MutableList<MediaItem>,
         startIndex: Int,
-        startPositionMs: Long,
-    ) {
-        val queue = OrisMediaService.ListQueue(
+        startPositionMs: Long
+    ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+        val queue = ListQueue(
             title = "External Queue",
             items = mediaItems,
             startIndex = startIndex,
-            startPosition = startPositionMs
+            position = startPositionMs
         )
         service?.playQueue(queue)
+        return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
     }
 
     companion object {
-        private const val AUTOMOTIVE_PACKAGES = setOf(
+        private val AUTOMOTIVE_PACKAGES = setOf(
             "com.google.android.projection.gearhead",
             "com.google.android.apps.automotive",
             "com.android.car",

@@ -1,10 +1,11 @@
 package com.orismusic.client.di
 
 import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
-import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import dagger.Module
@@ -17,13 +18,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
 
+@OptIn(UnstableApi::class)
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpDataSource(@ApplicationContext context: Context): DefaultHttpDataSource.Factory {
+    fun provideHttpDataSource(): DefaultHttpDataSource.Factory {
         return DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
             .setAllowCrossProtocolRedirects(true)
@@ -42,12 +44,14 @@ object AppModule {
     fun provideDatabaseProvider(@ApplicationContext context: Context): DatabaseProvider = StandaloneDatabaseProvider(context)
 }
 
+@OptIn(UnstableApi::class)
 @Module
 @InstallIn(SingletonComponent::class)
 object PlaybackModule {
 
     @Provides
     @Singleton
+    @PlayerCache
     fun providePlayerCache(
         @ApplicationContext context: Context,
         databaseProvider: DatabaseProvider,
@@ -61,6 +65,7 @@ object PlaybackModule {
 
     @Provides
     @Singleton
+    @DownloadCache
     fun provideDownloadCache(
         @ApplicationContext context: Context,
         databaseProvider: DatabaseProvider,

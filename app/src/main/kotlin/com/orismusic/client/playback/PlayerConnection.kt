@@ -19,11 +19,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -114,25 +116,24 @@ class PlayerConnection(
         player.playbackState != STATE_ENDED && player.playWhenReady
     )
 
-    val mediaMetadata = MutableStateFlow<MediaMetadata?>(player.currentMetadata)
+    val mediaMetadata = MutableStateFlow<MediaMetadata?>(null)
     val currentSong = MutableStateFlow<Any?>(null)
     val currentLyrics = MutableStateFlow<Any?>(null)
     val currentFormat = MutableStateFlow<Any?>(null)
 
     val duration: StateFlow<Long> =
-        combine(mediaMetadata, playbackState) { meta, _ ->
-            val playerDur = try {
+        combine(mediaMetadata, playbackState) { _, _ ->
+            try {
                 player.duration
             } catch (_: Exception) {
                 androidx.media3.common.C.TIME_UNSET
             }
-            meta?.duration?.times(1_000L) ?: playerDur
         }.stateIn(scope, SharingStarted.Lazily, 0L)
 
     val currentPosition: StateFlow<Long> =
         MutableStateFlow(0L).also { flow ->
             scope.launch {
-                playerReadinessFlow.first()
+                playerReadinessFlow.first { it }
                 while (true) {
                     delay(500)
                     if (playerReadinessFlow.value) {
@@ -211,10 +212,10 @@ class PlayerConnection(
 
         playbackState.value = newPlayer.playbackState
         playWhenReady.value = newPlayer.playWhenReady
-        mediaMetadata.value = newPlayer.currentMetadata
+        mediaMetadata.value = newPlayer.currentMediaItem?.mediaMetadata
         queueTitle.value = service.queueTitle
-        queueWindows.value = newPlayer.getQueueWindows()
-        currentWindowIndex.value = newPlayer.getCurrentQueueIndex()
+        queueWindows.value = emptyList() // getQueueWindows() not available in Media3
+        currentWindowIndex.value = newPlayer.currentMediaItemIndex
         currentMediaItemIndex.value = newPlayer.currentMediaItemIndex
         shuffleModeEnabled.value = newPlayer.shuffleModeEnabled
         repeatMode.value = newPlayer.repeatMode
@@ -320,7 +321,11 @@ class PlayerConnection(
                     castHandler.play()
                 }
             } else {
-                player.togglePlayPause()
+                if (player.playWhenReady) {
+                    player.playWhenReady = false
+                } else {
+                    player.playWhenReady = true
+                }
             }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error in togglePlayPause")

@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
 
         val queue = ListQueue(
             title = "Demo",
-            mediaItems = listOf(mediaItem)
+            items = listOf(mediaItem)
         )
         connection.playQueue(queue)
     }

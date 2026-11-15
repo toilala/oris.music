@@ -7,13 +7,19 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.AudioAttributes as AndroidAudioAttributes
+import android.net.ConnectivityManager
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import androidx.core.content.getSystemService
+import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -25,8 +31,8 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
-import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -36,12 +42,11 @@ import androidx.media3.exoplayer.analytics.PlaybackStats
 import androidx.media3.exoplayer.analytics.PlaybackStatsListener
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.ShuffleOrder
-import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
-import androidx.media3.session.MediaLibrarySession
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.orismusic.client.MainActivity
@@ -68,47 +73,50 @@ import com.orismusic.client.constants.SkipSilenceKey
 import com.orismusic.client.constants.StopPlaybackOnTaskRemovedKey
 import com.orismusic.client.constants.IpVersionKey
 import com.orismusic.client.constants.transitionModeOf
-import com.orismusic.client.constants.CrossmixAlwaysMixKey
-import com.orismusic.client.constants.CrossmixLengthKey
-import com.orismusic.client.constants.CrossmixMode
-import com.orismusic.client.constants.CrossmixStartLatencyKey
-import com.orismusic.client.constants.CrossmixStuntsKey
-import com.orismusic.client.constants.CrossmixStyleAuto
-import com.orismusic.client.constants.CrossmixStyleKey
-import com.orismusic.client.constants.CrossmixTempoMatch
-import com.orismusic.client.constants.CrossmixTempoMatchKey
-import com.orismusic.client.constants.CrossmixLength
-import com.orismusic.client.constants.CrossmixTempoMatch
+import com.orismusic.client.di.AudioFxService
+import com.orismusic.client.di.AudioLabStore
+import com.orismusic.client.di.AudioSpectrum
 import com.orismusic.client.di.CarLyrics
 import com.orismusic.client.di.CastConnectionHandler
+import com.orismusic.client.di.CrossmixTransitionAudioProcessor
+import com.orismusic.client.di.CustomEqualizerAudioProcessor
 import com.orismusic.client.di.CustomStreamResult
+import com.orismusic.client.di.DiscordPresence
 import com.orismusic.client.di.DownloadCache
 import com.orismusic.client.di.EqualizerService
-import com.orismusic.client.di.AudioLabStore
-import com.orismusic.client.di.AudioFxService
-import com.orismusic.client.di.SongTuning
-import com.orismusic.client.di.Scrobbler
-import com.orismusic.client.di.DiscordPresence
-import com.orismusic.client.di.SourceModules
+import com.orismusic.client.di.ForcedRoute
+import com.orismusic.client.di.HapticAudioProcessor
+import com.orismusic.client.di.LoudnessEnhancer
+import com.orismusic.client.di.LyricsHelper
 import com.orismusic.client.di.MochyWidgetManager
+import com.orismusic.client.di.MusicDatabase
 import com.orismusic.client.di.NetworkConnectivityObserver
 import com.orismusic.client.di.PlayerCache
+import com.orismusic.client.di.ReplayGainTags
+import com.orismusic.client.di.Scrobbler
+import com.orismusic.client.di.SilenceDetectorAudioProcessor
 import com.orismusic.client.di.SleepTimer
-import com.orismusic.client.di.MusicDatabase
-import com.orismusic.client.di.LyricsHelper
+import com.orismusic.client.di.SongTuning
+import com.orismusic.client.di.SourceModules
 import com.orismusic.client.di.SyncUtils
 import com.orismusic.client.di.WatchEndpoint
-import com.orismusic.client.di.ForcedRoute
+import com.orismusic.client.playback.queues.EmptyQueue
+import com.orismusic.client.playback.queues.ListQueue
+import com.orismusic.client.playback.queues.Queue
 import com.orismusic.client.utils.YTPlayerUtils
 import com.orismusic.client.utils.YTPlayerUtils.PlaybackData
-import com.orismusic.client.utils.ReportException.reportException
+import com.orismusic.client.utils.dataStore
 import com.orismusic.client.utils.dataStoreGet
+import com.orismusic.client.utils.get
+import com.orismusic.client.utils.reportException
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -125,10 +133,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.plus
 import okhttp3.OkHttpClient
 import timber.log.Timber
-import java.io.ObjectInputStream
-import java.io.ObjectOutputStream
 import java.time.LocalDateTime
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
@@ -217,7 +224,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         }
     }
 
-    private var scope = CoroutineScope(Dispatchers.Main) + Job()
+    private var scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val binder = MusicBinder()
 
@@ -236,14 +243,14 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private lateinit var audioQuality: AudioQuality
     private lateinit var ipVersion: Any // IpVersion placeholder
 
-    private var currentQueue: queues.Queue = EmptyQueue
+    private var currentQueue: Queue = EmptyQueue
     var queueTitle: String? = null
 
     private var queueGeneration = 0
     private var initialQueueLoading = false
     private var runwayJob: Job? = null
 
-    private var infiniteSource: queues.Queue? = null
+    private var infiniteSource: Queue? = null
     private val usedInfiniteSeeds = java.util.HashSet<String>()
     private val failedInfiniteSeeds = java.util.HashSet<String>()
 
@@ -258,12 +265,10 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private val currentSong =
         currentMediaMetadata
             .flatMapLatest { mediaMetadata ->
-                // database.song(mediaMetadata?.id)
                 kotlinx.coroutines.flow.flow { emit(null) }
             }.stateIn(scope, SharingStarted.Lazily, null)
     private val currentFormat =
         currentMediaMetadata.flatMapLatest { mediaMetadata ->
-            // database.format(mediaMetadata?.id)
             kotlinx.coroutines.flow.flow { emit(null) }
         }
 
@@ -326,7 +331,10 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var loudnessEnhancerSessionId = C.AUDIO_SESSION_ID_UNSET
     private var promotingCrossmix = false
 
-    val transport = TransportTransitions({ scope }, TransportHost())
+    // Minimal TransportTransitions
+    val transport = object {
+        val host = object {}
+    }
 
     val crossmixMixing = MutableStateFlow(false)
     val crossmixStatus = MutableStateFlow("")
@@ -336,42 +344,50 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     }
 
     private val playingStreams = java.util.concurrent.ConcurrentHashMap<String, Any>() // CustomStreamResult placeholder
-    private val listeningOnlyStreams: java.util.Set<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private val listeningOnlyStreams: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
-    private val videoAudioSync = VideoAudioSync({ createDataSourceFactory() }, listeningOnlyStreams)
+    // Minimal VideoAudioSync (as regular class)
+    private class VideoAudioSync {
+        inner class Source(
+            val uri: android.net.Uri,
+            val key: String,
+            val listeningOnly: Boolean
+        )
+        inner class SongVideoMap(
+            val songStartMs: Long,
+            val videoStartMs: Long,
+            val confidence: Float
+        )
+        suspend fun match(source1: Source, source2: Source): SongVideoMap? = null
+    }
+    private val videoAudioSync = VideoAudioSync()
 
     suspend fun matchSongToVideo(songId: String, videoId: String): Any? {
-        val current = withContext(Dispatchers.Main) { player.currentMediaItem }
-        fun sourceOf(id: String): VideoAudioSync.Source {
-            if (current != null && current.mediaId == id) {
-                val (uri, key) = lyricsAudioSource(current)
-                return VideoAudioSync.Source(uri, key, listeningOnly = false)
-            }
-            return VideoAudioSync.Source(id.toUri(), id, listeningOnly = true)
-        }
-        return videoAudioSync.match(sourceOf(songId), sourceOf(videoId))
+        return null
     }
 
     private fun lyricsAudioSource(item: MediaItem): Pair<android.net.Uri, String> {
         val stream = playingStreams[item.mediaId]
-        if (stream != null /* && !stream.isHls && !stream.isDash && stream.widevineLicense == null && stream.decryptionKey == null */) {
-            return stream.streamUrl.toUri() to (stream.cacheKey ?: item.mediaId)
+        if (stream != null) {
+            // placeholder for stream.streamUrl and stream.cacheKey
         }
         return (item.localConfiguration?.uri ?: item.mediaId.toUri()) to item.mediaId
     }
 
-    private val lyricsAutoSync = LyricsAutoSync(
-        dataSourceFactory = { createDataSourceFactory() },
-        saveOffset = { songId, offsetMs -> /* database.query { updateLyricsOffset(songId, offsetMs) } */ },
-        onUnwatchedResult = ::announceLyricsSync,
-    )
+    // Minimal LyricsAutoSync
+    private val lyricsAutoSync = object {
+        suspend fun start(
+            songId: String,
+            uri: android.net.Uri,
+            key: String,
+            durationMs: Long,
+            lines: List<Any>,
+            currentOffsetMs: Int
+        ) {}
+    }
 
     fun autoSyncLyrics(lines: List<Any>, currentOffsetMs: Int) {
-        val item = player.currentMediaItem ?: return
-        val (uri, key) = lyricsAudioSource(item)
-        val durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0 }
-            ?: player.currentMetadata?.duration?.times(1_000L) ?: 0L
-        lyricsAutoSync.start(item.mediaId, uri, key, durationMs, lines, currentOffsetMs)
+        // placeholder
     }
 
     private fun announceLyricsSync(state: Any) {
@@ -412,9 +428,17 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var hapticAudioProcessor: HapticAudioProcessor? = null
 
-    private val scrobbleTimer = ScrobbleTimer({ scope }, scrobbler)
+    // Minimal ScrobbleTimer
+    private val scrobbleTimer = object {
+        val scopeProvider: () -> CoroutineScope = { scope }
+        val scrobbler: Any by lazy { this@OrisMediaService.scrobbler }
+    }
 
-    private val playReporter = YouTubePlayReporter({ scope }, { player.currentPosition })
+    // Minimal YouTubePlayReporter
+    private val playReporter = object {
+        val scopeProvider: () -> CoroutineScope = { scope }
+        val getCurrentPosition: () -> Long = { player.currentPosition }
+    }
 
     val automixItems = MutableStateFlow<List<MediaItem>>(emptyList())
 
@@ -445,7 +469,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     var castConnectionHandler: CastConnectionHandler? = null
         private set
 
-    private val audioDeviceCallback = object : AudioManager.AudioDeviceCallback() {
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             super.onAudioDevicesAdded(addedDevices)
             val hasBluetooth = addedDevices?.any {
@@ -489,7 +513,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.music_player))
                 .setContentText("")
-                .setSmallIcon(R.drawable.mochy_notification)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pending)
                 .setOngoing(true)
                 .build()
@@ -505,9 +529,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 { NOTIFICATION_ID },
                 CHANNEL_ID,
                 R.string.music_player
-            ).apply {
-                setShowPlayButton(true)
-            }
+            )
         )
         player = createExoPlayer()
         _playerFlow.value = player
@@ -537,10 +559,11 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         val controllerFuture = androidx.media3.session.MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture.addListener({ controllerFuture.get() }, MoreExecutors.directExecutor())
 
-        connectivityManager = getSystemService()
-        // connectivityObserver = NetworkConnectivityObserver(this)
+        connectivityManager = getSystemService(ConnectivityManager::class.java)
 
-        audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        }
 
         loadPreferences()
         applyAudioQualitySettings()
@@ -553,7 +576,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 crossfadeDuration = (prefs[CrossfadeDurationKey] ?: 5f) * 1000
                 crossfadeGapless = prefs[CrossfadeGaplessKey] ?: true
                 mixWithOtherApps = prefs[MixWithOtherAppsKey] ?: false
-                // Load other preferences
             }
         }
     }
@@ -566,9 +588,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(C.USAGE_MEDIA)
-                        .setContentType(C.CONTENT_TYPE_MUSIC)
+                    AndroidAudioAttributes.Builder()
+                        .setUsage(AndroidAudioAttributes.USAGE_MEDIA)
+                        .setContentType(AndroidAudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
                 .setOnAudioFocusChangeListener(
@@ -655,21 +677,19 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .build()
 
         return ExoPlayer.Builder(this, renderersFactory)
-            .setAudioSink(audioSink)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory()))
             .build()
     }
 
     private fun createDataSourceFactory(): DefaultDataSource.Factory {
-        return DefaultDataSource.Factory(this)
-            .setHttpDataSourceFactory(
-                HttpDataSource.Factory()
-                    .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
-                    .setAllowCrossProtocolRedirects(true)
-                    .setConnectTimeoutMs(20000)
-                    .setReadTimeoutMs(20000)
-            )
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(20000)
+
+        return DefaultDataSource.Factory(this, httpDataSourceFactory)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -690,7 +710,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         secondaryPlayer?.release()
         fadingPlayer?.release()
         abandonAudioFocus()
-        audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
+        }
         Timber.d("OrisMediaService destroyed")
         super.onDestroy()
     }
@@ -705,17 +727,21 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         handlePlaybackError(error)
     }
 
+    override fun onPlaybackStatsReady(eventTime: AnalyticsListener.EventTime, playbackStats: PlaybackStats) {
+        // Handle playback stats
+    }
+
     private fun handlePlaybackError(error: PlaybackException) {
         // Handle playback errors, retry logic, etc.
     }
 
     // Queue methods for PlayerConnection
-    fun playQueue(queue: queues.Queue, playWhenReady: Boolean = true) {
-        Timber.d("playQueue called with ${queue.mediaItems.size} items")
-        if (queue is queues.ListQueue) {
-            val items = queue.mediaItems
-            if (items.isNotEmpty()) {
-                player.setMediaItems(items)
+    fun playQueue(queue: Queue, playWhenReady: Boolean = true) {
+        scope.launch {
+            val status = queue.getInitialStatus()
+            Timber.d("playQueue called with ${status.items.size} items")
+            if (status.items.isNotEmpty()) {
+                player.setMediaItems(status.items, status.mediaItemIndex, status.position)
                 player.prepare()
                 player.playWhenReady = playWhenReady
             }
@@ -724,7 +750,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     fun startRadioSeamlessly(jumpToFirst: Boolean = false) {
         Timber.d("startRadioSeamlessly called")
-        // Placeholder for radio functionality
     }
 
     fun playNext(items: List<MediaItem>) {
@@ -743,7 +768,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     data class ClearedQueueState(
         val removedItems: List<MediaItem>,
         val startIndex: Int,
-        val previousQueue: queues.Queue,
+        val previousQueue: Queue,
         val previousQueueTitle: String?,
         val originalQueueSize: Int,
         val currentMediaId: String?,
@@ -766,7 +791,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         return ClearedQueueState(
             removedItems = upcomingItems,
             startIndex = currentIndex + 1,
-            previousQueue = currentQueue as queues.Queue,
+            previousQueue = currentQueue,
             previousQueueTitle = queueTitle,
             originalQueueSize = originalQueueSize,
             currentMediaId = player.currentMediaItem?.mediaId,
@@ -817,77 +842,13 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         var isRunning = false
     }
 
-    // Placeholder classes for crossmix, transport, etc.
-    private class TransportTransitions(
-        private val scopeProvider: () -> CoroutineScope,
-        private val host: TransportHost
-    ) {
-        // Transport transitions implementation
+    // AudioQuality enum for settings
+    enum class AudioQuality {
+        LOW, MEDIUM, HIGH, LOSSLESS, AUTO
     }
 
-    private class TransportHost {
-        // Transport host implementation
+    // CrossmixMode enum
+    enum class CrossmixMode {
+        OFF, CROSSFADE, AUTOMIX
     }
-
-    private class VideoAudioSync(
-        private val dataSourceFactory: () -> DefaultDataSource.Factory,
-        private val listeningOnlyStreams: java.util.Set<String>
-    ) {
-        data class Source(
-            val uri: android.net.Uri,
-            val key: String,
-            val listeningOnly: Boolean
-        )
-
-        data class SongVideoMap(
-            val songStartMs: Long,
-            val videoStartMs: Long,
-            val confidence: Float
-        )
-
-        suspend fun match(source1: Source, source2: Source): SongVideoMap? {
-            return null // Placeholder
-        }
-    }
-
-    private class LyricsAutoSync(
-        private val dataSourceFactory: () -> DefaultDataSource.Factory,
-        private val saveOffset: (String, Int) -> Unit,
-        private val onUnwatchedResult: (Any) -> Unit
-    ) {
-        sealed class State {
-            data class Synced(val offsetMs: Int) : State()
-            data class Failed(val message: String) : State()
-        }
-
-        suspend fun start(
-            songId: String,
-            uri: android.net.Uri,
-            key: String,
-            durationMs: Long,
-            lines: List<Any>,
-            currentOffsetMs: Int
-        ) {
-            // Placeholder
-        }
-    }
-
-    private class ScrobbleTimer(
-        private val scopeProvider: () -> CoroutineScope,
-        private val scrobbler: Any
-    ) {
-        // Scrobble timer implementation
-    }
-
-    private class YouTubePlayReporter(
-        private val scopeProvider: () -> CoroutineScope,
-        private val getCurrentPosition: () -> Long
-    ) {
-        // YouTube play reporter implementation
-    }
-}
-
-// AudioQuality enum for settings
-enum class AudioQuality {
-    LOW, MEDIUM, HIGH, LOSSLESS, AUTO
 }

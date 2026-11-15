@@ -80,9 +80,6 @@ fun <T> DataStore<Preferences>.get(
 ): T = PreferencesCache.current(this)[key] ?: defaultValue
 
 // Extension functions for Context to easily access DataStore
-fun Context.dataStoreGet(key: androidx.datastore.preferences.core.Preferences.Key<*>): Any? =
-    dataStore[key]
-
 inline fun <reified T> Context.dataStoreGet(key: androidx.datastore.preferences.core.Preferences.Key<T>): T? =
     dataStore[key]
 
