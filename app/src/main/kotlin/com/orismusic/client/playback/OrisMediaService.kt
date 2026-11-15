@@ -1,5 +1,6 @@
 package com.orismusic.client.playback
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -12,7 +13,6 @@ import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -37,6 +37,7 @@ import androidx.media3.exoplayer.analytics.PlaybackStatsListener
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
@@ -48,53 +49,36 @@ import com.orismusic.client.R
 import com.orismusic.client.constants.AudioNormalizationKey
 import com.orismusic.client.constants.AudioOffload
 import com.orismusic.client.constants.AudioQualityKey
-import com.orismusic.client.constants.AutoDownloadOnLikeKey
-import com.orismusic.client.constants.AutoLoadMoreKey
-import com.orismusic.client.constants.AutoSkipNextOnErrorKey
-import com.orismusic.client.constants.DontSkipOnFailureKey
-import com.orismusic.client.constants.StreamFailureTimeoutKey
 import com.orismusic.client.constants.CrossfadeDurationKey
 import com.orismusic.client.constants.CrossfadeEnabledKey
 import com.orismusic.client.constants.CrossfadeGaplessKey
-import com.orismusic.client.constants.TransportEffect
-import com.orismusic.client.constants.TransportEffectKey
-import com.orismusic.client.constants.TransportFadeDefaultSeconds
-import com.orismusic.client.constants.TransportFadeEnabledKey
-import com.orismusic.client.constants.TransportFadeMaxSeconds
-import com.orismusic.client.constants.TransportFadeMinSeconds
-import com.orismusic.client.constants.TransportFadeSecondsKey
 import com.orismusic.client.constants.HideExplicitKey
 import com.orismusic.client.constants.HideVideoSongsKey
-import com.orismusic.client.constants.HistoryDuration
-import com.orismusic.client.constants.MediaSessionConstants.CommandToggleLike
-import com.orismusic.client.constants.MediaSessionConstants.CommandToggleRepeatMode
-import com.orismusic.client.constants.MediaSessionConstants.CommandToggleShuffle
-import com.orismusic.client.constants.MediaSessionConstants.CommandToggleStartRadio
-import com.orismusic.client.constants.OfflineModeKey
-import com.orismusic.client.constants.PauseListenHistoryKey
+import com.orismusic.client.constants.InfiniteQueueKey
 import com.orismusic.client.constants.MixWithOtherAppsKey
 import com.orismusic.client.constants.PauseOnMute
 import com.orismusic.client.constants.PersistentQueueKey
-import com.orismusic.client.constants.InfiniteQueueKey
-import com.orismusic.client.constants.PersistentShuffleAcrossQueuesKey
 import com.orismusic.client.constants.PlayerVolumeKey
-import com.orismusic.client.constants.RememberShuffleAndRepeatKey
 import com.orismusic.client.constants.RepeatModeKey
 import com.orismusic.client.constants.ResumeOnBluetoothConnectKey
-import com.orismusic.client.constants.ScrobbleDelayPercentKey
-import com.orismusic.client.constants.ScrobbleDelaySecondsKey
-import com.orismusic.client.constants.ScrobbleMinSongDurationKey
-import com.orismusic.client.constants.ShowLyricsKey
 import com.orismusic.client.constants.ShuffleModeKey
 import com.orismusic.client.constants.ShufflePlaylistFirstKey
-import com.orismusic.client.constants.PreventDuplicateTracksInQueueKey
-import com.orismusic.client.constants.SimilarContent
 import com.orismusic.client.constants.SkipSilenceInstantKey
 import com.orismusic.client.constants.SkipSilenceKey
 import com.orismusic.client.constants.StopPlaybackOnTaskRemovedKey
 import com.orismusic.client.constants.IpVersionKey
 import com.orismusic.client.constants.transitionModeOf
 import com.orismusic.client.constants.CrossmixAlwaysMixKey
+import com.orismusic.client.constants.CrossmixLengthKey
+import com.orismusic.client.constants.CrossmixMode
+import com.orismusic.client.constants.CrossmixStartLatencyKey
+import com.orismusic.client.constants.CrossmixStuntsKey
+import com.orismusic.client.constants.CrossmixStyleAuto
+import com.orismusic.client.constants.CrossmixStyleKey
+import com.orismusic.client.constants.CrossmixTempoMatch
+import com.orismusic.client.constants.CrossmixTempoMatchKey
+import com.orismusic.client.di.DownloadCache
+import com.orismusic.client.di.PlayerCache
 import com.orismusic.client.utils.YTPlayerUtils
 import com.orismusic.client.utils.YTPlayerUtils.PlaybackData
 import com.orismusic.client.utils.ReportException.reportException
@@ -286,9 +270,11 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     lateinit var sleepTimer: Any // SleepTimer placeholder
 
     @Inject
+    @PlayerCache
     lateinit var playerCache: SimpleCache
 
     @Inject
+    @DownloadCache
     lateinit var downloadCache: SimpleCache
 
     private val resolvedStreamSources = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -503,7 +489,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 setShowPlayButton(true)
             }
         )
-
         player = createExoPlayer()
         _playerFlow.value = player
         player.addListener(this)
@@ -795,4 +780,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     ) {
         // YouTube play reporter implementation
     }
+}
+
+// AudioQuality enum for settings
+enum class AudioQuality {
+    LOW, MEDIUM, HIGH, LOSSLESS, AUTO
 }
