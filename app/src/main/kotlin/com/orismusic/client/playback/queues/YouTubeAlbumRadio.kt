@@ -19,9 +19,7 @@ class YouTubeAlbumRadio(
     private var firstTimeLoaded: Boolean = false
 
     override fun getInitialStatus(): InitialStatus {
-        return withContext(IO) {
-            InitialStatus(emptyList())
-        }
+        return InitialStatus(emptyList())
     }
 
     override fun hasNextPage(): Boolean = !firstTimeLoaded || continuation != null

@@ -62,10 +62,10 @@ object EmptyQueue : Queue {
 // Extension functions for filtering
 fun InitialStatus.filterExplicit(hideExplicit: Boolean): InitialStatus {
     if (!hideExplicit) return this
-    return copy(items = items.filter { !it.mediaMetadata.extras?.getBoolean("explicit") == true })
+    return copy(items = items.filter { it.mediaMetadata.extras?.getBoolean("explicit") != true })
 }
 
 fun InitialStatus.filterVideoSongs(hideVideoSongs: Boolean): InitialStatus {
     if (!hideVideoSongs) return this
-    return copy(items = items.filter { !it.mediaMetadata.extras?.getBoolean("isVideoSong") == true })
+    return copy(items = items.filter { it.mediaMetadata.extras?.getBoolean("isVideoSong") != true })
 }

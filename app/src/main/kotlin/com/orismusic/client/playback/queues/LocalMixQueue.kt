@@ -18,9 +18,7 @@ class LocalMixQueue(
     override val title: String? = "Mix from Playlist"
 
     override fun getInitialStatus(): InitialStatus {
-        return withContext(Dispatchers.IO) {
-            InitialStatus(emptyList())
-        }
+        return InitialStatus(emptyList())
     }
 
     override fun hasNextPage(): Boolean = false

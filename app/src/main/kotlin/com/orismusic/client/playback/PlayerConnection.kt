@@ -441,12 +441,12 @@ class PlayerConnection(
         newPosition: Player.PositionInfo,
         reason: Int,
     ) {
-        val meta = player.currentMetadata
+        val meta = player.currentMediaItem?.mediaMetadata ?: player.currentMediaItem?.mediaMetadata
         if (meta != null) {
             mediaMetadata.value = meta
         }
         currentMediaItemIndex.value = player.currentMediaItemIndex
-        currentWindowIndex.value = player.getCurrentQueueIndex()
+        currentWindowIndex.value = player.currentMediaItemIndex
         updateCanSkipPreviousAndNext()
     }
 
@@ -454,9 +454,9 @@ class PlayerConnection(
         mediaItem: MediaItem?,
         reason: Int,
     ) {
-        mediaMetadata.value = mediaItem?.metadata ?: player.currentMetadata
+        mediaMetadata.value = mediaItem?.mediaMetadata ?: player.currentMediaItem?.mediaMetadata
         currentMediaItemIndex.value = player.currentMediaItemIndex
-        currentWindowIndex.value = player.getCurrentQueueIndex()
+        currentWindowIndex.value = player.currentMediaItemIndex
         updateCanSkipPreviousAndNext()
     }
 
@@ -465,7 +465,7 @@ class PlayerConnection(
         reason: Int,
     ) {
         currentMediaItemIndex.value = player.currentMediaItemIndex
-        currentWindowIndex.value = player.getCurrentQueueIndex()
+        currentWindowIndex.value = player.currentMediaItemIndex
         updateCanSkipPreviousAndNext()
     }
 
