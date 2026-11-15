@@ -11,7 +11,26 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import javax.inject.Qualifier
 import javax.inject.Singleton
+import kotlin.annotation.AnnotationRetention
+import kotlin.annotation.AnnotationTarget
+import kotlin.annotation.AnnotationTarget.FIELD
+import kotlin.annotation.AnnotationTarget.FUNCTION
+import kotlin.annotation.AnnotationTarget.PROPERTY_GETTER
+import kotlin.annotation.AnnotationTarget.PROPERTY_SETTER
+import kotlin.annotation.AnnotationTarget.VALUE_PARAMETER
+import kotlin.annotation.RetentionPolicy.RUNTIME
+
+@Qualifier
+@Retention(RUNTIME)
+@Target(FIELD, FUNCTION, PROPERTY_GETTER, PROPERTY_SETTER, VALUE_PARAMETER)
+annotation class PlayerCache
+
+@Qualifier
+@Retention(RUNTIME)
+@Target(FIELD, FUNCTION, PROPERTY_GETTER, PROPERTY_SETTER, VALUE_PARAMETER)
+annotation class DownloadCache
 
 // Placeholder interfaces for missing dependencies
 interface MusicDatabase {

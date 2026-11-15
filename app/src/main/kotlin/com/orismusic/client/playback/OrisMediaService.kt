@@ -80,6 +80,7 @@ import com.orismusic.client.constants.CrossmixTempoMatchKey
 import com.orismusic.client.di.CarLyrics
 import com.orismusic.client.di.CastConnectionHandler
 import com.orismusic.client.di.CustomStreamResult
+import com.orismusic.client.di.DownloadCache
 import com.orismusic.client.di.EqualizerService
 import com.orismusic.client.di.AudioLabStore
 import com.orismusic.client.di.AudioFxService
@@ -89,6 +90,7 @@ import com.orismusic.client.di.DiscordPresence
 import com.orismusic.client.di.SourceModules
 import com.orismusic.client.di.MochyWidgetManager
 import com.orismusic.client.di.NetworkConnectivityObserver
+import com.orismusic.client.di.PlayerCache
 import com.orismusic.client.di.SleepTimer
 import com.orismusic.client.di.MusicDatabase
 import com.orismusic.client.di.LyricsHelper
