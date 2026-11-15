@@ -223,7 +223,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     }
 
     private lateinit var connectivityManager: ConnectivityManager
-    lateinit var connectivityObserver: Any // NetworkConnectivityObserver placeholder
+    lateinit var connectivityObserver: NetworkConnectivityObserver
     val waitingForNetworkConnection = MutableStateFlow(false)
     val streamFailure = MutableStateFlow<StreamFailure?>(null)
     private var failureJob: Job? = null
@@ -232,7 +232,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private lateinit var audioQuality: AudioQuality
     private lateinit var ipVersion: Any // IpVersion placeholder
 
-    private var currentQueue: Any = EmptyQueue // Queue placeholder
+    private var currentQueue: queues.Queue = EmptyQueue
     var queueTitle: String? = null
 
     private var queueGeneration = 0
