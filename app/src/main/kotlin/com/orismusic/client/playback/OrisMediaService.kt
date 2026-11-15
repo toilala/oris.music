@@ -77,8 +77,24 @@ import com.orismusic.client.constants.CrossmixStyleAuto
 import com.orismusic.client.constants.CrossmixStyleKey
 import com.orismusic.client.constants.CrossmixTempoMatch
 import com.orismusic.client.constants.CrossmixTempoMatchKey
-import com.orismusic.client.di.DownloadCache
-import com.orismusic.client.di.PlayerCache
+import com.orismusic.client.di.CarLyrics
+import com.orismusic.client.di.CastConnectionHandler
+import com.orismusic.client.di.CustomStreamResult
+import com.orismusic.client.di.EqualizerService
+import com.orismusic.client.di.AudioLabStore
+import com.orismusic.client.di.AudioFxService
+import com.orismusic.client.di.SongTuning
+import com.orismusic.client.di.Scrobbler
+import com.orismusic.client.di.DiscordPresence
+import com.orismusic.client.di.SourceModules
+import com.orismusic.client.di.MochyWidgetManager
+import com.orismusic.client.di.NetworkConnectivityObserver
+import com.orismusic.client.di.SleepTimer
+import com.orismusic.client.di.MusicDatabase
+import com.orismusic.client.di.LyricsHelper
+import com.orismusic.client.di.SyncUtils
+import com.orismusic.client.di.WatchEndpoint
+import com.orismusic.client.di.ForcedRoute
 import com.orismusic.client.utils.YTPlayerUtils
 import com.orismusic.client.utils.YTPlayerUtils.PlaybackData
 import com.orismusic.client.utils.ReportException.reportException
@@ -127,40 +143,40 @@ data class StreamFailure(val startedAt: Long, val timeoutMs: Long)
 @AndroidEntryPoint
 class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsListener.Callback {
     @Inject
-    lateinit var database: Any // MusicDatabase placeholder
+    lateinit var database: MusicDatabase
 
     @Inject
-    lateinit var lyricsHelper: Any // LyricsHelper placeholder
+    lateinit var lyricsHelper: LyricsHelper
 
     @Inject
-    lateinit var syncUtils: Any // SyncUtils placeholder
+    lateinit var syncUtils: SyncUtils
 
     @Inject
     lateinit var mediaLibrarySessionCallback: MediaLibrarySessionCallback
 
     @Inject
-    lateinit var equalizerService: Any // EqualizerService placeholder
+    lateinit var equalizerService: EqualizerService
 
     @Inject
-    lateinit var audioLab: Any // AudioLabStore placeholder
+    lateinit var audioLab: AudioLabStore
 
     @Inject
-    lateinit var audioFx: Any // AudioFxService placeholder
+    lateinit var audioFx: AudioFxService
 
     @Inject
-    lateinit var songTuning: Any // SongTuning placeholder
+    lateinit var songTuning: SongTuning
 
     @Inject
-    lateinit var scrobbler: Any // Scrobbler placeholder
+    lateinit var scrobbler: Scrobbler
 
     @Inject
-    lateinit var discordPresence: Any // DiscordPresence placeholder
+    lateinit var discordPresence: DiscordPresence
 
     @Inject
-    lateinit var sourceModules: Any // SourceModules placeholder
+    lateinit var sourceModules: SourceModules
 
     @Inject
-    lateinit var widgetManager: Any // MochyWidgetManager placeholder
+    lateinit var widgetManager: MochyWidgetManager
 
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
