@@ -36,6 +36,8 @@
     <string name="podcasts">Podcasts</string>
     <string name="downloads">Downloads</string>
     <string name="liked_songs">Liked songs</string>
-    <string name="n_song" quantity="one">%d song</string>
-    <string name="n_song" quantity="other">%d songs</string>
+    <plurals name="n_song">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
 </resources>

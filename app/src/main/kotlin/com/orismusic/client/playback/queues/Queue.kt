@@ -1,85 +1,83 @@
 package com.orismusic.client.playback.queues
 
 import androidx.media3.common.MediaItem
-import com.orismusic.client.models.MediaMetadata
+import androidx.media3.common.Player
 
 interface Queue {
-    val preloadItem: MediaMetadata?
+    val mediaItems: List<MediaItem>
+    val shuffleModeEnabled: Boolean
+    val repeatMode: Int
+    suspend fun loadMore(): List<MediaItem>
+    fun refresh(): Queue
+    val preloadItem: MediaItem?
+        get() = null
+    val title: String?
+        get() = null
+    fun getInitialStatus(): InitialStatus
+    fun hasNextPage(): Boolean = false
+}
 
-    suspend fun getInitialStatus(): Status
+data class InitialStatus(
+    val items: List<MediaItem>,
+    val mediaItemIndex: Int = 0,
+    val position: Long = 0,
+    val title: String? = null,
+)
 
-    fun hasNextPage(): Boolean
+data class ListQueue(
+    override val title: String? = null,
+    override val mediaItems: List<MediaItem> = emptyList(),
+    val startIndex: Int = 0,
+    val startPosition: Long = 0,
+    override val preloadItem: MediaItem? = null,
+) : Queue {
+    override val shuffleModeEnabled = false
+    override val repeatMode = Player.REPEAT_MODE_OFF
 
-    suspend fun nextPage(): List<MediaItem>
+    override suspend fun loadMore() = emptyList()
 
-    data class Status(
-        val title: String?,
-        val items: List<MediaItem>,
-        val mediaItemIndex: Int,
-        val position: Long = 0L,
-    ) {
-        fun filterExplicit(enabled: Boolean = true): Status {
-            val currentMediaId = items.getOrNull(mediaItemIndex)?.mediaId
-            return if (enabled) {
-                withFilteredItems(items.filterExplicit(true, keepMediaId = currentMediaId))
-            } else {
-                this
-            }
-        }
+    override fun refresh() = this
 
-        fun filterVideoSongs(disableVideos: Boolean = false): Status {
-            val currentMediaId = items.getOrNull(mediaItemIndex)?.mediaId
-            return if (disableVideos) {
-                withFilteredItems(items.filterVideoSongs(true, keepMediaId = currentMediaId))
-            } else {
-                this
-            }
-        }
-
-        /**
-         * Re-points [mediaItemIndex] at the item it originally selected (matched by mediaId) after
-         * [newItems] has had entries removed, instead of leaving it as a raw position into a
-         * now-shorter list — which would silently select and play a different song than the one the
-         * user tapped.
-         *
-         * Matches by occurrence rather than the first same-mediaId hit, so a queue with the same song
-         * listed more than once still re-points at the exact occurrence that was selected instead of
-         * always snapping to the first one.
-         */
-        private fun withFilteredItems(newItems: List<MediaItem>): Status {
-            val currentItem = items.getOrNull(mediaItemIndex)
-            val newIndex =
-                if (currentItem != null) {
-                    val occurrence =
-                        items.take(mediaItemIndex + 1).count { it.mediaId == currentItem.mediaId } - 1
-                    newItems
-                        .withIndex()
-                        .filter { (_, item) -> item.mediaId == currentItem.mediaId }
-                        .getOrNull(occurrence)
-                        ?.index ?: -1
-                } else {
-                    -1
-                }
-            return copy(
-                items = newItems,
-                mediaItemIndex =
-                    if (newIndex >= 0) newIndex
-                    else mediaItemIndex.coerceIn(0, (newItems.size - 1).coerceAtLeast(0)),
-            )
-        }
+    override fun getInitialStatus(): InitialStatus {
+        return InitialStatus(
+            items = mediaItems,
+            mediaItemIndex = startIndex.coerceIn(0, mediaItems.lastIndex),
+            position = startPosition,
+            title = title,
+        )
     }
 }
 
-fun List<MediaItem>.filterExplicit(enabled: Boolean = true, keepMediaId: String? = null) =
-    if (enabled) {
-        filterNot { it.mediaId != keepMediaId && it.metadata?.explicit == true }
-    } else {
-        this
-    }
+object EmptyQueue : Queue {
+    override val mediaItems = emptyList<MediaItem>()
+    override val shuffleModeEnabled = false
+    override val repeatMode = Player.REPEAT_MODE_OFF
+    override suspend fun loadMore() = emptyList()
+    override fun refresh() = this
+    override fun getInitialStatus() = InitialStatus(emptyList())
+    override fun hasNextPage() = false
+}
 
-fun List<MediaItem>.filterVideoSongs(disableVideos: Boolean = false, keepMediaId: String? = null) =
-    if (disableVideos) {
-        filterNot { it.mediaId != keepMediaId && it.metadata?.isVideoSong == true }
-    } else {
-        this
-    }
+// YouTube queue placeholder
+data class YouTubeQueue(
+    val endpoint: Any, // WatchEndpoint placeholder
+) : Queue {
+    override val mediaItems = emptyList<MediaItem>()
+    override val shuffleModeEnabled = false
+    override val repeatMode = Player.REPEAT_MODE_OFF
+    override suspend fun loadMore() = emptyList()
+    override fun refresh() = this
+    override fun getInitialStatus() = InitialStatus(emptyList())
+    override fun hasNextPage() = true
+}
+
+// Extension functions for filtering
+fun InitialStatus.filterExplicit(hideExplicit: Boolean): InitialStatus {
+    if (!hideExplicit) return this
+    return copy(items = items.filter { !it.mediaMetadata.extras?.getBoolean("explicit") == true })
+}
+
+fun InitialStatus.filterVideoSongs(hideVideoSongs: Boolean): InitialStatus {
+    if (!hideVideoSongs) return this
+    return copy(items = items.filter { !it.mediaMetadata.extras?.getBoolean("isVideoSong") == true })
+}

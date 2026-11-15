@@ -689,27 +689,112 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         // Handle playback errors, retry logic, etc.
     }
 
+    // Queue methods for PlayerConnection
+    fun playQueue(queue: queues.Queue, playWhenReady: Boolean = true) {
+        Timber.d("playQueue called with ${queue.mediaItems.size} items")
+        if (queue is queues.ListQueue) {
+            val items = queue.mediaItems
+            if (items.isNotEmpty()) {
+                player.setMediaItems(items)
+                player.prepare()
+                player.playWhenReady = playWhenReady
+            }
+        }
+    }
+
+    fun startRadioSeamlessly(jumpToFirst: Boolean = false) {
+        Timber.d("startRadioSeamlessly called")
+        // Placeholder for radio functionality
+    }
+
+    fun playNext(items: List<MediaItem>) {
+        Timber.d("playNext called with ${items.size} items")
+        val insertIndex = player.currentMediaItemIndex + 1
+        player.addMediaItems(insertIndex, items)
+        player.prepare()
+    }
+
+    fun addToQueue(items: List<MediaItem>) {
+        Timber.d("addToQueue called with ${items.size} items")
+        player.addMediaItems(items)
+        player.prepare()
+    }
+
+    data class ClearedQueueState(
+        val removedItems: List<MediaItem>,
+        val startIndex: Int,
+        val previousQueue: queues.Queue,
+        val previousQueueTitle: String?,
+        val originalQueueSize: Int,
+        val currentMediaId: String?,
+        val queueGeneration: Long,
+        val wasShuffled: Boolean,
+        val preservedPlaybackOrder: List<Int>?,
+    )
+
+    fun clearQueue(): ClearedQueueState? {
+        if (player.mediaItemCount == 0) return null
+        val currentIndex = player.currentMediaItemIndex
+        val upcomingItems = mutableListOf<MediaItem>()
+        for (i in currentIndex + 1 until player.mediaItemCount) {
+            upcomingItems.add(player.getMediaItemAt(i))
+        }
+        if (upcomingItems.isEmpty()) return null
+
+        player.removeMediaItems(currentIndex + 1, player.mediaItemCount)
+
+        return ClearedQueueState(
+            removedItems = upcomingItems,
+            startIndex = currentIndex + 1,
+            previousQueue = currentQueue as queues.Queue,
+            previousQueueTitle = queueTitle,
+            originalQueueSize = originalQueueSize,
+            currentMediaId = player.currentMediaItem?.mediaId,
+            queueGeneration = queueGeneration.toLong(),
+            wasShuffled = player.shuffleModeEnabled,
+            preservedPlaybackOrder = null,
+        )
+    }
+
+    fun restoreQueue(state: ClearedQueueState) {
+        player.addMediaItems(state.startIndex, state.removedItems)
+        currentQueue = state.previousQueue
+        queueTitle = state.previousQueueTitle
+        originalQueueSize = state.originalQueueSize
+    }
+
+    fun toggleLike() {
+        Timber.d("toggleLike called")
+    }
+
+    fun toggleLibrary() {
+        Timber.d("toggleLibrary called")
+    }
+
+    fun toggleLikeForMediaId(mediaId: String) {
+        Timber.d("toggleLikeForMediaId: $mediaId")
+    }
+
+    fun playNextMediaId(mediaId: String) {
+        Timber.d("playNextMediaId: $mediaId")
+    }
+
+    fun dismissFromQueue(mediaId: String) {
+        Timber.d("dismissFromQueue: $mediaId")
+    }
+
+    fun followArtist(mediaId: String) {
+        Timber.d("followArtist: $mediaId")
+    }
+
+    fun unfollowArtist(mediaId: String) {
+        Timber.d("unfollowArtist: $mediaId")
+    }
+
     companion object {
         const val CHANNEL_ID = "media_playback"
         const val NOTIFICATION_ID = 1
         var isRunning = false
-    }
-
-    // Queue interface
-    interface Queue {
-        val mediaItems: List<MediaItem>
-        val shuffleModeEnabled: Boolean
-        val repeatMode: Int
-        suspend fun loadMore(): List<MediaItem>
-        fun refresh(): Queue
-    }
-
-    object EmptyQueue : Queue {
-        override val mediaItems = emptyList<MediaItem>()
-        override val shuffleModeEnabled = false
-        override val repeatMode = Player.REPEAT_MODE_OFF
-        override suspend fun loadMore() = emptyList()
-        override fun refresh() = this
     }
 
     // Placeholder classes for crossmix, transport, etc.
