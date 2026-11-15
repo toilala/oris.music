@@ -26,7 +26,7 @@ class YouTubePlaylistQueue(
    */
   private var pendingSongs: List<SongItem> = emptyList()
 
-  override suspend fun getInitialQueue.Status(): Status {
+  override suspend fun getInitialStatus(): Queue.Status {
     return withContext(Dispatchers.IO) {
       if (initialSongs.isNotEmpty()) {
         // The playlist screen keeps loading pages in the background, so for long

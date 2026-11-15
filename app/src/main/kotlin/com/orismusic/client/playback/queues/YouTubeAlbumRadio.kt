@@ -20,7 +20,7 @@ class YouTubeAlbumRadio(
   private var continuation: String? = null
   private var firstTimeLoaded: Boolean = false
 
-  override suspend fun getInitialQueue.Status(): Status =
+  override suspend fun getInitialStatus(): Queue.Status =
     withContext(Dispatchers.IO) {
       val albumSongs = YouTube.albumSongs(playlistId).getOrThrow()
       albumSongCount = albumSongs.size

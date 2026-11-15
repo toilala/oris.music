@@ -1,6 +1,7 @@
 package com.orismusic.client.playback.queues
 
 import androidx.media3.common.MediaItem
+import com.orismusic.client.extensions.metadata
 import com.orismusic.client.models.MediaMetadata
 
 interface Queue {

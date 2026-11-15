@@ -20,7 +20,7 @@ class YouTubeQueue(
   private val isRadioQueue = endpoint.playlistId?.startsWith("RD") != false
   private val pageFilter = RadioQueuePageFilter()
 
-  override suspend fun getInitialQueue.Status(): Status {
+  override suspend fun getInitialStatus(): Queue.Status {
     return withContext(Dispatchers.IO) {
       continuation = null
       pageFilter.reset()
