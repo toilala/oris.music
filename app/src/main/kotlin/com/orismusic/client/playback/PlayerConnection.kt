@@ -1,22 +1,20 @@
 package com.orismusic.client.playback
 
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
-import android.os.Binder
-import android.os.Bundle
-import android.os.IBinder
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.Player.Listener
+import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
+import androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+import androidx.media3.common.Player.REPEAT_MODE_OFF
+import androidx.media3.common.Player.STATE_ENDED
+import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
-import com.orismusic.client.MainActivity
+import com.orismusic.client.playback.OrisMediaService.MusicBinder
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -30,14 +28,23 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlayerConnection(
-    val context: Context,
-    private val binder: OrisMediaService.MusicBinder,
+    context: Context,
+    binder: MusicBinder,
     parentScope: CoroutineScope,
-) : Listener {
+) : Player.Listener {
 
+    private companion object {
+        private const val TAG = "PlayerConnection"
+        private const val PLAYER_INIT_TIMEOUT_MS = 5000L
+    }
+
+    // its own job under the parent's, so dispose() can stop the pollers and flows this connection started
     val scope: CoroutineScope =
         CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
+
+    val context: Context = context.applicationContext
 
     val service = binder.service
     private val playerReadinessFlow = service.isPlayerReady
@@ -45,63 +52,114 @@ class PlayerConnection(
     private fun getPlayerSafe(): ExoPlayer {
         return try {
             if (!playerReadinessFlow.value) {
-                Timber.w("Player accessed before service initialization complete")
+                Timber.tag(TAG).w("Player accessed before service initialization complete; returning best-effort reference")
             }
-            service.getPlayer()
-        } catch (e: Exception) {
-            Timber.e(e, "Fatal: player property accessed but not initialized")
-            throw IllegalStateException("OrisMediaService.player not initialized", e)
+            service.player
+        } catch (e: UninitializedPropertyAccessException) {
+            Timber.tag(TAG).e(e, "Fatal: player property accessed but not initialized")
+            throw IllegalStateException("OrisMediaService.player not initialized; possible race condition in service startup", e)
         }
     }
 
     val player: ExoPlayer
         get() = getPlayerSafe()
 
-    private val _isPlayerInitialized = MutableStateFlow(playerReadinessFlow.value)
-    val isPlayerInitialized: StateFlow<Boolean> = _isPlayerInitialized
+    private val isPlayerInitialized = MutableStateFlow(service.isPlayerReady.value)
 
-    private val _playbackState = MutableStateFlow(Player.STATE_IDLE)
-    val playbackState: StateFlow<Int> = _playbackState
-
-    private val _playWhenReady = MutableStateFlow(false)
-    val playWhenReady: StateFlow<Boolean> = _playWhenReady
-
-    val isPlaying: StateFlow<Boolean> = combine(_playbackState, _playWhenReady) { state, ready ->
-        ready && state != Player.STATE_ENDED
-    }.stateIn(scope, SharingStarted.Lazily, false)
-
-    private val _currentMetadata = MutableStateFlow<MediaMetadata?>(null)
-    val currentMetadata: StateFlow<MediaMetadata?> = _currentMetadata
-
-    private val _currentMediaItem = MutableStateFlow<MediaItem?>(null)
-    val currentMediaItem: StateFlow<MediaItem?> = _currentMediaItem
-
-    private val _currentPosition = MutableStateFlow(0L)
-    val currentPosition: StateFlow<Long> = _currentPosition
-
-    private val _duration = MutableStateFlow(0L)
-    val duration: StateFlow<Long> = _duration
-
-    val canSkipNext = MutableStateFlow(true)
-    val canSkipPrevious = MutableStateFlow(true)
-    val shuffleModeEnabled = MutableStateFlow(false)
-    val repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
-    val error = MutableStateFlow<androidx.media3.common.PlaybackException?>(null)
-
-    private var attachedPlayer: Player? = null
+    val playbackState: MutableStateFlow<Int>
+    private val playWhenReady: MutableStateFlow<Boolean>
+    val isPlaying: StateFlow<Boolean>
 
     init {
+        Timber.tag(TAG).d("PlayerConnection init: playerReady=${playerReadinessFlow.value}")
+
+        val initialState = try {
+            val initialPlayer = getPlayerSafe()
+            Triple(initialPlayer.playbackState, initialPlayer.playWhenReady,
+                   initialPlayer.playWhenReady && initialPlayer.playbackState != STATE_ENDED)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error during PlayerConnection initialization, using defaults")
+            Triple(Player.STATE_IDLE, false, false)
+        }
+
+        playbackState = MutableStateFlow(initialState.first)
+        playWhenReady = MutableStateFlow(initialState.second)
+        isPlaying = combine(playbackState, playWhenReady) { state, ready -> ready && state != STATE_ENDED }
+            .stateIn(scope, SharingStarted.Lazily, initialState.third)
+
         scope.launch {
             playerReadinessFlow.collect { ready ->
-                _isPlayerInitialized.value = ready
-                if (ready && attachedPlayer == null) {
-                    updateAttachedPlayer(player)
+                isPlayerInitialized.value = ready
+                if (ready) {
+                    Timber.tag(TAG).d("Service player initialization detected by PlayerConnection")
                 }
             }
         }
 
-        if (service.isPlayerReady.value) {
-            updateAttachedPlayer(player)
+        Timber.tag(TAG).d("PlayerConnection state flows initialized successfully")
+    }
+
+    val isEffectivelyPlaying = combine(
+        isPlaying,
+        service.castConnectionHandler?.isCasting ?: MutableStateFlow(false),
+        service.castConnectionHandler?.castIsPlaying ?: MutableStateFlow(false)
+    ) { localPlaying, isCasting, castPlaying ->
+        if (isCasting) castPlaying else localPlaying
+    }.stateIn(
+        scope,
+        SharingStarted.Lazily,
+        player.playbackState != STATE_ENDED && player.playWhenReady
+    )
+
+    val mediaMetadata = MutableStateFlow<MediaMetadata?>(player.currentMetadata)
+
+    val currentMediaItemIndex = MutableStateFlow(-1)
+    val currentWindowIndex = MutableStateFlow(-1)
+
+    val shuffleModeEnabled = MutableStateFlow(false)
+    val repeatMode = MutableStateFlow(REPEAT_MODE_OFF)
+
+    val canSkipPrevious = MutableStateFlow(true)
+    val canSkipNext = MutableStateFlow(true)
+
+    val error = MutableStateFlow<PlaybackException?>(null)
+    val isMuted = service.isMuted
+
+    val waitingForNetworkConnection = service.waitingForNetworkConnection
+
+    /** Crossmix has the next song playing over the end of this one */
+    val isCrossmixing = service.crossmixMixing
+
+    /** Crossmix's last decision, for its test tools */
+    val crossmixStatus = service.crossmixStatus
+
+    fun testCrossmix() = service.testCrossmix()
+
+    var onSkipPrevious: (() -> Unit)? = null
+    var onSkipNext: (() -> Unit)? = null
+
+    private var attachedPlayer: Player? = null
+
+    init {
+        try {
+
+            scope.launch {
+                service.playerFlow.collect { newPlayer ->
+                    if (newPlayer != null && newPlayer != attachedPlayer) {
+                        updateAttachedPlayer(newPlayer)
+                    }
+                }
+            }
+
+            if (attachedPlayer == null && service.isPlayerReady.value) {
+                 updateAttachedPlayer(player)
+            }
+
+            Timber.tag(TAG).d("PlayerConnection flow observer registered")
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to initialize PlayerConnection listener or state")
+
+            throw e
         }
     }
 
@@ -110,97 +168,310 @@ class PlayerConnection(
         attachedPlayer = newPlayer
         newPlayer.addListener(this)
 
-        _playbackState.value = newPlayer.playbackState
-        _playWhenReady.value = newPlayer.playWhenReady
-        _currentMetadata.value = newPlayer.mediaMetadata
-        _currentMediaItem.value = newPlayer.currentMediaItem
-        _currentPosition.value = newPlayer.currentPosition
-        _duration.value = newPlayer.duration
+        playbackState.value = newPlayer.playbackState
+        playWhenReady.value = newPlayer.playWhenReady
+        mediaMetadata.value = newPlayer.currentMetadata
+        currentMediaItemIndex.value = newPlayer.currentMediaItemIndex
+        currentWindowIndex.value = newPlayer.getCurrentQueueIndex()
         shuffleModeEnabled.value = newPlayer.shuffleModeEnabled
         repeatMode.value = newPlayer.repeatMode
-        updateCanSkipNextPrevious()
+
+        Timber.tag(TAG).d("Attached to new player instance: $newPlayer")
     }
 
-    private fun updateCanSkipNextPrevious() {
-        val timeline = player.currentTimeline
-        if (!timeline.isEmpty) {
-            canSkipNext.value = player.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            canSkipPrevious.value = player.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-        } else {
-            canSkipNext.value = false
-            canSkipPrevious.value = false
+    fun playQueue(queue: OrisMediaService.Queue) {
+        if (!playerReadinessFlow.value) {
+            Timber.tag(TAG).w("playQueue called before player ready; delegating to service")
+        }
+        try {
+            service.playQueue(queue)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in playQueue")
+            throw e
+        }
+    }
+
+    fun startRadioSeamlessly() {
+
+        if (!playerReadinessFlow.value) {
+            Timber.tag(TAG).w("startRadioSeamlessly called before player ready; delegating to service")
+        }
+        try {
+            service.startRadioSeamlessly()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in startRadioSeamlessly")
+            throw e
+        }
+    }
+
+    fun playNext(item: MediaItem) = playNext(listOf(item))
+
+    fun playNext(items: List<MediaItem>) {
+        try {
+            service.playNext(items)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in playNext")
+            throw e
+        }
+    }
+
+    fun addToQueue(item: MediaItem) = addToQueue(listOf(item))
+
+    fun addToQueue(items: List<MediaItem>) {
+        try {
+            service.addToQueue(items)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in addToQueue")
+            throw e
+        }
+    }
+
+    fun clearQueue(): OrisMediaService.ClearedQueueState? {
+        return try {
+            service.clearQueue()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in clearQueue")
+            null
+        }
+    }
+
+    fun restoreQueue(state: OrisMediaService.ClearedQueueState) {
+        try {
+            service.restoreQueue(state)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in restoreQueue")
+        }
+    }
+
+    fun toggleLike() {
+        try {
+            service.toggleLike()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in toggleLike")
+        }
+    }
+
+    fun toggleMute() {
+        service.toggleMute()
+    }
+
+    fun setMuted(muted: Boolean) {
+        service.setMuted(muted)
+    }
+
+    fun toggleLibrary() {
+        try {
+            service.toggleLibrary()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in toggleLibrary")
+        }
+    }
+
+    fun togglePlayPause() {
+        try {
+            val castHandler = service.castConnectionHandler
+            if (castHandler?.isCasting?.value == true) {
+                if (castHandler.castIsPlaying.value) {
+                    castHandler.pause()
+                } else {
+                    castHandler.play()
+                }
+            } else {
+                player.togglePlayPause()
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in togglePlayPause")
         }
     }
 
     fun play() {
-        try { player.play() } catch (e: Exception) { Timber.e(e) }
+        try {
+            val castHandler = service.castConnectionHandler
+            if (castHandler?.isCasting?.value == true) {
+                castHandler.play()
+            } else {
+                if (player.playbackState == Player.STATE_IDLE) {
+                    player.prepare()
+                }
+                player.playWhenReady = true
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in play")
+        }
     }
 
     fun pause() {
-        try { player.pause() } catch (e: Exception) { Timber.e(e) }
+        try {
+            val castHandler = service.castConnectionHandler
+            if (castHandler?.isCasting?.value == true) {
+                castHandler.pause()
+            } else {
+                player.playWhenReady = false
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in pause")
+        }
     }
 
     fun seekTo(position: Long) {
-        try { player.seekTo(position) } catch (e: Exception) { Timber.e(e) }
+        try {
+            val castHandler = service.castConnectionHandler
+            if (castHandler?.isCasting?.value == true) {
+                castHandler.seekTo(position)
+            } else {
+                player.seekTo(position)
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in seekTo")
+        }
     }
 
     fun seekToNext() {
-        try { player.seekToNext() } catch (e: Exception) { Timber.e(e) }
+        try {
+
+            val castHandler = service.castConnectionHandler
+            if (castHandler?.isCasting?.value == true) {
+                castHandler.skipToNext()
+                return
+            }
+            player.seekToNext()
+            if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
+                player.prepare()
+            }
+            player.playWhenReady = true
+            onSkipNext?.invoke()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in seekToNext")
+        }
     }
+
+    var onRestartSong: (() -> Unit)? = null
 
     fun seekToPrevious() {
-        try { player.seekToPrevious() } catch (e: Exception) { Timber.e(e) }
-    }
-
-    fun setMediaItem(mediaItem: MediaItem) {
         try {
-            player.setMediaItem(mediaItem)
-            player.prepare()
-            player.playWhenReady = true
-        } catch (e: Exception) { Timber.e(e) }
+
+            val castHandler = service.castConnectionHandler
+            if (castHandler?.isCasting?.value == true) {
+                castHandler.skipToPrevious()
+                return
+            }
+
+            if (player.currentPosition > 3000 || !player.hasPreviousMediaItem()) {
+                player.seekTo(0)
+                if (
+                    player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED
+                ) {
+                    player.prepare()
+                }
+                player.playWhenReady = true
+                onRestartSong?.invoke()
+            } else {
+
+                player.seekToPreviousMediaItem()
+                if (
+                    player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED
+                ) {
+                    player.prepare()
+                }
+                player.playWhenReady = true
+                onSkipPrevious?.invoke()
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in seekToPrevious")
+        }
     }
 
     override fun onPlaybackStateChanged(state: Int) {
-        _playbackState.value = state
+        playbackState.value = state
         error.value = player.playerError
     }
 
-    override fun onPlayWhenReadyChanged(newPlayWhenReady: Boolean, reason: Int) {
-        _playWhenReady.value = newPlayWhenReady
+    override fun onPlayWhenReadyChanged(
+        newPlayWhenReady: Boolean,
+        reason: Int,
+    ) {
+        playWhenReady.value = newPlayWhenReady
     }
 
-    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-        _currentMediaItem.value = mediaItem
-        _currentMetadata.value = mediaItem?.mediaMetadata
-        _currentPosition.value = player.currentPosition
-        _duration.value = player.duration
-        updateCanSkipNextPrevious()
+    override fun onPositionDiscontinuity(
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        reason: Int,
+    ) {
+        val meta = player.currentMetadata
+        if (meta != null) {
+            mediaMetadata.value = meta
+        }
+        currentMediaItemIndex.value = player.currentMediaItemIndex
+        currentWindowIndex.value = player.getCurrentQueueIndex()
+        updateCanSkipPreviousAndNext()
     }
 
-    override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
-        updateCanSkipNextPrevious()
+    override fun onMediaItemTransition(
+        mediaItem: MediaItem?,
+        reason: Int,
+    ) {
+        mediaMetadata.value = mediaItem?.metadata ?: player.currentMetadata
+        currentMediaItemIndex.value = player.currentMediaItemIndex
+        currentWindowIndex.value = player.getCurrentQueueIndex()
+        updateCanSkipPreviousAndNext()
+    }
+
+    override fun onTimelineChanged(
+        timeline: Timeline,
+        reason: Int,
+    ) {
+        currentMediaItemIndex.value = player.currentMediaItemIndex
+        currentWindowIndex.value = player.getCurrentQueueIndex()
+        updateCanSkipPreviousAndNext()
     }
 
     override fun onShuffleModeEnabledChanged(enabled: Boolean) {
         shuffleModeEnabled.value = enabled
-        updateCanSkipNextPrevious()
+        updateCanSkipPreviousAndNext()
     }
 
     override fun onRepeatModeChanged(mode: Int) {
         repeatMode.value = mode
-        updateCanSkipNextPrevious()
+        updateCanSkipPreviousAndNext()
     }
 
-    override fun onPlayerErrorChanged(playbackError: androidx.media3.common.PlaybackException?) {
-        error.value = playbackError
+    override fun onPlayerErrorChanged(playbackError: PlaybackException?) {
         if (playbackError != null) {
             Timber.e(playbackError, "Player error")
+        }
+        error.value = playbackError
+    }
+
+    private fun updateCanSkipPreviousAndNext() {
+        if (
+            !player.currentTimeline.isEmpty &&
+              player.currentMediaItemIndex != androidx.media3.common.C.INDEX_UNSET &&
+              player.currentMediaItemIndex >= 0 &&
+              player.currentMediaItemIndex < player.currentTimeline.windowCount
+        ) {
+            val window = player.currentTimeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
+            canSkipPrevious.value =
+                player.isCommandAvailable(COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) ||
+                  !window.isLive ||
+                  player.isCommandAvailable(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            canSkipNext.value =
+                window.isLive && window.isDynamic ||
+                  player.isCommandAvailable(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+        } else {
+            canSkipPrevious.value = false
+            canSkipNext.value = false
         }
     }
 
     fun dispose() {
-        attachedPlayer?.removeListener(this)
-        attachedPlayer = null
-        scope.cancel()
+        try {
+            attachedPlayer?.removeListener(this)
+            attachedPlayer = null
+            scope.cancel()
+            Timber.tag(TAG).d("PlayerConnection disposed successfully")
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error during PlayerConnection disposal")
+        }
     }
 }
