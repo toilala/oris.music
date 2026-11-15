@@ -29,9 +29,13 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var database: com.orismusic.client.di.MusicDatabase
 
     private var playerConnection: PlayerConnection? = null
     private var isBound = false
@@ -65,7 +69,7 @@ class MainActivity : ComponentActivity() {
 
     private fun connectTo(binder: OrisMediaService.MusicBinder) {
         val previous = playerConnection
-        playerConnection = PlayerConnection(this, binder, com.orismusic.client.di.MusicDatabase { }, lifecycleScope).also { connection ->
+        playerConnection = PlayerConnection(this, binder, database, lifecycleScope).also { connection ->
             lifecycleScope.launch {
                 connection.isPlayerInitialized.collect { ready ->
                     if (ready) {

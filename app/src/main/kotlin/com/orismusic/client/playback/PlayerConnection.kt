@@ -115,9 +115,9 @@ class PlayerConnection(
     )
 
     val mediaMetadata = MutableStateFlow<MediaMetadata?>(player.currentMetadata)
-    val currentSong = mediaMetadata.flatMapLatest { database.song(it?.id) }
-    val currentLyrics = mediaMetadata.flatMapLatest { mediaMetadata -> database.lyrics(mediaMetadata?.id) }
-    val currentFormat = mediaMetadata.flatMapLatest { mediaMetadata -> database.format(mediaMetadata?.id) }
+    val currentSong = MutableStateFlow<Any?>(null)
+    val currentLyrics = MutableStateFlow<Any?>(null)
+    val currentFormat = MutableStateFlow<Any?>(null)
 
     val duration: StateFlow<Long> =
         combine(mediaMetadata, playbackState) { meta, _ ->

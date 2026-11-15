@@ -200,7 +200,7 @@ private fun playDemoTrack(connection: PlayerConnection) {
 
     val queue = com.orismusic.client.playback.queues.ListQueue(
         title = "Demo",
-        items = listOf(mediaItem)
+        mediaItems = listOf(mediaItem)
     )
     connection.playQueue(queue)
 }
