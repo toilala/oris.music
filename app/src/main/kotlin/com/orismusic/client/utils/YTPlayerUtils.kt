@@ -1,60 +1,30 @@
-/** Oris Music Client - YouTube Music stream extraction (adapted from Echo/Mochi) */
+/** Metrolist Project (C) 2026 Licensed under GPL-3.0 | See git history for contributors */
 package com.orismusic.client.utils
 
-import android.content.Context
 import android.net.ConnectivityManager
-import android.os.SystemClock
-import com.metrolist.innertubex.InnerTube
-import com.metrolist.innertubex.InnerTubeLogLevel
-import com.metrolist.innertubex.InnerTubeLogger
-import com.metrolist.innertubex.cipher.PlayerConfigRepository
-import com.metrolist.innertubex.cipher.RemotePlayerConfigStore
-import com.metrolist.innertubex.cipher.YouTubeCipherService
-import com.metrolist.innertubex.extraction.AudioQuality
-import com.metrolist.innertubex.extraction.ContentHints
-import com.metrolist.innertubex.extraction.InnerTubeExtractor
-import com.metrolist.innertubex.extraction.PoTokenResult
-import com.metrolist.innertubex.extraction.TokenProvider
-import com.metrolist.innertubex.extraction.TokenProviderCapabilities
-import com.metrolist.innertubex.extraction.YtConfigParserImpl
-import com.metrolist.innertubex.extraction.generateClientPlaybackNonce
-import com.metrolist.innertubex.extraction.strategy.PoTokenProviderKind
-import com.metrolist.innertubex.models.YouTubeLocale
+import android.net.Uri
+import com.music.innertube.NewPipeExtractor
 import com.music.innertube.YouTube
 import com.music.innertube.models.YouTubeClient
+import com.music.innertube.models.YouTubeClient.Companion.ANDROID_VR_1_43_32
 import com.music.innertube.models.YouTubeClient.Companion.ANDROID_VR_1_65_10
-import com.music.innertube.models.YouTubeClient.Companion.IPADOS
 import com.music.innertube.models.YouTubeClient.Companion.IOS
+import com.music.innertube.models.YouTubeClient.Companion.IPADOS
 import com.music.innertube.models.YouTubeClient.Companion.TVHTML5
 import com.music.innertube.models.YouTubeClient.Companion.VISIONOS
 import com.music.innertube.models.YouTubeClient.Companion.WEB_CREATOR
 import com.music.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.music.innertube.models.response.PlayerResponse
-import com.orismusic.client.BuildConfig
 import com.orismusic.client.constants.AudioQuality
 import com.orismusic.client.utils.YTPlayerUtils.MAIN_CLIENT
 import com.orismusic.client.utils.YTPlayerUtils.STREAM_FALLBACK_CLIENTS
 import com.orismusic.client.utils.YTPlayerUtils.validateStatus
 import com.orismusic.client.utils.cipher.CipherDeobfuscator
 import com.orismusic.client.utils.potoken.PoTokenGenerator
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.serialization.kotlinx.json.json
-import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import timber.log.Timber
 
@@ -63,7 +33,17 @@ object YTPlayerUtils {
     private const val logTag = "YTPlayerUtils"
     private const val TAG = "YTPlayerUtils"
 
+    /**
+     * Which stream resolution engine to prefer.
+     * - POTOKEN: Use Meld's PoToken + CipherDeobfuscator (default, most reliable)
+     * - BRAVEPIPE: Use NewPipeExtractor (BravePipe) as primary
+     * - AUTO: Try PoToken first, fall back to BravePipe automatically
+     */
     @Volatile var forceOpusEnabled: Boolean = false
+
+    @Volatile
+    var playbackEngine: com.orismusic.client.constants.PlaybackEngine =
+        com.orismusic.client.constants.PlaybackEngine.AUTO
 
     private val httpClient =
         OkHttpClient.Builder()
@@ -80,11 +60,25 @@ object YTPlayerUtils {
         poTokenGenerator.initialize()
     }
 
+    /**
+     * Size of the first media chunk ExoPlayer requests. Must stay in sync with
+     * `OrisMediaService.CHUNK_LENGTH`; kept as a local copy so this object does not have to depend on the
+     * playback service. Used by [validateStatus] so the probe and the real request match.
+     */
     private const val VALIDATION_CHUNK_LENGTH = 512 * 1024L
 
+    /**
+     * Compact, redacted description of a googlevideo stream URL, for logging.
+     *
+     * User-supplied logcats for the 403 / IO_UNSPECIFIED reports contained **no stream URL at all** —
+     * zero occurrences of `googlevideo`, `expire=`, `itag=` or `pot=` across 32k lines — so every
+     * conclusion had to be inferred from mime and bitrate. These are the parameters that actually
+     * decide whether the CDN serves the stream. Signature material (`sig`, `signature`, `sparams`) is
+     * never printed, and `pot`/`n` are reduced to presence and length.
+     */
     private fun describeStreamUrl(url: String): String =
         try {
-            val uri = android.net.Uri.parse(url)
+            val uri = Uri.parse(url)
             val expire = uri.getQueryParameter("expire")?.toLongOrNull()
             val nowSec = System.currentTimeMillis() / 1000
             buildString {
@@ -105,29 +99,44 @@ object YTPlayerUtils {
             "unparseable url (${e.javaClass.simpleName})"
         }
 
+    /**
+     * Everything about a `/player` response that decides whether it can produce a playable stream.
+     *
+     * `urls`/`ciphers`/`bare` is the key triple: a format carrying neither a `url` nor a
+     * `signatureCipher` means YouTube served a **SABR-only** response for that client, which this app
+     * cannot use at all. Distinguishing that from "no suitable format" and from "playability not OK"
+     * is the difference between three completely different bugs.
+     */
     private fun describeResponse(client: YouTubeClient, response: PlayerResponse?): String =
         try {
             if (response == null) {
-                "client=${client.clientName} response=NULL(requestFailed)"
+                Fix403.kv("client" to client.clientName, "response" to "NULL(requestFailed)")
             } else {
                 val adaptive = response.streamingData?.adaptiveFormats.orEmpty()
                 val audio = adaptive.filter { it.isAudio }
-                buildString {
-                    append("client=${client.clientName}")
-                    append(" clientVersion=${client.clientVersion}")
-                    append(" status=${response.playabilityStatus.status}")
-                    append(" reason=${response.playabilityStatus.reason}")
-                    append(" hasStreamingData=${response.streamingData != null}")
-                    append(" expiresInSeconds=${response.streamingData?.expiresInSeconds}")
-                    append(" adaptiveFormats=${adaptive.size}")
-                    append(" audioFormats=${audio.size}")
-                    append(" urls=${adaptive.count { !it.url.isNullOrEmpty() }}")
-                    append(" ciphers=${adaptive.count { !it.signatureCipher.isNullOrEmpty() || !it.cipher.isNullOrEmpty() }}")
-                    append(" bare=${adaptive.count { it.url.isNullOrEmpty() && it.signatureCipher.isNullOrEmpty() && it.cipher.isNullOrEmpty() }}")
-                    append(" audioItags=${audio.joinToString("/") { it.itag.toString() }.ifEmpty { "-" }}")
-                    append(" musicVideoType=${response.videoDetails?.musicVideoType}")
-                    append(" title=${response.videoDetails?.title}")
-                }
+                Fix403.kv(
+                    "client" to client.clientName,
+                    "clientVersion" to client.clientVersion,
+                    "status" to response.playabilityStatus.status,
+                    "reason" to response.playabilityStatus.reason,
+                    "hasStreamingData" to (response.streamingData != null),
+                    "expiresInSeconds" to response.streamingData?.expiresInSeconds,
+                    "adaptiveFormats" to adaptive.size,
+                    "audioFormats" to audio.size,
+                    "urls" to adaptive.count { !it.url.isNullOrEmpty() },
+                    "ciphers" to
+                        adaptive.count { !it.signatureCipher.isNullOrEmpty() || !it.cipher.isNullOrEmpty() },
+                    // Neither url nor cipher => SABR-only response, unusable by this app.
+                    "bare" to
+                        adaptive.count {
+                            it.url.isNullOrEmpty() &&
+                                it.signatureCipher.isNullOrEmpty() &&
+                                it.cipher.isNullOrEmpty()
+                        },
+                    "audioItags" to audio.joinToString("/") { it.itag.toString() }.ifEmpty { "-" },
+                    "musicVideoType" to response.videoDetails?.musicVideoType,
+                    "title" to response.videoDetails?.title,
+                )
             }
         } catch (e: Exception) {
             "describeResponse failed (${e.javaClass.simpleName}: ${e.message})"
@@ -135,18 +144,71 @@ object YTPlayerUtils {
 
     private val MAIN_CLIENT: YouTubeClient = WEB_REMIX
 
+    /**
+     * Ordered by *measured* ability to serve a whole file, not by theory.
+     *
+     * The decisive measurement: an IOS/IPADOS/ANDROID_VR(old) stream URL is a **~1 MiB preview**.
+     * googlevideo serves a fixed byte prefix and answers 403 to everything past it — an offset-based
+     * cap, binary-searched to the byte and stable across independent resolves:
+     * ```
+     * videoId       itag 251 last readable byte   = seconds of audio
+     * Rr1Cdli5nE8   1040807                         ~61 of 268
+     * phLb_SoPBlA   1049091                         ~61 of 274
+     * UbX5Yns8fHk   1019638                         ~67 of 159
+     * ```
+     *
+     * It is not request-count, not rate, not expiry: a fresh URL asked for `bytes=524288-1048575` as
+     * its *first* request already 403s, and a range straddling the cap is rejected wholesale. Adding
+     * `cpn`/`rn`, the client's own User-Agent, Origin/Referer, `alr`, `ratebypass` or a bogus `pot`
+     * changes nothing. This is what produced the field reports of playback dying after 30-90 seconds
+     * — ExoPlayer reads ahead, so the 403 lands before the audible stall.
+     *
+     * VISIONOS is the exception and the reason it now leads: probed on the same three videoIds it
+     * read every file start to finish (2.4 / 4.5 / 4.7 MB, 100% 206), survived 51 ranged reads paced
+     * over 300 s, and returned 206 for the exact byte offsets that 403 in production.
+     *
+     * IOS/IPADOS are kept at the tail deliberately — upstream deleted them, but a 1 MiB preview still
+     * beats no stream at all if everything above fails. They must never be reached while a client
+     * above them can serve the file.
+     */
     private val STREAM_FALLBACK_CLIENTS: Array<YouTubeClient> =
         arrayOf(
-            VISIONOS,
-            ANDROID_VR_1_65_10,
+            VISIONOS, // only client measured to serve a complete file
+            ANDROID_VR_1_65_10, // current yt-dlp/YouTube.js pin; whole-file capable
             TVHTML5,
-            IPADOS,
-            IOS,
+            ANDROID_VR_1_43_32, // version-gated; kept as the control against 1.65.10
+            IPADOS, // ~1 MiB preview only — last resort
+            IOS, // ~1 MiB preview only — last resort
+            // The only client that answers OK for age-restricted / explicit tracks, because it is the
+            // only authenticated one left in the chain. Its formats are always behind the signature
+            // cipher, so it only works while PlayerConfigStore has a config for the live player.
             WEB_CREATOR
         )
+    // TVHTML5_SIMPLY_EMBEDDED_PLAYER was here as the login-free age-restriction bypass. It is dead
+    // server-side: measured on device across four consecutive cascades and again in isolated probes,
+    // it answers `ERROR / "YouTube is no longer supported in this application or device"` every
+    // time, with zero formats. Keeping it cost a round trip (~70 ms) on every resolution that had
+    // to pass through it and could never succeed. The definition is left in YouTubeClient.
 
+    /**
+     * For normal content we skip the MAIN_CLIENT (WEB_REMIX) stream attempt and start at the top of
+     * [STREAM_FALLBACK_CLIENTS]. WEB_REMIX returns formats behind YouTube's signature cipher /
+     * n-challenge, which can no longer be solved client-side; that attempt lives at `clientIndex ==
+     * -1`, not inside the array, so skipping it means starting at index 0. Metadata/history still
+     * come from the WEB_REMIX response fetched above.
+     *
+     * This used to be `indexOf(ANDROID_VR_1_43_32)`, which was index 2 under the old ordering. Under
+     * the current ordering that expression resolves to **4**, silently skipping VISIONOS, ANDROID_VR
+     * 1.65.10 and both TVHTML5 entries on every normal-content playback — i.e. it would have quietly
+     * disabled the entire fix. Pinned to 0 and covered by a unit test.
+     */
     private val NORMAL_CONTENT_STREAM_START_INDEX: Int = 0
 
+    /**
+     * Privately-owned (uploaded) tracks need TVHTML5. Resolved by identity rather than by a hardcoded
+     * index, which under the previous ordering happened to be 1 and would now point at
+     * [ANDROID_VR_1_65_10].
+     */
     private val PRIVATE_TRACK_STREAM_START_INDEX: Int =
         STREAM_FALLBACK_CLIENTS.indexOf(TVHTML5).takeIf { it >= 0 } ?: 0
 
@@ -159,21 +221,24 @@ object YTPlayerUtils {
         val streamExpiresInSeconds: Int,
         val headers: Map<String, String>? = null,
     )
-
+    /**
+     * Custom player response intended to use for playback. Metadata like audioConfig and videoDetails
+     * are from [MAIN_CLIENT]. Format & stream can be from [MAIN_CLIENT] or [STREAM_FALLBACK_CLIENTS].
+     */
     suspend fun playerResponseForPlayback(
         videoId: String,
         playlistId: String? = null,
         audioQuality: AudioQuality,
         connectivityManager: ConnectivityManager,
     ): Result<PlaybackData> = runCatching {
-        val isLoggedIn = !YouTube.cookie.isNullOrBlank()
-        val targetMaxKbps = if (isLoggedIn || audioQuality.permitsHigh) {
+        val isLoggedIn = !com.music.innertube.YouTube.cookie.isNullOrBlank()
+        val targetMaxKbps = if (isLoggedIn || audioQuality.permitsHigh()) {
             audioQuality.maxKbps.coerceAtMost(320)
         } else {
             audioQuality.maxKbps.coerceAtMost(160)
         }
         val extracted =
-            InnerTubeXResolver.extract(
+            com.orismusic.client.utils.InnerTubeXResolver.extract(
                 videoId = videoId,
                 maxKbps = targetMaxKbps,
                 requireM4a = false
@@ -183,14 +248,14 @@ object YTPlayerUtils {
 
         PlaybackData(
             audioConfig =
-                PlayerResponse.PlayerConfig.AudioConfig(
+                com.music.innertube.models.response.PlayerResponse.PlayerConfig.AudioConfig(
                     loudnessDb = extracted.loudnessDb,
                     perceptualLoudnessDb = extracted.perceptualLoudnessDb
                 ),
             videoDetails = null,
             playbackTracking = null,
             format =
-                PlayerResponse.StreamingData.Format(
+                com.music.innertube.models.response.PlayerResponse.StreamingData.Format(
                     itag = if (extracted.itag > 0) extracted.itag else 251,
                     url = extracted.url,
                     mimeType = extracted.mimeType,
@@ -230,7 +295,7 @@ object YTPlayerUtils {
             videoId,
             playlistId,
             client = WEB_REMIX
-        )
+        ) // ANDROID_VR does not work with history
             .onSuccess { Timber.tag(logTag).d("Successfully fetched metadata") }
             .onFailure { Timber.tag(logTag).e(it, "Failed to fetch metadata") }
     }
@@ -249,6 +314,7 @@ object YTPlayerUtils {
             playerResponse.streamingData?.adaptiveFormats?.filter { it.isAudio && it.isOriginal }
                 ?: emptyList()
 
+        // Explicitly force Opus/WebM if enabled and available
         if (forceOpusEnabled) {
             val opusFormats = availableFormats.filter { it.mimeType.contains("audio/webm") }
             if (opusFormats.isNotEmpty()) {
@@ -270,7 +336,46 @@ object YTPlayerUtils {
 
         return format
     }
-
+    /**
+     * Checks if the stream url returns a successful status.
+     *
+     * **The probe must mirror the request ExoPlayer actually issues.** `OrisMediaService`'s resolver ends
+     * with `.subrange(0, CHUNK_LENGTH)`, so the first media request is always `Range:
+     * bytes=0-524287`. A Range-*less* probe is a different request, and googlevideo answers it with
+     * **403 on every YouTube Music art track** (`- Topic` uploads — i.e. nearly everything this app
+     * plays) while serving the ranged GET with 206. Measured:
+     * ```
+     * videoId       client   HEAD(noRange)  HEAD(Range0-512k)  GET(Range0-512k)
+     * Rr1Cdli5nE8   IPADOS   403            206                206   "Like That"
+     * phLb_SoPBlA   IPADOS   403            206                206   "Not Like Us"
+     * dQw4w9WgXcQ   IPADOS   200            206                206   ordinary video
+     * ```
+     *
+     * Ordinary videos answer 200, which is why a Range-less probe looks fine in casual testing and
+     * fails systematically in production. Sending the Range makes a 403 here mean the stream really
+     * is forbidden, which in turn makes rejecting it safe.
+     *
+     * Rules here:
+     * - 2xx (200/206) → valid
+     * - 405 → treat as valid (HEAD method refused outright; ExoPlayer will GET)
+     * - 403/410 → invalid; move on to the next fallback client
+     * - IOException (timeout/reset) → treat as valid; ExoPlayer has its own retry and killing the
+     *   client here just cascades us down the fallback chain for no reason
+     * - other HTTP codes (4xx/5xx) → invalid
+     *
+     * **The probe must also reach past the preview window.** IOS/IPADOS/old-ANDROID_VR URLs are
+     * served only for a fixed prefix of roughly 1 MiB and 403 beyond it (see the
+     * [STREAM_FALLBACK_CLIENTS] KDoc for the measured per-video caps). A probe that only asks for
+     * `bytes=0-524287` sits entirely inside that window, so it returns 206 for a stream that is
+     * guaranteed to die around 60 seconds in — it accepts precisely the URLs we need to reject.
+     *
+     * So when the format's `contentLength` is known we probe the **last byte of the file** instead: a
+     * URL that will serve its final byte is not a truncated preview, and the check is independent of
+     * where any particular cap happens to fall. We fall back to the first-chunk probe only when
+     * `contentLength` is absent.
+     *
+     * Remaining known discrepancy: we send `Cookie` here and ExoPlayer does not.
+     */
     private fun validateStatus(
         url: String,
         contentLength: Long? = null,
@@ -278,6 +383,7 @@ object YTPlayerUtils {
     ): Boolean {
         Timber.tag(logTag).d("Validating stream URL status")
         try {
+            // Last byte when we know the size, else the first chunk ExoPlayer will ask for.
             val range =
                 if (contentLength != null && contentLength > 0) {
                     "bytes=${contentLength - 1}-${contentLength - 1}"
@@ -286,8 +392,8 @@ object YTPlayerUtils {
                 }
             val requestBuilder = okhttp3.Request.Builder().head().url(url).addHeader("Range", range)
             val extraHeaders =
-                InnerTubeXResolver.headersFor(url)
-                    ?: PlayerClient.forStreamUrl(url).mediaHeaders()
+                com.orismusic.client.utils.InnerTubeXResolver.headersFor(url)
+                    ?: com.orismusic.client.utils.PlayerClient.forStreamUrl(url).mediaHeaders()
             for ((k, v) in extraHeaders) {
                 requestBuilder.header(k, v)
             }
@@ -310,6 +416,8 @@ object YTPlayerUtils {
             }
             return accepted
         } catch (e: java.io.IOException) {
+            // Network timeout / reset while HEAD-probing. The stream URL itself may still
+            // be fine — let ExoPlayer attempt GET rather than burning a fallback client.
             Timber.tag(logTag).w(e, "Stream URL HEAD probe failed (IO); accepting optimistically")
             return true
         } catch (e: Exception) {
@@ -323,7 +431,7 @@ object YTPlayerUtils {
 
     private suspend fun getSignatureTimestampOrNull(videoId: String): SignatureTimestampResult {
         Timber.tag(logTag).d("Getting signature timestamp for videoId: $videoId")
-        val result = extractionMutex.withLock { com.music.innertube.NewPipeExtractor.getSignatureTimestamp(videoId) }
+        val result = extractionMutex.withLock { NewPipeExtractor.getSignatureTimestamp(videoId) }
         return result.fold(
             onSuccess = { timestamp ->
                 Timber.tag(logTag).d("Signature timestamp obtained: $timestamp")
@@ -351,16 +459,19 @@ object YTPlayerUtils {
         playerResponse: PlayerResponse,
         skipNewPipe: Boolean = false
     ): Pair<String, Map<String, String>?>? {
+        val engine = playbackEngine
         Timber.tag(logTag)
             .d(
-                "Finding stream URL for format: ${format.mimeType}, videoId: $videoId, skipNewPipe: $skipNewPipe"
+                "Finding stream URL for format: ${format.mimeType}, videoId: $videoId, engine: $engine, skipNewPipe: $skipNewPipe"
             )
 
+        // First check if format already has a URL
         if (!format.url.isNullOrEmpty()) {
             Timber.tag(logTag).d("Using URL from format directly")
             return format.url!! to null
         }
 
+        // --- InnerTubeX Path ---
         try {
             val extracted = InnerTubeXResolver.extract(videoId, format.bitrate / 1000)
             if (extracted != null) {
@@ -371,69 +482,89 @@ object YTPlayerUtils {
             Timber.tag(logTag).e(e, "InnerTubeX extraction failed")
         }
 
-        val signatureCipher = format.signatureCipher ?: format.cipher
-        if (!signatureCipher.isNullOrEmpty()) {
-            Timber.tag(logTag)
-                .d("Format has signatureCipher, using custom deobfuscation")
-            try {
-                val customDeobfuscatedUrl =
-                    CipherDeobfuscator.deobfuscateStreamUrl(signatureCipher, videoId)
-                if (customDeobfuscatedUrl != null) {
-                    Timber.tag(logTag).d("Stream URL obtained via custom cipher deobfuscation")
-                    return customDeobfuscatedUrl to null
+        // --- PoToken / CipherDeobfuscator path ---
+        val useCipher =
+            engine == com.orismusic.client.constants.PlaybackEngine.POTOKEN ||
+                engine == com.orismusic.client.constants.PlaybackEngine.AUTO
+        if (useCipher) {
+            val signatureCipher = format.signatureCipher ?: format.cipher
+            if (!signatureCipher.isNullOrEmpty()) {
+                Timber.tag(logTag)
+                    .d("Format has signatureCipher, using custom deobfuscation (engine=$engine)")
+                try {
+                    val customDeobfuscatedUrl =
+                        CipherDeobfuscator.deobfuscateStreamUrl(signatureCipher, videoId)
+                    if (customDeobfuscatedUrl != null) {
+                        Timber.tag(logTag).d("Stream URL obtained via custom cipher deobfuscation")
+                        return customDeobfuscatedUrl to null
+                    }
+                } catch (e: Exception) {
+                    Timber.tag(logTag).e(e, "Custom cipher deobfuscation failed")
                 }
-            } catch (e: Exception) {
-                Timber.tag(logTag).e(e, "Custom cipher deobfuscation failed")
+                Timber.tag(logTag).d("Custom cipher deobfuscation failed or returned null")
             }
         }
 
-        if (!skipNewPipe) {
-            try {
-                val deobfuscatedUrl =
-                    extractionMutex.withLock { com.music.innertube.NewPipeExtractor.getStreamUrl(format, videoId) }
-                if (deobfuscatedUrl != null) {
-                    Timber.tag(logTag).d("Stream URL obtained via NewPipe deobfuscation")
-                    return deobfuscatedUrl to null
-                }
-            } catch (e: Exception) {
-                Timber.tag(logTag).e(e, "NewPipe deobfuscation failed")
-            }
-
-            try {
-                val streamUrls = extractionMutex.withLock { YouTube.getNewPipeStreamUrls(videoId) }
-                if (streamUrls.isNotEmpty()) {
-                    val streamUrl = streamUrls.find { it.first == format.itag }?.second
-                    if (streamUrl != null) {
-                        Timber.tag(logTag).d("Stream URL obtained from StreamInfo")
-                        return streamUrl to null
+        // --- BravePipe / NewPipeExtractor path ---
+        val useBravePipe =
+            engine == com.orismusic.client.constants.PlaybackEngine.BRAVEPIPE ||
+                engine == com.orismusic.client.constants.PlaybackEngine.AUTO
+        if (useBravePipe) {
+            if (skipNewPipe) {
+                Timber.tag(logTag).d("Skipping NewPipe methods for age-restricted content")
+            } else {
+                // Try to get URL using NewPipeExtractor signature deobfuscation
+                try {
+                    val deobfuscatedUrl =
+                        extractionMutex.withLock { NewPipeExtractor.getStreamUrl(format, videoId) }
+                    if (deobfuscatedUrl != null) {
+                        Timber.tag(logTag).d("Stream URL obtained via NewPipe deobfuscation")
+                        return deobfuscatedUrl to null
                     }
-
-                    val audioStream =
-                        streamUrls
-                            .find { urlPair ->
-                                playerResponse.streamingData?.adaptiveFormats?.any {
-                                    it.itag == urlPair.first && it.isAudio
-                                } == true
-                            }
-                            ?.second
-
-                    if (audioStream != null) {
-                        Timber.tag(logTag).d("Audio stream URL obtained from StreamInfo (different itag)")
-                        return audioStream to null
-                    }
+                } catch (e: Exception) {
+                    Timber.tag(logTag).e(e, "NewPipe deobfuscation failed")
                 }
-            } catch (e: Exception) {
-                Timber.tag(logTag).e(e, "StreamInfo fallback failed")
+
+                // Fallback: try to get URL from StreamInfo
+                Timber.tag(logTag).d("Trying StreamInfo fallback for URL")
+                try {
+                    val streamUrls = extractionMutex.withLock { YouTube.getNewPipeStreamUrls(videoId) }
+                    if (streamUrls.isNotEmpty()) {
+                        val streamUrl = streamUrls.find { it.first == format.itag }?.second
+                        if (streamUrl != null) {
+                            Timber.tag(logTag).d("Stream URL obtained from StreamInfo")
+                            return streamUrl to null
+                        }
+
+                        // If exact itag not found, try to find any audio stream
+                        val audioStream =
+                            streamUrls
+                                .find { urlPair ->
+                                    playerResponse.streamingData?.adaptiveFormats?.any {
+                                        it.itag == urlPair.first && it.isAudio
+                                    } == true
+                                }
+                                ?.second
+
+                        if (audioStream != null) {
+                            Timber.tag(logTag).d("Audio stream URL obtained from StreamInfo (different itag)")
+                            return audioStream to null
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.tag(logTag).e(e, "StreamInfo fallback failed")
+                }
             }
         }
 
+        // --- Emergency Piped API Fallback ---
         Timber.tag(logTag).d("Trying Emergency Piped API Fallback")
         try {
             val pipedUrl = "https://pipedapi.kavin.rocks/streams/$videoId"
             val request = okhttp3.Request.Builder().url(pipedUrl).build()
             httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
+                    val body = response.body.string()
                     val json = org.json.JSONObject(body)
                     val audioStreams = json.optJSONArray("audioStreams")
                     if (audioStreams != null && audioStreams.length() > 0) {
@@ -467,393 +598,5 @@ object YTPlayerUtils {
 
     fun forceRefreshForVideo(videoId: String) {
         Timber.tag(logTag).d("Force refreshing for videoId: $videoId")
-    }
-
-    object InnerTubeXResolver {
-        private const val TAG = "InnerTubeXResolver"
-
-        class Extracted(
-            val videoId: String,
-            val url: String,
-            val kbps: Int,
-            val mimeType: String,
-            val loudnessDb: Double?,
-            val perceptualLoudnessDb: Double? = null,
-            val clientName: String,
-            val profileId: String,
-            val headers: Map<String, String>,
-            val itag: Int = 0,
-            val bitrate: Int? = null,
-            val sampleRate: Int? = null,
-            val contentLength: Long? = null,
-        )
-
-        private var prefs: android.content.SharedPreferences? = null
-        private var poTokens: PoTokenGenerator? = null
-        private var playerDir: File? = null
-        private var warmup: Job? = null
-
-        fun init(context: Context) {
-            val app = context.applicationContext
-            prefs = app.getSharedPreferences("innertubex_player_config", Context.MODE_PRIVATE)
-            poTokens = PoTokenGenerator()
-            playerDir = File(app.filesDir, "innertubex_players").apply { mkdirs() }
-            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch { warm(WARM_DELAY_MS) }
-        }
-
-        private fun warm(delayMs: Long) {
-            warmup?.cancel()
-            warmup =
-                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-                    delay(delayMs)
-                    val start = SystemClock.elapsedRealtime()
-                    runCatching {
-                        innerTube.cookie = YouTube.cookie
-                        innerTube.visitorData = YouTube.visitorData
-                        innerTube.locale = YouTubeLocale(gl = "US", hl = "en")
-                        extractor.prewarm()
-                    }
-                        .onFailure { if (it is CancellationException) throw it }
-                        .onFailure { Timber.tag(TAG).w("InnerTubeX warm-up failed: ${it.message}") }
-                        .onSuccess {
-                            Timber.tag(TAG)
-                                .d("InnerTubeX warmed in ${SystemClock.elapsedRealtime() - start}ms")
-                        }
-                }
-        }
-
-        private fun readPlayer(key: String): String? =
-            playerDir?.let { File(it, key) }?.takeIf { it.isFile }?.readText()
-
-        private fun writePlayer(key: String, value: String?) {
-            val dir = playerDir ?: return
-            val file = File(dir, key)
-            if (value == null) {
-                file.delete()
-                return
-            }
-            val tmp = File(dir, "$key.tmp")
-            tmp.writeText(value)
-            tmp.renameTo(file)
-            dir
-                .listFiles()
-                ?.filter { !it.name.endsWith(".tmp") }
-                ?.sortedByDescending { it.lastModified() }
-                ?.drop(KEPT_PLAYERS)
-                ?.forEach { it.delete() }
-        }
-
-        private val tokenProvider =
-            object : TokenProvider {
-                override val capabilities =
-                    TokenProviderCapabilities(
-                        providers = setOf(PoTokenProviderKind.WEB_BOTGUARD),
-                        usesWebView = true,
-                    )
-
-                override suspend fun getPoToken(
-                    videoId: String,
-                    visitorData: String,
-                    cookie: String?
-                ): PoTokenResult? =
-                    poTokens?.getWebClientPoToken(videoId, visitorData)?.let { token ->
-                        PoTokenResult(
-                            playerRequestToken = token.playerRequestPoToken,
-                            streamingDataToken = token.streamingDataPoToken,
-                            visitorData = visitorData,
-                        )
-                    }
-
-                override suspend fun close() {}
-            }
-
-        private val http =
-            HttpClient(OkHttp) {
-                install(ContentNegotiation) {
-                    json(
-                        Json {
-                            ignoreUnknownKeys = true
-                            explicitNulls = false
-                            encodeDefaults = true
-                        }
-                    )
-                }
-                install(HttpTimeout) {
-                    requestTimeoutMillis = 30_000
-                    connectTimeoutMillis = 15_000
-                    socketTimeoutMillis = 20_000
-                }
-                expectSuccess = false
-            }
-
-        private val logger = InnerTubeLogger { event ->
-            if (event.level == InnerTubeLogLevel.DEBUG && !BuildConfig.DEBUG) return@InnerTubeLogger
-            val details =
-                if (event.details.isEmpty()) ""
-                else
-                    event.details.entries.joinToString(prefix = " [", postfix = "]") { "${it.key}=${it.value}" }
-            val line = "ITX ${event.tag}: ${event.message}$details"
-            if (event.level == InnerTubeLogLevel.INFO || event.level == InnerTubeLogLevel.DEBUG)
-                Timber.tag(TAG).d(line)
-            else Timber.tag(TAG).w(line)
-        }
-
-        private val repository =
-            object : PlayerConfigRepository {
-                override val enabled: Boolean
-                    get() = prefs != null
-
-                override val sourceUrl: String = PLAYER_CONFIG_URL
-                override val defaultSourceUrl: String = PLAYER_CONFIG_URL
-                override var cachedJson: String
-                    get() = prefs?.getString("json", "").orEmpty()
-                    set(value) {
-                        prefs?.edit()?.putString("json", value)?.apply()
-                    }
-
-                override var cachedAtMs: Long
-                    get() = prefs?.getLong("cached_at_ms", 0L) ?: 0L
-                    set(value) {
-                        prefs?.edit()?.putLong("cached_at_ms", value)?.apply()
-                    }
-
-                override var cachedSourceUrl: String
-                    get() = prefs?.getString("source_url", "").orEmpty()
-                    set(value) {
-                        prefs?.edit()?.putString("source_url", value)?.apply()
-                    }
-
-                override var cachedEtag: String
-                    get() = prefs?.getString("etag", "").orEmpty()
-                    set(value) {
-                        prefs?.edit()?.putString("etag", value)?.apply()
-                    }
-            }
-
-        private val innerTube = InnerTube(http, logger = logger)
-        private val remoteStore = RemotePlayerConfigStore(http, repository, logger)
-        private val cipherService = YouTubeCipherService(http, remoteStore, logger)
-        private val extractor =
-            InnerTubeExtractor(
-                configParser = YtConfigParserImpl(http, innerTube, remoteStore, logger),
-                cipherService = cipherService,
-                innerTube = innerTube,
-                tokenProvider = tokenProvider,
-                logger = logger,
-            )
-
-        private val minted = ConcurrentHashMap<String, Extracted>()
-        private val excluded = ConcurrentHashMap<String, ConcurrentHashMap<String, Long>>()
-
-        suspend fun extract(
-            videoId: String,
-            maxKbps: Int,
-            skipClients: Set<String> = emptySet(),
-            requireM4a: Boolean = false,
-        ): Extracted? {
-            innerTube.cookie = YouTube.cookie
-            innerTube.visitorData = YouTube.visitorData
-            innerTube.locale = YouTubeLocale(gl = "US", hl = "en")
-            val stream =
-                extractor.extract(
-                    videoId = videoId,
-                    hints =
-                        ContentHints()
-                            .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
-                    excludedClients = excludedFor(videoId) + skipClients,
-                    audioQuality =
-                        when {
-                            requireM4a -> AudioQuality.MP4
-                            maxKbps <= LOW_KBPS -> AudioQuality.LOW
-                            maxKbps > 160 -> AudioQuality.HIGH
-                            else -> AudioQuality.AUTO
-                        },
-                    clientPlaybackNonce = generateClientPlaybackNonce(),
-                ) ?: return null
-            check(stream.sabrBootstrap == null) { "SABR is not supported by this playback engine" }
-            val mime = stream.mimeType.orEmpty()
-            val extracted =
-                Extracted(
-                    videoId = videoId,
-                    url = stream.audioUrl,
-                    kbps = (stream.bitrate ?: 0) / 1000,
-                    mimeType =
-                        if (stream.codecs.isNullOrBlank()) mime else "$mime; codecs=\"${stream.codecs}\"",
-                    loudnessDb = stream.loudnessDb,
-                    perceptualLoudnessDb = stream.perceptualLoudnessDb,
-                    clientName = stream.clientName,
-                    profileId = stream.profileId,
-                    headers = stream.headers,
-                    itag = stream.itag,
-                    bitrate = stream.bitrate,
-                    sampleRate = stream.sampleRate,
-                    contentLength = stream.contentLengthBytes,
-                )
-            if (minted.size >= MAX_REMEMBERED) minted.clear()
-            minted[extracted.url] = extracted
-            return extracted
-        }
-
-        fun headersFor(url: String): Map<String, String>? = minted[url]?.headers
-
-        fun onRefused(url: String): String? {
-            val refused = minted.remove(url) ?: return null
-            exclude(refused.videoId, refused.profileId)
-            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch { runCatching { cipherService.refreshAfterStreamRejection() } }
-            return refused.videoId
-        }
-
-        fun exclude(videoId: String, profileId: String) {
-            Timber.tag(TAG).w("InnerTubeX: $profileId refused $videoId; skipping it for this track")
-            excluded.getOrPut(videoId) { ConcurrentHashMap() }[profileId] =
-                SystemClock.elapsedRealtime() + EXCLUDE_MS
-        }
-
-        fun onSessionChanged() {
-            excluded.clear()
-            minted.clear()
-            if (prefs != null) warm(0)
-        }
-
-        private fun excludedFor(videoId: String): Set<String> {
-            val entries = excluded[videoId] ?: return emptySet()
-            val now = SystemClock.elapsedRealtime()
-            entries.entries.removeAll { it.value <= now }
-            return entries.keys.toSet()
-        }
-
-        private const val PLAYER_CONFIG_URL =
-            "https://raw.githubusercontent.com/ZemerTeam/zemer-cipher/master/library/src/main/assets/player_configs.json"
-        private const val LOW_KBPS = 64
-        private const val EXCLUDE_MS = 10 * 60 * 1000L
-        private const val MAX_REMEMBERED = 64
-        private const val WARM_DELAY_MS = 2_000L
-        private const val KEPT_PLAYERS = 3
-    }
-
-    object PlayerClient {
-        private const val MUSIC_ORIGIN = "https://music.youtube.com"
-        private const val YOUTUBE_ORIGIN = "https://www.youtube.com"
-
-        private const val WEB_USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-
-        private val IOS =
-            PlayerClient(
-                clientName = "IOS",
-                clientVersion = "21.26.4",
-                userAgent = "com.google.ios.youtube/21.26.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
-            )
-
-        private val IOS_RECENT =
-            IOS.copy(
-                clientVersion = "21.29.1",
-                userAgent = "com.google.ios.youtube/21.29.1 (iPhone16,2; U; CPU iOS 18_5 like Mac OS X;)",
-            )
-
-        private val ANDROID =
-            PlayerClient(
-                clientName = "ANDROID",
-                clientVersion = "21.26.364",
-                userAgent =
-                    "com.google.android.youtube/21.26.364 " +
-                        "(Linux; U; Android 15; en_US; Pixel 9 Pro; Build/AP4A.250205.002; Cronet/132.0.6834.79) gzip",
-            )
-
-        private val ANDROID_MUSIC =
-            PlayerClient(
-                clientName = "ANDROID_MUSIC",
-                clientVersion = "8.39.42",
-                userAgent =
-                    "com.google.android.apps.youtube.music/8.39.42 " +
-                        "(Linux; U; Android 15; en_US; Pixel 9 Pro; Build/AP4A.250205.002) gzip",
-            )
-
-        private val ANDROID_VR =
-            PlayerClient(
-                clientName = "ANDROID_VR",
-                clientVersion = "1.65.10",
-                userAgent =
-                    "com.google.android.apps.youtube.vr.oculus/1.65.10 " +
-                        "(Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
-            )
-
-        private val ANDROID_VR_LEGACY =
-            ANDROID_VR.copy(
-                clientVersion = "1.43.32",
-                userAgent =
-                    "com.google.android.apps.youtube.vr.oculus/1.43.32 " +
-                        "(Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1; Cronet/107.0.5284.2)",
-            )
-
-        private val WEB_REMIX =
-            PlayerClient(
-                clientName = "WEB_REMIX",
-                clientVersion = "1.20260707.12.00",
-                userAgent = WEB_USER_AGENT,
-                origin = MUSIC_ORIGIN,
-            )
-
-        private val WEB =
-            PlayerClient(
-                clientName = "WEB",
-                clientVersion = "2.20260708.00.00",
-                userAgent = WEB_USER_AGENT,
-                origin = YOUTUBE_ORIGIN,
-            )
-
-        private val TVHTML5 =
-            PlayerClient(
-                clientName = "TVHTML5",
-                clientVersion = "7.20260707.07.00",
-                userAgent =
-                    "Mozilla/5.0(SMART-TV; Linux; Tizen 4.0.0.2) AppleWebkit/605.1.15 " +
-                        "(KHTML, like Gecko) SamsungBrowser/9.2 TV Safari/605.1.15",
-                origin = YOUTUBE_ORIGIN,
-            )
-
-        fun forStreamUrl(url: String): PlayerClient {
-            val parsed = url.toHttpUrlOrNull() ?: return IOS
-            val name = parsed.queryParameter("c")?.uppercase(java.util.Locale.ROOT) ?: return IOS
-            val version = parsed.queryParameter("cver")
-            return when {
-                name.startsWith("IOS") -> if (version == IOS_RECENT.clientVersion) IOS_RECENT else IOS
-                name == "ANDROID_VR" ->
-                    if (version == ANDROID_VR_LEGACY.clientVersion) ANDROID_VR_LEGACY else ANDROID_VR
-                name == "ANDROID_MUSIC" -> ANDROID_MUSIC
-                name.startsWith("ANDROID") -> ANDROID
-                name.startsWith("TVHTML5") -> TVHTML5
-                name == "WEB_REMIX" -> WEB_REMIX
-                name.startsWith("WEB") || name == "MWEB" -> WEB
-                name == "VISIONOS" -> visionOs(version)
-                else -> IOS
-            }
-        }
-
-        private fun visionOs(version: String?) =
-            PlayerClient(
-                clientName = "VISIONOS",
-                clientVersion = version ?: "1.02",
-                userAgent =
-                    "com.google.ios.youtube/1.02 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/605.1.15 (KHTML, like Gecko)"
-            )
-    }
-
-    @kotlinx.serialization.Serializable
-    data class PlayerClient(
-        val clientName: String,
-        val clientVersion: String,
-        val userAgent: String,
-        val origin: String? = null,
-    ) {
-        val referer: String?
-            get() = origin?.let { "$it/" }
-
-        fun mediaHeaders(): Map<String, String> = buildMap {
-            put("User-Agent", userAgent)
-            origin?.let { put("Origin", it) }
-            referer?.let { put("Referer", it) }
-        }
     }
 }
