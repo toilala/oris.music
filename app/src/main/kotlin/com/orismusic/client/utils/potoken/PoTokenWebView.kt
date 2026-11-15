@@ -11,6 +11,10 @@ import androidx.annotation.MainThread
 import androidx.collection.ArrayMap
 import com.music.innertube.YouTube
 import com.orismusic.client.BuildConfig
+import com.orismusic.client.utils.potoken.parseChallengeData
+import com.orismusic.client.utils.potoken.parseIntegrityTokenData
+import com.orismusic.client.utils.potoken.stringToU8
+import com.orismusic.client.utils.potoken.u8ToBase64
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -341,26 +345,4 @@ class PoTokenWebView private constructor(
         }
     }
 
-    private fun parseChallengeData(responseBody: String): String {
-        return responseBody
-            .substringAfter("), ")
-            .takeUnless { it.isNullOrBlank() }
-            ?: throw PoTokenException("Failed to parse challenge data")
     }
-
-    private fun parseIntegrityTokenData(responseBody: String): Pair<String, Long> {
-        val json = kotlinx.serialization.json.Json.decodeFromString(responseBody)
-        val integrityToken = json.getString("integrityToken")
-        val expirationTimeInSeconds = json.getLong("expirationTimeInSeconds")
-        return integrityToken to expirationTimeInSeconds
-    }
-
-    private fun stringToU8(input: String): String {
-        return input.toByteArray().joinToString(",") { it.toInt().toString() }
-    }
-
-    private fun u8ToBase64(u8String: String): String {
-        val bytes = u8String.split(",").map { it.toInt().toByte() }.toByteArray()
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-    }
-}

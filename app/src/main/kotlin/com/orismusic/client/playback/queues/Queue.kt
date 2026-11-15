@@ -72,14 +72,14 @@ interface Queue {
 
 fun List<MediaItem>.filterExplicit(enabled: Boolean = true, keepMediaId: String? = null) =
   if (enabled) {
-    filterNot { it.mediaId != keepMediaId && it.mediaMetadata?.explicit == true }
+    filterNot { it.mediaId != keepMediaId && it.metadata?.explicit == true }
   } else {
     this
   }
 
 fun List<MediaItem>.filterVideoSongs(disableVideos: Boolean = false, keepMediaId: String? = null) =
   if (disableVideos) {
-    filterNot { it.mediaId != keepMediaId && it.mediaMetadata?.isVideoSong == true }
+    filterNot { it.mediaId != keepMediaId && it.metadata?.isVideoSong == true }
   } else {
     this
   }

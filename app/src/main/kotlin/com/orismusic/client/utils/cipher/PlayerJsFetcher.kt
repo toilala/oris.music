@@ -2,7 +2,6 @@
 
 package com.orismusic.client.utils.cipher
 
-import com.orismusic.client.utils.followAppProxy
 import com.music.innertube.YouTube
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,10 +18,10 @@ object PlayerJsFetcher {
     const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
 
     private val httpClient = OkHttpClient.Builder()
-        .followAppProxy()
+        .proxy(YouTube.proxy)
         .build()
 
-    private val PLAYER_HASH_REGEX = Regex("""\?/s\?/player\?/([a-zA-Z0-9_-]+)\?/""")
+    private val PLAYER_HASH_REGEX = Regex("""\\?/s\\?/player\\?/([a-zA-Z0-9_-]+)\\?/""")
 
     private fun getCacheDir(): File = File(CipherDeobfuscator.appContext.filesDir, "cipher_cache")
 

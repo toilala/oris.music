@@ -1,6 +1,7 @@
 package com.orismusic.client.models
 
 import androidx.compose.runtime.Immutable
+import com.music.innertube.models.SongItem
 import com.music.innertube.models.WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig.Companion.MUSIC_VIDEO_TYPE_ATV
 import java.io.Serializable
 import java.time.LocalDateTime
@@ -41,3 +42,20 @@ data class MediaMetadata(
     val title: String,
   ) : Serializable
 }
+
+fun SongItem.toMediaMetadata(): MediaMetadata =
+  MediaMetadata(
+    id = id,
+    title = title,
+    artists = artists.map { MediaMetadata.Artist(id = it.id, name = it.name) },
+    duration = duration ?: -1,
+    thumbnailUrl = thumbnail,
+    album = album?.let { MediaMetadata.Album(id = it.id, title = it.name) },
+    explicit = explicit,
+    setVideoId = setVideoId,
+    musicVideoType = musicVideoType,
+    libraryAddToken = libraryAddToken,
+    libraryRemoveToken = libraryRemoveToken,
+    suggestedBy = null,
+    source = QueueItemSource.USER
+  )

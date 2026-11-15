@@ -11,7 +11,7 @@ class ListQueue(
 ) : Queue {
   override val preloadItem: MediaMetadata? = null
 
-  override suspend fun getInitialStatus() = Status(title, items, startIndex, position)
+  override suspend fun getInitialStatus() = Queue.Status(title, items, startIndex, position)
 
   override fun hasNextPage(): Boolean = false
 

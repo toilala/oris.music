@@ -26,7 +26,7 @@ class YouTubePlaylistQueue(
    */
   private var pendingSongs: List<SongItem> = emptyList()
 
-  override suspend fun getInitialStatus(): Status {
+  override suspend fun getInitialQueue.Status(): Status {
     return withContext(Dispatchers.IO) {
       if (initialSongs.isNotEmpty()) {
         // The playlist screen keeps loading pages in the background, so for long
@@ -36,7 +36,7 @@ class YouTubePlaylistQueue(
         val from = (startIndex - WINDOW_BEFORE).coerceAtLeast(0)
         val to = (startIndex + WINDOW_AFTER).coerceAtMost(initialSongs.size)
         pendingSongs = initialSongs.subList(to, initialSongs.size)
-        Status(
+        Queue.Status(
           title = playlistTitle,
           items = initialSongs.subList(from, to).map { it.toMediaItem() },
           mediaItemIndex = startIndex - from,
@@ -44,7 +44,7 @@ class YouTubePlaylistQueue(
       } else {
         val playlistPage = YouTube.playlist(playlistId).getOrThrow()
         continuation = playlistPage.songsContinuation
-        Status(
+        Queue.Status(
           title = playlistPage.playlist.title,
           items = playlistPage.songs.map { it.toMediaItem() },
           mediaItemIndex = startIndex,

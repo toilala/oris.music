@@ -20,7 +20,7 @@ class YouTubeQueue(
   private val isRadioQueue = endpoint.playlistId?.startsWith("RD") != false
   private val pageFilter = RadioQueuePageFilter()
 
-  override suspend fun getInitialStatus(): Status {
+  override suspend fun getInitialQueue.Status(): Status {
     return withContext(Dispatchers.IO) {
       continuation = null
       pageFilter.reset()
@@ -60,7 +60,7 @@ class YouTubeQueue(
               }
           }
 
-          return@withContext Status(
+          return@withContext Queue.Status(
             title = nextResult.title,
             items = itemsList,
             mediaItemIndex = if (isAddon) 0 else
@@ -78,7 +78,7 @@ class YouTubeQueue(
       }
 
       if (isAddon && originalAddonItem != null) {
-          return@withContext Status(
+          return@withContext Queue.Status(
               title = originalAddonItem.title,
               items = listOf(originalAddonItem.toMediaItem()),
               mediaItemIndex = 0
