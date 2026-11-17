@@ -123,10 +123,17 @@ try:
         chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings",
                   "Home", "Library", "Queue"}
         h = max((y for _, y, _, _ in clickable_nodes(root)), default=2000)
+        # Song titles render twice in the tree (card + a11y ghost); section
+        # headers render once. Tap the first duplicated in-feed text.
+        counts = {}
+        for n in root.iter("node"):
+            t = (n.get("text") or "").strip()
+            if t:
+                counts[t] = counts.get(t, 0) + 1
         target = None
         for n in root.iter("node"):
             t = (n.get("text") or "").strip()
-            if not t or t in chrome or len(t) < 4:
+            if not t or t in chrome or len(t) < 4 or counts.get(t, 0) < 2:
                 continue
             nums = [int(x) for x in re.findall(r"\d+", n.get("bounds") or "")]
             if len(nums) != 4:
