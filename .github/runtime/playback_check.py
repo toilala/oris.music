@@ -110,7 +110,9 @@ try:
                                               else "error state")
                 print("FEED ERROR STATE:", result["feed_failed_text"], flush=True)
                 break
-            if len(clicks) > 4:
+            # chrome alone (app bar + bottom nav) is ~8 texts / ~6 clickables;
+            # a loaded feed has many more
+            if len(texts) >= 12 and len(clicks) > 6:
                 result["feed_loaded"] = True
                 break
     screenshot("1_home.png")
