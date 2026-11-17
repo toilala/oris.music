@@ -547,6 +547,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         player = createExoPlayer()
         _playerFlow.value = player
         player.addListener(this)
+        EqualizerController.watch(this, player, player)
         playerInitialized.value = true
         Timber.d("OrisMediaService created")
 

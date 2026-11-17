@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.horizontalScroll
+import com.orismusic.client.playback.EqualizerController
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.settings.PlaybackPreferences
 
@@ -84,6 +86,34 @@ fun SettingsScreen(
                                 preferences.applyTo(connection)
                             },
                             label = { Text(if (option == 1f) "1x" else "${option}x") },
+                        )
+                    }
+                }
+            }
+            HorizontalDivider()
+            Text("Equalizer", style = MaterialTheme.typography.titleMedium)
+            val eq by EqualizerController.state.collectAsState()
+            if (!eq.available) {
+                Text("The equalizer shows up once a song has played.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                SettingSwitch(title = "Equalizer", detail = if (eq.enabled) "On" else "Off",
+                    checked = eq.enabled) { EqualizerController.setEnabled(it) }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EqualizerController.presets.forEach { (name, shape) ->
+                        AssistChip(onClick = { EqualizerController.applyPreset(shape) }, label = { Text(name) })
+                    }
+                }
+                eq.levels.forEachIndexed { i, level ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val hz = eq.centerHz.getOrNull(i) ?: 0
+                        Text(if (hz >= 1000) "${hz / 1000} kHz" else "$hz Hz", modifier = Modifier.width(64.dp),
+                            style = MaterialTheme.typography.bodySmall)
+                        Slider(
+                            value = level.toFloat(),
+                            onValueChange = { EqualizerController.setLevel(i, it.toInt()) },
+                            valueRange = eq.minLevel.toFloat()..eq.maxLevel.toFloat(),
+                            enabled = eq.enabled,
                         )
                     }
                 }
