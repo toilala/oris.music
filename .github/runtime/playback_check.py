@@ -203,10 +203,11 @@ try:
     with open(os.path.join(EVIDENCE, "logcat.txt"), "w") as f:
         f.write(logcat)
     interesting = [l for l in logcat.splitlines()
-                   if re.search(r"FATAL|AndroidRuntime|OrisMedia|OrisTap|InnerTube|"
+                   if re.search(r"FATAL|AndroidRuntime|OrisMedia|OrisTap|InnerTube|MainActivity|"
+                                r"PlayerConnection|ServiceConnection|Binding|"
                                 r"innertube|Resolving|Resolved|YouTube", l)]
-    print("LOGCAT INTERESTING (last 40):", flush=True)
-    for l in interesting[-40:]:
+    print("LOGCAT INTERESTING (last 80):", flush=True)
+    for l in interesting[-80:]:
         print(l[:200], flush=True)
     result["resolved_log"] = ("Resolving stream" in logcat) or \
         ("Resolved" in logcat)
