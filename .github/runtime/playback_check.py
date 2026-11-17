@@ -74,6 +74,46 @@ def clickable_nodes(root):
     return out
 
 
+
+def node_center(n):
+    nums = [int(x) for x in re.findall(r"\d+", n.get("bounds") or "")]
+    if len(nums) != 4:
+        return None
+    return (nums[0] + nums[2]) // 2, (nums[1] + nums[3]) // 2
+
+
+def tap_content_desc(root, desc):
+    for n in root.iter("node"):
+        if (n.get("content-desc") or "").strip() == desc:
+            c = node_center(n)
+            if c:
+                adb("shell", "input", "tap", str(c[0]), str(c[1]))
+                return True
+    return False
+
+
+def find_song_target(root):
+    """First in-feed duplicated text (song title) with bounds; None if the
+    current shelves carry no song cards."""
+    chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings",
+              "Home", "Library", "Queue"}
+    headers = {"Quick picks", "Song mixes", "Throwbacks", "Tap retry"}
+    counts = {}
+    for n in root.iter("node"):
+        t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
+        if t:
+            counts[t] = counts.get(t, 0) + 1
+    for n in root.iter("node"):
+        t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
+        if not t or t in chrome or t in headers or len(t) < 4:
+            continue
+        if counts.get(t, 0) < 2:
+            continue
+        c = node_center(n)
+        if c:
+            return c[0], c[1], t
+    return None
+
 def focus():
     r = adb("shell", "dumpsys", "window", check=False)
     m = re.search(r"mCurrentFocus=.*?\s([\w.]+)/", r.stdout)
@@ -120,38 +160,21 @@ try:
     if not result["feed_loaded"]:
         print("FEED DID NOT LOAD")
     else:
+        # YouTube rotates anonymous home shelves; some rounds have no song
+        # cards. Refresh up to 3 times looking for a playable song card.
+        for attempt in range(3):
+            if find_song_target(root) is not None:
+                break
+            print("NO SONG CARDS YET, refreshing (attempt", attempt + 1, ")",
+                  flush=True)
+            tap_content_desc(root, "Refresh home feed")
+            time.sleep(8)
+            root = dump_ui()
         # Tap a real song card: find a feed text node (song title) below the
         # app bar and above the bottom nav, then tap its bounds center.
-        chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings",
-                  "Home", "Library", "Queue"}
-        h = max((y for _, y, _, _ in clickable_nodes(root)), default=2000)
-        # Song titles render twice in the tree (card + a11y ghost); section
-        # headers render once. Tap the first duplicated in-feed text.
-        counts = {}
-        for n in root.iter("node"):
-            t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
-            if t:
-                counts[t] = counts.get(t, 0) + 1
-        target = None
-        for n in root.iter("node"):
-            t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
-            if not t or t in chrome or len(t) < 4 or counts.get(t, 0) < 2:
-                continue
-            nums = [int(x) for x in re.findall(r"\d+", n.get("bounds") or "")]
-            if len(nums) != 4:
-                continue
-            cy = (nums[1] + nums[3]) // 2
-            if 260 < cy < h - 260:
-                target = ((nums[0] + nums[2]) // 2, cy, t)
-                break
+        target = find_song_target(root)
         if target is None:
-            # fallback: first clickable inside the card band (below app bar,
-            # above bottom nav)
-            band = [c for c in clickable_nodes(root) if 400 < c[1] < h - 260]
-            band.sort(key=lambda c: c[1])
-            if band:
-                c = band[0]
-                target = (c[0], c[1], c[3] or "clickable card")
+            print("NO SONG CARDS IN FEED after refreshes", flush=True)
         if target is None:
             print("NO TAPPABLE CARD FOUND")
         else:
