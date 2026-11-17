@@ -63,6 +63,9 @@ import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.queues.MusicRadioQueue
 import com.orismusic.client.music.MusicCandidates
+import com.orismusic.client.library.LibraryStore
+import com.orismusic.client.library.toPlayableItem
+import com.orismusic.client.playback.queues.ListQueue
 import timber.log.Timber
 import kotlinx.coroutines.launch
 
@@ -148,7 +151,11 @@ fun HomeScreen(
                 ),
             )
         },
-    ) { innerPadding ->
+    ) { outerPadding ->
+        val innerPadding = PaddingValues(0.dp)
+        Column(Modifier.fillMaxSize().padding(outerPadding)) {
+        JumpBackIn(playerConnection)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         when (val state = feed) {
             HomeFeedState.Loading -> Box(
                 modifier = Modifier
@@ -192,6 +199,58 @@ fun HomeScreen(
                 playerConnection = playerConnection,
                 contentPadding = innerPadding,
             )
+        }
+        }
+        }
+    }
+}
+
+/** Recently played songs kept on the phone, so Home is useful even when the feed is not. */
+@Composable
+private fun JumpBackIn(connection: PlayerConnection?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val history by LibraryStore.get(context).history.collectAsState()
+    if (history.isEmpty()) return
+    val songs = history.take(12)
+    Column(Modifier.padding(top = 4.dp, bottom = 8.dp)) {
+        Text(
+            text = "Jump back in",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items = songs, key = { "back-${it.id}" }) { song ->
+                Column(
+                    modifier = Modifier
+                        .width(110.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            connection?.playQueue(
+                                ListQueue(
+                                    title = "Jump back in",
+                                    items = songs.map { it.toPlayableItem() },
+                                    startIndex = songs.indexOf(song),
+                                ),
+                            )
+                        },
+                ) {
+                    AsyncImage(
+                        model = song.thumbnail,
+                        contentDescription = song.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(110.dp).clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                    )
+                    Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                    Text(song.artist, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }
