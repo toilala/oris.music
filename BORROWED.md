@@ -41,3 +41,5 @@ the code stays close to its source. Replacements must be genuine rewrites
 - PoTokenGenerator.kt: small Oris integration fix to borrowed code, not a rewrite. Application context is supplied through its constructor instead of an uninitialized CipherDeobfuscator global. InnerTubeXResolver uses its suspend token entry point. Mochy provenance and GPL credit remain.
 
 - YTPlayerUtils.kt guest path: fresh Oris implementation informed by reading the visitor-first / VISIONOS-first approach in Mochy Music and oris-music-foundation YTPlayerUtils.kt. No source blocks copied. Accepts only direct HTTPS googlevideo audio without cipher or n-transform; unsupported formats remain with the credited InnerTubeX library. Existing innertube API module stays borrowed/GPL-3.0. Reference: https://github.com/toilala/oris-music-foundation
+
+- PlaybackDiagnostic and refusal handling: fresh Oris code. Shows provider status/reason on device without cookies/tokens/stream URLs; explicit bot-check refusal stops automatic load retries. This is a diagnostic build, not proof of working anonymous playback.

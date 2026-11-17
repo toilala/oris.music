@@ -38,6 +38,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.orismusic.client.utils.PlaybackDiagnostic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -88,6 +92,14 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     playerConnection: PlayerConnection? = null,
 ) {
+    var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val diagnostic = PlaybackDiagnostic.message.collectAsState().value
+    if (showDiagnostic) AlertDialog(
+        onDismissRequest = { showDiagnostic = false },
+        title = { Text("Playback diagnostic") },
+        text = { Text(diagnostic) },
+        confirmButton = { TextButton(onClick = { showDiagnostic = false }) { Text("Close") } },
+    )
     var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val feed by produceState<HomeFeedState>(HomeFeedState.Loading, refreshTick) {
         value = loadHomeFeed()
@@ -119,10 +131,10 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    IconButton(onClick = { /* settings arrive with the settings slice */ }) {
+                    IconButton(onClick = { showDiagnostic = true }) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = "Playback diagnostic",
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }

@@ -96,7 +96,7 @@ def find_song_target(root):
     """First clickable in-feed card. Song cards are clickable Compose nodes;
     playlist cards, headers and chrome are not (or are excluded by label),
     so this skips playlist-only shelves. None if no song card is present."""
-    chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings",
+    chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings", "Playback diagnostic",
               "Home", "Library", "Queue"}
     for n in root.iter("node"):
         if n.get("clickable") != "true":
@@ -199,6 +199,12 @@ try:
             m = re.search(r"position=(\d+)", sess)
             result["positions"].append(int(m.group(1)) if m else -1)
 
+    root = dump_ui()
+    if root is not None:
+        tap_content_desc(root, "Playback diagnostic")
+        time.sleep(2)
+        screenshot("3_diagnostic.png")
+        print("DIAGNOSTIC UI:", visible_texts(dump_ui()), flush=True)
     logcat = adb("logcat", "-d", check=False).stdout
     with open(os.path.join(EVIDENCE, "logcat.txt"), "w") as f:
         f.write(logcat)
@@ -217,6 +223,13 @@ try:
     result["ok"] = bool(result["feed_loaded"] and playing and advancing
                         and result["resolved_log"])
 finally:
+    # Preserve decisive pixels in the authenticated raw log as well as the artifact.
+    import base64
+    image = os.path.join(EVIDENCE, "3_diagnostic.png")
+    if os.path.exists(image):
+        encoded = base64.b64encode(open(image, "rb").read()).decode()
+        for offset in range(0, len(encoded), 3000):
+            print("ORIS_SCREENSHOT_PNG " + encoded[offset:offset+3000], flush=True)
     with open(os.path.join(EVIDENCE, "result.txt"), "w") as f:
         for k, v in result.items():
             f.write(f"{k}={v}\n")

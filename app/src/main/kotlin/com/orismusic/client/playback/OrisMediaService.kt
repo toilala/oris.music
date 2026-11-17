@@ -22,6 +22,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import com.orismusic.client.utils.GuestAccessRefused
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -687,7 +690,17 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
         return ExoPlayer.Builder(this, renderersFactory)
             .setLoadControl(loadControl)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory()))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory())
+                .setLoadErrorHandlingPolicy(object : DefaultLoadErrorHandlingPolicy() {
+                    override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                        var cause: Throwable? = info.exception
+                        repeat(12) {
+                            if (cause is GuestAccessRefused) return C.TIME_UNSET
+                            cause = cause?.cause
+                        }
+                        return super.getRetryDelayMsFor(info)
+                    }
+                }))
             .build()
     }
 

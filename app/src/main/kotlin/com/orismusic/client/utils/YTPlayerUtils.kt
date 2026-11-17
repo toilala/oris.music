@@ -44,6 +44,14 @@ object YTPlayerUtils {
             return null
         }
         if (response.playabilityStatus.status != "OK") {
+            val status = response.playabilityStatus.status
+            val reason = response.playabilityStatus.reason.orEmpty()
+                .replace(Regex("[\\r\\n]+"), " ").take(240)
+            PlaybackDiagnostic.report("VISIONOS: $status. $reason")
+            Timber.tag(TAG).w("Direct client refusal: status=$status reason=$reason")
+            if (status == "LOGIN_REQUIRED" && reason.contains("bot", ignoreCase = true)) {
+                throw GuestAccessRefused("YouTube asked this connection to confirm it is not a bot. Automatic retries stopped. This does not mean all songs require sign-in.")
+            }
             Timber.tag(TAG).w("Direct VISIONOS status=${response.playabilityStatus.status}")
             return null
         }
@@ -107,14 +115,24 @@ object YTPlayerUtils {
             AudioQuality.HIGH -> 256
             else -> Int.MAX_VALUE
         }
+        PlaybackDiagnostic.report("Resolving selected song anonymously...")
         Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps)")
-        directAnonymous(videoId, maxKbps)?.let { return@withContext it }
+        try {
+            directAnonymous(videoId, maxKbps)?.let {
+                PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
+                return@withContext it
+            }
+        } catch (refused: GuestAccessRefused) {
+            PlaybackDiagnostic.report(refused.message.orEmpty())
+            throw refused
+        }
         val extracted = try {
             InnerTubeXResolver.extract(videoId = videoId, maxKbps = maxKbps)
                 ?: throw IOException("No playable stream found for $videoId")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: StreamResolveException) {
+            PlaybackDiagnostic.report(PlaybackDiagnostic.message.value + "\nFallback: ${failure.reason}. No playable stream was returned.")
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
                 Timber.tag(TAG).w(
@@ -126,6 +144,7 @@ object YTPlayerUtils {
             throw IOException("Cannot resolve $videoId: ${failure.reason}", failure)
         }
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")
+        PlaybackDiagnostic.report("Stream resolved through ${extracted.clientName}. Listen and check that playback time advances.")
         PlaybackData(
             streamUrl = extracted.url,
             cacheKey = videoId,
