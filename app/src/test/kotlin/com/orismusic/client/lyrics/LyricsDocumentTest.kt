@@ -9,6 +9,9 @@ class LyricsDocumentTest {
         assertEquals(listOf(2125L,4000L,12500L), lines.map { it.timeMs })
         assertEquals(listOf("Hello","World","Hello"), lines.map { it.text })
     }
+    @Test fun lrcSpeakerAndBackgroundTagsAreRemoved() {
+        assertEquals(listOf(LyricLine(1000, "Hello world")), readLrc("[00:01.00]{agent:1}Hello {bg}world"))
+    }
     @Test fun plainLyricsRemainUntimed() {
         assertEquals(listOf(LyricLine(null,"Hello"),LyricLine(null,"World")), readLrc("Hello\n\nWorld"))
     }

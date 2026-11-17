@@ -35,6 +35,11 @@ class LyricsCheckActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        // Runs with Android ICU, not the desktop JVM regex engine.
+        check(com.orismusic.client.lyrics.readLrc("[00:01.00]{agent:1}Hello {bg}world").single().text == "Hello world")
+        android.util.Log.i("OrisLyrics", "Android LRC parser regression passed")
+        window.statusBarColor = android.graphics.Color.BLACK
+        window.navigationBarColor = android.graphics.Color.BLACK
         startService(Intent(this, OrisMediaService::class.java))
         bound = bindService(Intent(this, OrisMediaService::class.java), connection, Context.BIND_AUTO_CREATE)
     }

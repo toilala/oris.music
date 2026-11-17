@@ -15,7 +15,7 @@ fun readLrc(value: String): List<LyricLine> {
     value.lineSequence().forEach { raw ->
         val stamps = clock.findAll(raw).toList()
         val text = raw.replace(clock, "").replace(Regex("<\\d+:\\d{2}(?:[.:]\\d{1,3})?>"), "")
-            .replace(Regex("\\{(?:agent:[^}]+|bg)}"), "").trim()
+            .replace(Regex("\\{(?:agent:[^}]+|bg)\\}"), "").trim()
         if (stamps.isEmpty()) {
             if (text.isNotBlank() && !text.startsWith("[")) output += LyricLine(null, text)
         } else stamps.forEach { match ->
