@@ -150,9 +150,9 @@ try:
                                               else "error state")
                 print("FEED ERROR STATE:", result["feed_failed_text"], flush=True)
                 break
-            # chrome alone (app bar + bottom nav) is ~8 texts / ~6 clickables;
-            # a loaded feed has many more
-            if len(texts) >= 12 and len(clicks) > 6:
+            # chrome alone (app bar + bottom nav) is ~8 texts; any real feed
+            # (songs or playlist-only) shows many more
+            if len(texts) >= 12:
                 result["feed_loaded"] = True
                 break
     screenshot("1_home.png")
@@ -162,13 +162,13 @@ try:
     else:
         # YouTube rotates anonymous home shelves; some rounds have no song
         # cards. Refresh up to 3 times looking for a playable song card.
-        for attempt in range(3):
+        for attempt in range(5):
             if find_song_target(root) is not None:
                 break
             print("NO SONG CARDS YET, refreshing (attempt", attempt + 1, ")",
                   flush=True)
             tap_content_desc(root, "Refresh home feed")
-            time.sleep(8)
+            time.sleep(10)
             root = dump_ui()
         # Tap a real song card: find a feed text node (song title) below the
         # app bar and above the bottom nav, then tap its bounds center.
