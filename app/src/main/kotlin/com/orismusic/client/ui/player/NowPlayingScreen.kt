@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -35,6 +36,8 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,7 +64,9 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.currentSavedSong
+import android.os.SystemClock
 import com.orismusic.client.playback.PlayerConnection
+import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.utils.formatTime
 
 /**
@@ -123,6 +128,36 @@ fun NowPlayingScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.weight(1f))
+            var timerMenu by remember { mutableStateOf(false) }
+            val timerEnd = SleepTimer.endsAt.collectAsState().value
+            Box {
+                IconButton(onClick = { timerMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.Timer,
+                        contentDescription = "Sleep timer",
+                        tint = if (timerEnd != null) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(expanded = timerMenu, onDismissRequest = { timerMenu = false }) {
+                    if (timerEnd != null) {
+                        val left = ((timerEnd - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
+                        DropdownMenuItem(
+                            text = { Text("Turn off timer ($left min left)") },
+                            onClick = { SleepTimer.cancel(); timerMenu = false },
+                        )
+                    }
+                    listOf(15, 30, 45, 60).forEach { minutes ->
+                        DropdownMenuItem(
+                            text = { Text("Stop after $minutes min") },
+                            onClick = {
+                                SleepTimer.start(minutes) { connection.pause() }
+                                timerMenu = false
+                            },
+                        )
+                    }
+                }
+            }
             IconButton(onClick = { nowSong?.let { library.toggleLike(it) } }, enabled = nowSong != null) {
                 Icon(
                     imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
