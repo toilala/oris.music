@@ -28,7 +28,7 @@ blob = json.dumps(songs).replace('&', '&amp;').replace('"', '&quot;')
 xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
        f'<string name="liked">{blob}</string><string name="history">{blob}</string></map>')
 adb('shell', 'am', 'force-stop', PKG)
-subprocess.run(['adb', 'shell', 'run-as', PKG, 'sh', '-c', 'mkdir -p shared_prefs && cat > shared_prefs/oris-library.xml'],
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/oris-library.xml'"],
                input=xml.encode(), check=True)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
