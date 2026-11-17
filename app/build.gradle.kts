@@ -208,3 +208,8 @@ configurations.all {
 tasks.matching { it.name == "assembleFossDebug" }.configureEach {
     dependsOn("testFossDebugUnitTest")
 }
+
+// Robolectric fetches the local Android runtime separately from Gradle dependencies.
+tasks.withType<Test>().configureEach {
+    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+}

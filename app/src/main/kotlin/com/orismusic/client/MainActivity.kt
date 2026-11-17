@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import com.orismusic.client.ui.screens.SearchScreen
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.orismusic.client.ui.navigation.NavigationState
 import androidx.activity.compose.setContent
@@ -115,6 +117,7 @@ class MainActivity : ComponentActivity() {
             OrisTheme {
                 val connection = connectionState.value
                 var navigation by rememberSaveable { mutableStateOf(NavigationState()) }
+                val tabState = rememberSaveableStateHolder()
                 val selectedTab = navigation.currentTab
                 val showPlayer = navigation.playerOpen
                 BackHandler(enabled = navigation.canGoBack) {
@@ -159,8 +162,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         ) { innerPadding ->
+                            tabState.SaveableStateProvider(selectedTab) {
                             when (MainTab.entries[selectedTab]) {
                                 MainTab.Home -> HomeScreen(
+                                    onSearch = { navigation = navigation.select(MainTab.Search.ordinal) },
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(innerPadding),
@@ -174,8 +179,8 @@ class MainActivity : ComponentActivity() {
                                         .padding(innerPadding),
                                     connection = connection,
                                 )
-                                MainTab.Search -> ComingSoonTab(
-                                    title = "Search",
+                                MainTab.Search -> SearchScreen(
+                                    connection = connection,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(innerPadding),
@@ -186,6 +191,7 @@ class MainActivity : ComponentActivity() {
                                         .fillMaxSize()
                                         .padding(innerPadding),
                                 )
+                            }
                             }
                         }
 

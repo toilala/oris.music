@@ -42,7 +42,9 @@ def wait_label(label, seconds=25):
     raise AssertionError(f'UI never showed {label}')
 
 def tap(label):
-    node = wait_label(label)
+    wait_label(label)
+    nodes = [n for n in tree().iter('node') if label in (n.get('text'), n.get('content-desc'))]
+    node = nodes[-1]  # Bottom navigation, not the Home header's duplicate Search icon.
     points = list(map(int, re.findall(r'\d+', node.get('bounds'))))
     adb('shell', 'input', 'tap', str((points[0]+points[2])//2), str((points[1]+points[3])//2))
     time.sleep(1)
@@ -77,8 +79,35 @@ screen('back_to_home')
 tap('Search')
 tap('Library')
 back()
-wait_label('Search arrives in a later stage')
+wait_label('Search music')
 still_open()
+back()
+wait_label('OrisMusic')
+still_open()
+tap('Search')
+wait_label('Search music')
+screen('search_empty')
+edit = next(n for n in tree().iter('node') if n.get('class') == 'android.widget.EditText')
+xy = list(map(int, re.findall(r'\d+', edit.get('bounds'))))
+adb('shell', 'input', 'tap', str((xy[0]+xy[2])//2), str((xy[1]+xy[3])//2))
+adb('shell', 'input', 'text', 'Yesterday')
+time.sleep(2)
+adb('shell', 'input', 'keyevent', '66')
+# Search is permitted; this check never taps a song or resolves an audio stream.
+end = time.monotonic()+45
+while time.monotonic() < end:
+    nodes = list(tree().iter('node'))
+    if any('Yesterday' in (n.get('text') or '') and n.get('class') != 'android.widget.EditText' for n in nodes):
+        break
+    time.sleep(1)
+else:
+    screen('search_failure')
+    raise AssertionError('No search results for Yesterday')
+screen('search_results')
+# Clearing query reveals persisted recent searches.
+tap('Clear search')
+wait_label('Recent searches')
+screen('search_history')
 back()
 wait_label('OrisMusic')
 still_open()

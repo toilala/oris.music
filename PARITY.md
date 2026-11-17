@@ -25,7 +25,10 @@ user-facing, status per slice.
 ## Stage 3 - search
 - [ ] Online search screen: query field, live suggestions, results grouped
       (songs/albums/artists/playlists), tap song to play, tap others to detail pages
-- [ ] Recent searches (local persistence)
+- [x] Online grouped search results; song taps queue the song group.
+- [x] Debounced query suggestions, explicit Search button, clear/retry states.
+- [x] Recent searches (local persistence, clear history).
+- [ ] Album/artist/playlist rows open detail pages (stage 4).
 
 ## Stage 4 - detail pages
 - [ ] Album page (track list, play all)

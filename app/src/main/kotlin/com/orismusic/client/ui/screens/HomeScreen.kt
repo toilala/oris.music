@@ -91,6 +91,7 @@ private suspend fun loadHomeFeed(): HomeFeedState =
 fun HomeScreen(
     modifier: Modifier = Modifier,
     playerConnection: PlayerConnection? = null,
+    onSearch: () -> Unit = {},
 ) {
     var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
     val diagnostic = PlaybackDiagnostic.message.collectAsState().value
@@ -124,7 +125,7 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    IconButton(onClick = { /* search arrives with the search slice */ }) {
+                    IconButton(onClick = onSearch) {
                         Icon(
                             imageVector = Icons.Filled.Search,
                             contentDescription = "Search",
