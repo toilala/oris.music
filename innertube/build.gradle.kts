@@ -26,11 +26,11 @@ kotlin {
 }
 
 dependencies {
-    implementation("io.ktor:ktor-client-core:3.4.0")
-    implementation("io.ktor:ktor-client-okhttp:3.4.0")
-    implementation("io.ktor:ktor-client-content-negotiation:3.4.0")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:3.4.0")
-    implementation("io.ktor:ktor-client-encoding:3.4.0")
+    implementation("io.ktor:ktor-client-core:3.5.2")
+    implementation("io.ktor:ktor-client-okhttp:3.5.2")
+    implementation("io.ktor:ktor-client-content-negotiation:3.5.2")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.2")
+    implementation("io.ktor:ktor-client-encoding:3.5.2")
     implementation("org.brotli:dec:0.1.2")
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.25.2")
     testImplementation("junit:junit:4.13.2")

@@ -181,11 +181,11 @@ dependencies {
     implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
 
     // Ktor for network requests
-    implementation("io.ktor:ktor-client-core:2.3.12")
-    implementation("io.ktor:ktor-client-okhttp:2.3.12")
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
-    implementation("io.ktor:ktor-client-cio:2.3.12")
+    implementation("io.ktor:ktor-client-core:3.5.2")
+    implementation("io.ktor:ktor-client-okhttp:3.5.2")
+    implementation("io.ktor:ktor-client-content-negotiation:3.5.2")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.2")
+    implementation("io.ktor:ktor-client-cio:3.5.2")
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
@@ -202,8 +202,5 @@ configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.12.0")
         force("com.squareup.okhttp3:logging-interceptor:4.12.0")
-        // okhttp-android must stay: since OkHttp 4.12 the `okhttp` module
-        // redirects Android consumers to it, and excluding it strips every
-        // okhttp3 class from the APK (runtime NoClassDefFoundError).
     }
 }
