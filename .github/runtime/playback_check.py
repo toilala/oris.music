@@ -3,8 +3,9 @@
 
 Boots the app on the emulator, waits for the home feed, taps the first song
 card, and verifies real playback through the media session and logcat.
-Evidence (screenshots, ui dump, logcat, result summary) lands in
-runtime-evidence/ for the workflow to upload.
+Diagnostics (screen text, window focus, logcat excerpts) print to stdout so
+the job log itself carries the evidence. Artifacts also land in
+runtime-evidence/ for upload.
 """
 import os
 import re
@@ -19,7 +20,6 @@ ACTIVITY = "com.orismusic.client.MainActivity"
 APK_GLOB = "app/build/outputs/apk/foss/debug/*.apk"
 
 os.makedirs(EVIDENCE, exist_ok=True)
-log = open(os.path.join(EVIDENCE, "logcat.txt"), "w")
 
 
 def sh(cmd, check=True, capture=True):
@@ -37,7 +37,6 @@ def adb(*args, check=True):
 
 
 def screenshot(name):
-    sh(["adb", "exec-out", "screencap", "-p"], capture=False) if False else None
     r = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True)
     with open(os.path.join(EVIDENCE, name), "wb") as f:
         f.write(r.stdout)
@@ -55,6 +54,15 @@ def dump_ui():
         return None
 
 
+def visible_texts(root, limit=40):
+    out = []
+    for n in root.iter("node"):
+        t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
+        if t:
+            out.append(t[:60])
+    return out[:limit]
+
+
 def clickable_nodes(root):
     out = []
     for n in root.iter("node"):
@@ -66,8 +74,15 @@ def clickable_nodes(root):
     return out
 
 
-result = {"feed_loaded": False, "tap": None, "state": None,
-          "positions": [], "resolved_log": False, "ok": False}
+def focus():
+    r = adb("shell", "dumpsys", "window", check=False)
+    m = re.search(r"mCurrentFocus=.*?\s([\w.]+)/", r.stdout)
+    return m.group(1) if m else "?"
+
+
+result = {"feed_loaded": False, "feed_failed_text": None, "tap": None,
+          "state": None, "positions": [], "resolved_log": False, "ok": False}
+logcat = ""
 try:
     adb("wait-for-device")
     adb("shell", "input", "keyevent", "82", check=False)  # unlock
@@ -79,14 +94,23 @@ try:
     adb("logcat", "-c", check=False)
     adb("shell", "am", "start", "-n", f"{PKG}/{ACTIVITY}")
 
-    # Wait for home feed (up to ~60s)
     root = None
-    for _ in range(12):
+    for i in range(12):
         time.sleep(5)
         root = dump_ui()
+        texts = visible_texts(root) if root is not None else []
+        clicks = clickable_nodes(root) if root is not None else []
+        print(f"POLL {i}: focus={focus()} clickables={len(clicks)} texts={texts}",
+              flush=True)
         if root is not None:
             xml_text = ET.tostring(root, encoding="unicode")
-            if "Could not load" not in xml_text and len(clickable_nodes(root)) > 4:
+            if "Could not load" in xml_text or "went wrong" in xml_text:
+                m = re.search(r"Could not load[^\"]*", xml_text)
+                result["feed_failed_text"] = (m.group(0)[:120] if m
+                                              else "error state")
+                print("FEED ERROR STATE:", result["feed_failed_text"], flush=True)
+                break
+            if len(clicks) > 4:
                 result["feed_loaded"] = True
                 break
     screenshot("1_home.png")
@@ -98,8 +122,6 @@ try:
         h = max((y for _, y, _, _ in nodes), default=2000)
         candidates = [n for n in nodes if n[2] < h - 250]  # exclude bottom nav
         candidates.sort(key=lambda n: n[2])
-        # skip the first row of clickables only if it is a header chip row; tap
-        # the first large card candidate instead (cards have no text attr)
         card = next((n for n in candidates if not n[3] or len(n[3]) > 3),
                     candidates[0] if candidates else None)
         if card is None:
@@ -107,29 +129,34 @@ try:
         else:
             result["tap"] = [card[0], card[1]]
             adb("shell", "input", "tap", str(card[0]), str(card[1]))
+            time.sleep(20)
+            screenshot("2_after_tap.png")
 
-    # Wait for resolve + buffer
-    time.sleep(20)
-    screenshot("2_after_tap.png")
+            sess = adb("shell", "dumpsys", "media_session", check=False).stdout
+            with open(os.path.join(EVIDENCE, "media_session.txt"), "w") as f:
+                f.write(sess)
+            m = re.search(r"state=(\d+)", sess)
+            result["state"] = int(m.group(1)) if m else None
+            for _ in range(2):
+                m = re.search(r"position=(\d+)", sess)
+                result["positions"].append(int(m.group(1)) if m else -1)
+                time.sleep(5)
+                sess = adb("shell", "dumpsys", "media_session",
+                           check=False).stdout
+            m = re.search(r"position=(\d+)", sess)
+            result["positions"].append(int(m.group(1)) if m else -1)
 
-    sess = adb("shell", "dumpsys", "media_session", check=False).stdout
-    with open(os.path.join(EVIDENCE, "media_session.txt"), "w") as f:
-        f.write(sess)
-    m = re.search(r"state=PlaybackStateCompat \{state=(\d+)", sess) or \
-        re.search(r"state=(\d+)", sess)
-    result["state"] = int(m.group(1)) if m else None
-
-    for _ in range(2):
-        m = re.search(r"position=(\d+)", sess)
-        result["positions"].append(int(m.group(1)) if m else -1)
-        time.sleep(5)
-        sess = adb("shell", "dumpsys", "media_session", check=False).stdout
-    m = re.search(r"position=(\d+)", sess)
-    result["positions"].append(int(m.group(1)) if m else -1)
-
-    cat = adb("logcat", "-d", check=False).stdout
-    log.write(cat)
-    result["resolved_log"] = ("Resolving stream" in cat) or ("Resolved" in cat)
+    logcat = adb("logcat", "-d", check=False).stdout
+    with open(os.path.join(EVIDENCE, "logcat.txt"), "w") as f:
+        f.write(logcat)
+    interesting = [l for l in logcat.splitlines()
+                   if re.search(r"FATAL|AndroidRuntime|OrisMedia|InnerTube|"
+                                r"innertube|Resolving|Resolved|YouTube", l)]
+    print("LOGCAT INTERESTING (last 40):", flush=True)
+    for l in interesting[-40:]:
+        print(l[:200], flush=True)
+    result["resolved_log"] = ("Resolving stream" in logcat) or \
+        ("Resolved" in logcat)
 
     playing = result["state"] == 3
     advancing = len(result["positions"]) >= 2 and \
@@ -137,7 +164,6 @@ try:
     result["ok"] = bool(result["feed_loaded"] and (playing or advancing)
                         and result["resolved_log"])
 finally:
-    log.close()
     with open(os.path.join(EVIDENCE, "result.txt"), "w") as f:
         for k, v in result.items():
             f.write(f"{k}={v}\n")
