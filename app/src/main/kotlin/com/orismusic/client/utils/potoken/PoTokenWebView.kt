@@ -288,9 +288,17 @@ class PoTokenWebView private constructor(
         continuation.resumeWithException(error)
     }
 
+    private var closed = false
+
     @MainThread
     fun close() {
+        if (closed) return
+        closed = true
         scope.cancel()
+        httpClient.dispatcher.cancelAll()
+        popAllPoTokenContinuations().forEach { (_, pending) ->
+            pending.resumeWithException(kotlinx.coroutines.CancellationException("Playback stopped"))
+        }
 
         webView.clearHistory()
         webView.clearCache(true)
@@ -340,6 +348,9 @@ class PoTokenWebView private constructor(
                 } catch (e: TimeoutCancellationException) {
                     runCatching { pending?.close() }
                     throw PoTokenException("BotGuard did not initialise within ${COLD_START_TIMEOUT_MS}ms")
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    runCatching { pending?.close() }
+                    throw e
                 }
             }
         }

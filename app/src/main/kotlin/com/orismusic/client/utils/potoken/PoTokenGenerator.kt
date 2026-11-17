@@ -39,6 +39,16 @@ class PoTokenGenerator(context: Context) {
     private var webPoTokenSessionId: String? = null
     private var webPoTokenStreamingPot: String? = null
     private var webPoTokenGenerator: PoTokenWebView? = null
+    @Volatile private var closed = false
+
+    /** Main-thread shutdown, including a generator still being booted. */
+    fun close() {
+        closed = true
+        webPoTokenGenerator?.close()
+        webPoTokenGenerator = null
+        webPoTokenStreamingPot = null
+    }
+
 
     /** True once a session token has been minted, so diagnostics can show the real state. */
     val hasSessionToken: Boolean
@@ -64,7 +74,7 @@ class PoTokenGenerator(context: Context) {
      * ExoPlayer loading thread for however long BotGuard takes.
      */
     suspend fun poTokenFor(videoId: String, sessionId: String): PoTokenResult? {
-        if (!webViewSupported || webViewBadImpl) return null
+        if (closed || !webViewSupported || webViewBadImpl) return null
         if (System.currentTimeMillis() < mintCooldownUntilMs) {
             Timber.tag(TAG).d("Skipping poToken mint - cooling down after a failure")
             return null
@@ -115,6 +125,7 @@ class PoTokenGenerator(context: Context) {
 
         val (poTokenGenerator, streamingPot, hasBeenRecreated) =
             webPoTokenGenLock.withLock {
+                if (closed) throw kotlinx.coroutines.CancellationException("Playback stopped")
                 val shouldRecreate =
                     forceRecreate ||
                         webPoTokenGenerator == null ||
@@ -134,6 +145,11 @@ class PoTokenGenerator(context: Context) {
                     webPoTokenStreamingPot = null
 
                     val generator = PoTokenWebView.getNewPoTokenGenerator(applicationContext)
+                    if (closed) {
+                        withContext(Dispatchers.Main) { generator.close() }
+                        throw kotlinx.coroutines.CancellationException("Playback stopped")
+                    }
+                    webPoTokenGenerator = generator
                     webPoTokenStreamingPot = try {
                         generator.generatePoToken(webPoTokenSessionId!!)
                     } catch (e: Exception) {

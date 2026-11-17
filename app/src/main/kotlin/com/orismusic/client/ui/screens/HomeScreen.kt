@@ -93,6 +93,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     playerConnection: PlayerConnection? = null,
     onSearch: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
     var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
     val diagnostic = PlaybackDiagnostic.message.collectAsState().value
@@ -133,10 +134,10 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    IconButton(onClick = { showDiagnostic = true }) {
+                    IconButton(onClick = onSettings) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
-                            contentDescription = "Playback diagnostic",
+                            contentDescription = "Settings",
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }

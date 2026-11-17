@@ -28,6 +28,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,13 +68,35 @@ object InnerTubeXResolver {
   private var poTokens: PoTokenGenerator? = null
   private var playerDir: File? = null
   private var warmup: Job? = null
+  private var appContext: Context? = null
+  private var backgroundStopped = false
+
+  /** Called on the main thread with playback shutdown. A cached process does no warm-up work. */
+  fun stopBackgroundWork() {
+    backgroundStopped = true
+    warmup?.cancel()
+    warmup = null
+    scope.coroutineContext.cancelChildren()
+    http.coroutineContext.cancelChildren()
+    poTokens?.close()
+    poTokens = null
+  }
+
+  fun resumeBackgroundWork() {
+    if (!backgroundStopped) return
+    backgroundStopped = false
+    appContext?.let { poTokens = PoTokenGenerator(it) }
+  }
+
 
   fun init(context: Context) {
     val app = context.applicationContext
+    appContext = app
+    backgroundStopped = false
     prefs = app.getSharedPreferences("innertubex_player_config", Context.MODE_PRIVATE)
     poTokens = PoTokenGenerator(app)
     playerDir = File(app.filesDir, "innertubex_players").apply { mkdirs() }
-    scope.launch { warm(WARM_DELAY_MS) }
+    warm(WARM_DELAY_MS)
   }
 
   /**

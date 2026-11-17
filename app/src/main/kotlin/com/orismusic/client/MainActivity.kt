@@ -117,6 +117,7 @@ class MainActivity : ComponentActivity() {
             OrisTheme {
                 val connection = connectionState.value
                 var navigation by rememberSaveable { mutableStateOf(NavigationState()) }
+                var settingsOpen by rememberSaveable { mutableStateOf(false) }
                 val tabState = rememberSaveableStateHolder()
                 val selectedTab = navigation.currentTab
                 val showPlayer = navigation.playerOpen
@@ -165,6 +166,7 @@ class MainActivity : ComponentActivity() {
                             tabState.SaveableStateProvider(selectedTab) {
                             when (MainTab.entries[selectedTab]) {
                                 MainTab.Home -> HomeScreen(
+                                    onSettings = { settingsOpen = true },
                                     onSearch = { navigation = navigation.select(MainTab.Search.ordinal) },
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -195,6 +197,13 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        if (settingsOpen) {
+                            com.orismusic.client.ui.screens.SettingsScreen(
+                                onBack = { settingsOpen = false },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
                         AnimatedVisibility(
                             visible = showPlayer && connection != null,
                             enter = slideInVertically(initialOffsetY = { it }),
@@ -215,6 +224,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        startService(Intent(this, OrisMediaService::class.java))
         bindService(
             Intent(this, OrisMediaService::class.java),
             serviceConnection,

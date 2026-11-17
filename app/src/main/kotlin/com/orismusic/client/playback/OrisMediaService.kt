@@ -504,6 +504,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         isRunning = true
 
         playerInitialized.value = false
+        com.orismusic.client.utils.InnerTubeXResolver.resumeBackgroundWork()
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -567,9 +568,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 )
                 .build()
 
-        val sessionToken = SessionToken(this, ComponentName(this, OrisMediaService::class.java))
-        val controllerFuture = androidx.media3.session.MediaController.Builder(this, sessionToken).buildAsync()
-        controllerFuture.addListener({ controllerFuture.get() }, MoreExecutors.directExecutor())
 
         connectivityManager = getSystemService(ConnectivityManager::class.java)
 
@@ -741,27 +739,60 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
-        return if (::mediaSession.isInitialized) {
+        return if (!resourcesReleased && ::mediaSession.isInitialized) {
             mediaSession
         } else {
             null
         }
     }
 
-    override fun onDestroy() {
-        isRunning = false
-        scope.cancel()
-        if (::mediaSession.isInitialized) {
-            mediaSession.release()
+    private var resourcesReleased = false
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        // Do not resurrect an idle playback service after Android reclaims it.
+        return START_NOT_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (com.orismusic.client.settings.PlaybackPreferences(this).keepPlayingAfterTaskRemoval) {
+            Timber.i("Task removed: background playback retained by preference")
+            return
         }
-        player.release()
+        releasePlaybackResources()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+        stopSelf()
+        Timber.i("Task removed: playback shutdown requested")
+    }
+
+    private fun releasePlaybackResources() {
+        if (resourcesReleased) return
+        resourcesReleased = true
+        isRunning = false
+        playerInitialized.value = false
+        queueGeneration++
+        scope.cancel()
+        if (::player.isInitialized) player.removeListener(this)
+        if (::mediaSession.isInitialized) mediaSession.release()
+        if (::player.isInitialized) player.release()
         secondaryPlayer?.release()
+        secondaryPlayer = null
         fadingPlayer?.release()
+        fadingPlayer = null
         abandonAudioFocus()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (::audioManager.isInitialized && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         }
-        Timber.d("OrisMediaService destroyed")
+        com.orismusic.client.utils.InnerTubeXResolver.stopBackgroundWork()
+        Timber.i("Playback resources released; service work cancelled")
+    }
+
+    override fun onDestroy() {
+        releasePlaybackResources()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+        Timber.i("OrisMediaService destroyed")
         super.onDestroy()
     }
 
@@ -790,7 +821,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     }
 
     private fun fillUpcomingMusic() {
-        if (initialQueueLoading || runwayJob?.isActive == true || !currentQueue.hasNextPage()) return
+        if (resourcesReleased || initialQueueLoading || runwayJob?.isActive == true || !currentQueue.hasNextPage()) return
         if (player.mediaItemCount - player.currentMediaItemIndex > 3) return
         val source = currentQueue
         val generation = queueGeneration
