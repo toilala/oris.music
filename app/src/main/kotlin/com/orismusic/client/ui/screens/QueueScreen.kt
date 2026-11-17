@@ -1,6 +1,9 @@
 package com.orismusic.client.ui.screens
 
 import androidx.compose.foundation.background
+import com.orismusic.client.library.toSavedSong
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +49,41 @@ fun QueueScreen(
     onBack: () -> Unit = {},
     onOpenPlayer: () -> Unit = {},
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var saving by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var saveName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    var saved by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (saving) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { saving = false },
+            title = { Text("Save queue as playlist") },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = saveName, onValueChange = { saveName = it }, singleLine = true,
+                    label = { Text("Name") },
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    enabled = saveName.isNotBlank(),
+                    onClick = {
+                        val store = com.orismusic.client.library.PlaylistStore.get(context)
+                        val id = store.create(saveName)
+                        val p = connection?.player
+                        val n = try { p?.mediaItemCount ?: 0 } catch (e: Exception) { 0 }
+                        for (i in 0 until n) {
+                            val song = try { p?.getMediaItemAt(i)?.toSavedSong() } catch (e: Exception) { null }
+                            if (song != null) store.add(id, song)
+                        }
+                        saving = false; saveName = ""; saved = true
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { saving = false }) { Text("Cancel") }
+            },
+        )
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -57,6 +95,10 @@ fun QueueScreen(
                     }
                 },
                 actions = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { saving = true },
+                        enabled = connection != null,
+                    ) { Text(if (saved) "Saved" else "Save") }
                     IconButton(onClick = onOpenPlayer, enabled = connection != null) {
                         Icon(Icons.Filled.ExpandLess, "Open player")
                     }
