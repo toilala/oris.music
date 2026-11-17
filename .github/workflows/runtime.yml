@@ -23,6 +23,8 @@ jobs:
           if [ ! -f ~/.android/debug.keystore ]; then
             keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
           fi
+      - name: Inspect ktor resolution
+        run: ./gradlew :app:dependencyInsight --dependency ktor-client-content-negotiation --configuration fossDebugRuntimeClasspath --console=plain
       - name: Build FOSS debug APK
         run: ./gradlew :app:assembleFossDebug --console=plain --warning-mode summary
       - name: Enable KVM
