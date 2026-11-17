@@ -16,6 +16,7 @@ import android.net.ConnectivityManager
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
@@ -234,6 +235,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         val service: OrisMediaService
             get() = this@OrisMediaService
     }
+
+    // MainActivity binds with an explicit intent (no action); media session
+    // controllers always use MediaSessionService's interface action. Route
+    // the local binding to MusicBinder, keep the session contract for the rest.
+    override fun onBind(intent: Intent?): IBinder? =
+        if (intent?.action == null) binder else super.onBind(intent)
 
     private lateinit var connectivityManager: ConnectivityManager
     lateinit var connectivityObserver: NetworkConnectivityObserver
