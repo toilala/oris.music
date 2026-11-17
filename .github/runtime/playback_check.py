@@ -118,17 +118,29 @@ try:
     if not result["feed_loaded"]:
         print("FEED DID NOT LOAD")
     else:
-        nodes = clickable_nodes(root)
-        h = max((y for _, y, _, _ in nodes), default=2000)
-        candidates = [n for n in nodes if n[2] < h - 250]  # exclude bottom nav
-        candidates.sort(key=lambda n: n[2])
-        card = next((n for n in candidates if not n[3] or len(n[3]) > 3),
-                    candidates[0] if candidates else None)
-        if card is None:
+        # Tap a real song card: find a feed text node (song title) below the
+        # app bar and above the bottom nav, then tap its bounds center.
+        chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings",
+                  "Home", "Library", "Queue"}
+        h = max((y for _, y, _, _ in clickable_nodes(root)), default=2000)
+        target = None
+        for n in root.iter("node"):
+            t = (n.get("text") or "").strip()
+            if not t or t in chrome or len(t) < 4:
+                continue
+            nums = [int(x) for x in re.findall(r"\d+", n.get("bounds") or "")]
+            if len(nums) != 4:
+                continue
+            cy = (nums[1] + nums[3]) // 2
+            if 260 < cy < h - 260:
+                target = ((nums[0] + nums[2]) // 2, cy, t)
+                break
+        if target is None:
             print("NO TAPPABLE CARD FOUND")
         else:
-            result["tap"] = [card[0], card[1]]
-            adb("shell", "input", "tap", str(card[0]), str(card[1]))
+            print("TAPPING:", target[2], "at", target[0], target[1], flush=True)
+            result["tap"] = [target[0], target[1]]
+            adb("shell", "input", "tap", str(target[0]), str(target[1]))
             time.sleep(20)
             screenshot("2_after_tap.png")
 
