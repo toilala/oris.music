@@ -204,3 +204,7 @@ configurations.all {
         force("com.squareup.okhttp3:logging-interceptor:4.12.0")
     }
 }
+// A patch cannot pass the assembly gate while a unit regression fails.
+tasks.matching { it.name == "assembleFossDebug" }.configureEach {
+    dependsOn("testFossDebugUnitTest")
+}

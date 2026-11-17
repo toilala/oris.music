@@ -7,12 +7,16 @@ Borrowed internals stay credited in BORROWED.md until genuinely rewritten.
 One verified slice at a time: build-gated commit, emulator-verified where
 user-facing, status per slice.
 
-## Stage 1 - playable core (in progress)
+## Stage 1 - playable core (phone verified)
 - [x] Real home feed from YouTube Music (loading/error/ready, artwork, tap-to-queue)
 - [x] Stream resolution over the app's own InnerTubeXResolver (demo track deleted)
-- [ ] Emulator-verified playback: tap a song, PLAYING state, advancing position
+- [x] Owner verified anonymous home-song playback and play/pause on phone (Nov 17).
+      CI is refused by YouTube's bot check, so UI/unit checks run without live playback.
+- [x] On-device refusal diagnostic with explicit bot-check retry stop.
 
 ## Stage 2 - player experience
+- [x] System Back dismisses player, then unwinds tab history to Home; state survives recreation.
+- [x] Play icon state follows Media3 isPlaying, not requested play intent.
 - [ ] Full now-playing screen: artwork, title/artist, seek bar with position/duration,
       play/pause/next/prev, shuffle/repeat, expand from a mini-player bar
 - [ ] Queue screen: up-next list, tap to jump, remove/reorder

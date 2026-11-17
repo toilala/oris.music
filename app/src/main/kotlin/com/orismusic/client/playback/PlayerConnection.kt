@@ -73,7 +73,8 @@ class PlayerConnection(
 
     val playbackState: MutableStateFlow<Int>
     private val playWhenReady: MutableStateFlow<Boolean>
-    val isPlaying: StateFlow<Boolean>
+    private val actualPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = actualPlaying
 
     init {
         Timber.tag(TAG).d("PlayerConnection init: playerReady=${playerReadinessFlow.value}")
@@ -81,7 +82,7 @@ class PlayerConnection(
         val initialState = try {
             val initialPlayer = getPlayerSafe()
             Triple(initialPlayer.playbackState, initialPlayer.playWhenReady,
-                   initialPlayer.playWhenReady && initialPlayer.playbackState != STATE_ENDED)
+                   initialPlayer.isPlaying)
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error during PlayerConnection initialization, using defaults")
             Triple(Player.STATE_IDLE, false, false)
@@ -89,8 +90,7 @@ class PlayerConnection(
 
         playbackState = MutableStateFlow(initialState.first)
         playWhenReady = MutableStateFlow(initialState.second)
-        isPlaying = combine(playbackState, playWhenReady) { state, ready -> ready && state != STATE_ENDED }
-            .stateIn(scope, SharingStarted.Lazily, initialState.third)
+        actualPlaying.value = initialState.third
 
         scope.launch {
             playerReadinessFlow.collect { ready ->
@@ -113,7 +113,7 @@ class PlayerConnection(
     }.stateIn(
         scope,
         SharingStarted.Lazily,
-        player.playbackState != STATE_ENDED && player.playWhenReady
+        isPlaying.value
     )
 
     val mediaMetadata = MutableStateFlow<MediaMetadata?>(null)
@@ -212,6 +212,7 @@ class PlayerConnection(
 
         playbackState.value = newPlayer.playbackState
         playWhenReady.value = newPlayer.playWhenReady
+        actualPlaying.value = newPlayer.isPlaying
         mediaMetadata.value = newPlayer.currentMediaItem?.mediaMetadata
         queueTitle.value = service.queueTitle
         queueWindows.value = emptyList() // getQueueWindows() not available in Media3
@@ -461,7 +462,12 @@ class PlayerConnection(
         }
     }
 
+    override fun onIsPlayingChanged(isPlaying: Boolean) {
+        actualPlaying.value = isPlaying
+    }
+
     override fun onPlaybackStateChanged(state: Int) {
+        actualPlaying.value = player.isPlaying
         playbackState.value = state
         error.value = player.playerError
     }

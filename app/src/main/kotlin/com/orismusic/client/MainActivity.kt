@@ -7,6 +7,9 @@ import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.orismusic.client.ui.navigation.NavigationState
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
@@ -111,8 +114,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             OrisTheme {
                 val connection = connectionState.value
-                var selectedTab by remember { mutableIntStateOf(MainTab.Home.ordinal) }
-                var showPlayer by remember { mutableStateOf(false) }
+                var navigation by rememberSaveable { mutableStateOf(NavigationState()) }
+                val selectedTab = navigation.currentTab
+                val showPlayer = navigation.playerOpen
+                BackHandler(enabled = navigation.canGoBack) {
+                    navigation = navigation.back()
+                }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -126,14 +133,14 @@ class MainActivity : ComponentActivity() {
                                     connection?.let {
                                         MiniPlayer(
                                             connection = it,
-                                            onExpand = { showPlayer = true },
+                                            onExpand = { navigation = navigation.openPlayer() },
                                         )
                                     }
                                     NavigationBar {
                                         MainTab.entries.forEach { tab ->
                                             NavigationBarItem(
                                                 selected = selectedTab == tab.ordinal,
-                                                onClick = { selectedTab = tab.ordinal },
+                                                onClick = { navigation = navigation.select(tab.ordinal) },
                                                 icon = {
                                                     Icon(
                                                         imageVector = when (tab) {
@@ -160,6 +167,8 @@ class MainActivity : ComponentActivity() {
                                     playerConnection = connection,
                                 )
                                 MainTab.Queue -> QueueScreen(
+                                    onBack = { navigation = navigation.back() },
+                                    onOpenPlayer = { navigation = navigation.openPlayer() },
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(innerPadding),
@@ -188,7 +197,7 @@ class MainActivity : ComponentActivity() {
                             connection?.let {
                                 NowPlayingScreen(
                                     connection = it,
-                                    onCollapse = { showPlayer = false },
+                                    onCollapse = { navigation = navigation.closePlayer() },
                                 )
                             }
                         }
