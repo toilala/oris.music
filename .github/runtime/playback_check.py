@@ -127,12 +127,12 @@ try:
         # headers render once. Tap the first duplicated in-feed text.
         counts = {}
         for n in root.iter("node"):
-            t = (n.get("text") or "").strip()
+            t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
             if t:
                 counts[t] = counts.get(t, 0) + 1
         target = None
         for n in root.iter("node"):
-            t = (n.get("text") or "").strip()
+            t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
             if not t or t in chrome or len(t) < 4 or counts.get(t, 0) < 2:
                 continue
             nums = [int(x) for x in re.findall(r"\d+", n.get("bounds") or "")]
@@ -142,6 +142,14 @@ try:
             if 260 < cy < h - 260:
                 target = ((nums[0] + nums[2]) // 2, cy, t)
                 break
+        if target is None:
+            # fallback: first clickable inside the card band (below app bar,
+            # above bottom nav)
+            band = [c for c in clickable_nodes(root) if 400 < c[1] < h - 260]
+            band.sort(key=lambda c: c[1])
+            if band:
+                c = band[0]
+                target = (c[0], c[1], c[3] or "clickable card")
         if target is None:
             print("NO TAPPABLE CARD FOUND")
         else:
