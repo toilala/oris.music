@@ -1,0 +1,75 @@
+name: Tidy repo
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: repo-cleanup
+  cancel-in-progress: false
+jobs:
+  tidy:
+    if: github.repository == 'toilala/oris-music-rebuilt'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Backup current history
+        run: |
+          set -euo pipefail
+          test "$(git remote get-url origin)" = 'https://github.com/toilala/oris-music-rebuilt'
+          git config user.name toilala
+          git config user.email 129511137+toilala@users.noreply.github.com
+          before=$(git rev-parse HEAD)
+          echo "BEFORE=$before" >> "$GITHUB_ENV"
+          backup="before-repo-cleanup-$(date -u +%Y%m%d-%H%M%S)"
+          git tag "$backup" "$before"
+          git push origin "refs/tags/$backup"
+          echo "BACKUP=$backup" >> "$GITHUB_ENV"
+          echo "Backup: $backup at $before"
+      - name: Short readme and credits
+        env:
+          README_B64: IyBPcmlzIE11c2ljCgpBbiBBbmRyb2lkIG11c2ljIHBsYXllciBJJ20gd29ya2luZyBvbi4gU2VhcmNoLCBwbGF5YmFjaywgcXVldWVzIGFuZCBseXJpY3MgYXJlIGluLiBUaGVyZSdzIHN0aWxsIHBsZW50eSB0byBmaXguCgojIyBCdWlsZAoKVXNlIEpESyAxNyBhbmQgdGhlIEFuZHJvaWQgU0RLLCB0aGVuIHJ1bjoKCmBgYAouL2dyYWRsZXcgOmFwcDphc3NlbWJsZUZvc3NEZWJ1ZwpgYGAKClRoZSBBUEsgZW5kcyB1cCBpbiBgYXBwL2J1aWxkL291dHB1dHMvYXBrL2Zvc3MvZGVidWcvYC4KCiMjIENyZWRpdHMgYW5kIGxpY2Vuc2UKCkdQTC0zLjAuIFNlZSBbTElDRU5TRV0oTElDRU5TRSkuIEV4aXN0aW5nIGNvcHlyaWdodCBhbmQgbGljZW5zZSBub3RpY2VzIGluIHRoZSBzb3VyY2Ugc3RpbGwgYXBwbHkuCgotIFtNb2NoeSBNdXNpY10oaHR0cHM6Ly9naXRodWIuY29tL3JlYWxpZGtyb28vTW9jaHktTXVzaWMpOiB0aGUgaW5oZXJpdGVkIGBpbm5lcnR1YmVgIGNsaWVudCwgdG9rZW4vY2lwaGVyIGNvZGUsIHNvbWUgcXVldWUgaGVscGVycywgdGhlbWUgYW5kIHNtYWxsIHV0aWxpdGllcy4gVGhlc2UgcGFydHMgYXJlIGJvcnJvd2VkIEdQTCBjb2RlLCBub3QgYWxsIHdyaXR0ZW4gZnJvbSBzY3JhdGNoIGhlcmUuCi0gW01ldHJvbGlzdCAvIElubmVyVHViZVhdKGh0dHBzOi8vZ2l0aHViLmNvbS9NZXRyb2xpc3RHcm91cC9pbm5lcnR1YmV4KTogc3RyZWFtIGV4dHJhY3Rpb24gbGlicmFyeSBhbmQgaW5oZXJpdGVkIHBsYXliYWNrIGxpbmVhZ2UuIFRoZSBvbGQgWVRQbGF5ZXJVdGlscyBzdHViIHdhcyByZXBsYWNlZDsgSW5uZXJUdWJlWCBhbmQgb3RoZXIgY3JlZGl0ZWQgZW5naW5lIHBhcnRzIHJlbWFpbi4KLSBbRWNobyBNdXNpY10oaHR0cHM6Ly9naXRodWIuY29tL0VjaG9NdXNpY0FwcC9FY2hvLU11c2ljKSBhbmQgTW9jaHk6IHJlZmVyZW5jZXMgZm9yIHRoZSBuZXcgc2VhcmNoL3JhZGlvIGFuZCBseXJpY3Mgd29yay4gVGhvc2UgT3JpcyBpbXBsZW1lbnRhdGlvbnMgd2VyZSB3cml0dGVuIHNlcGFyYXRlbHksIG5vdCBwYXN0ZWQuCi0gTHlyaWNzIGNvbWUgZnJvbSBbTFJDTElCXShodHRwczovL2xyY2xpYi5uZXQpLCBbQmV0dGVyIEx5cmljc10oaHR0cHM6Ly9naXRodWIuY29tL2JldHRlci1seXJpY3MvYXBpKSAoYWxzbyB0aGUgS3VHb3Ugcm91dGUpLCBbVW5pc29uXShodHRwczovL2dpdGh1Yi5jb20vYmV0dGVyLWx5cmljcy91bmlzb24pLCBbWW91THlQbHVzXShodHRwczovL2dpdGh1Yi5jb20vaWJyYXRhYmlhbjE3L0x5cmljc1BsdXMpLCBbUGF4U2VuaXhdKGh0dHBzOi8vbHlyaWNzLnBheHNlbml4Lm9yZy8pIGFuZCBZb3VUdWJlLCB3aGVyZSBhdmFpbGFibGUuIFByb3ZpZGVyIGFuZCByZXF1aXJlZCBzdWJtaXR0ZXIgY3JlZGl0cyBhcmUgc2hvd24gaW4gdGhlIGFwcC4gU29tZSBzb3VyY2VzIGFyZSBvcHRpb25hbCBvciB1bmF2YWlsYWJsZTsgU2ltcE11c2ljIGlzIGRpc2FibGVkIGJlY2F1c2UgaXRzIHNlcnZpY2UgcmVzdHJpY3RzIG90aGVyIGNsaWVudHMuIEx5cmljcyBzdGlsbCBiZWxvbmcgdG8gdGhlaXIgb3duZXJzLiBBUEkgYWNjZXNzIGlzIG5vdCBhIGdyYW50IG9mIHJlZGlzdHJpYnV0aW9uIHJpZ2h0cy4KLSBHcmFkbGUgd3JhcHBlcjogQXBhY2hlLTIuMCwgYnJvdWdodCBvdmVyIHRocm91Z2ggW29yaXMtbXVzaWMtZm91bmRhdGlvbl0oaHR0cHM6Ly9naXRodWIuY29tL3RvaWxhbGEvb3Jpcy1tdXNpYy1mb3VuZGF0aW9uKS4gT3RoZXIgbGlicmFyaWVzIGtlZXAgdGhlaXIgb3duIGxpY2Vuc2VzLgo=
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,base64,pathlib
+          pathlib.Path('README.md').write_bytes(base64.b64decode(os.environ['README_B64']))
+          for name in ['BORROWED.md','PARITY.md','docs/LYRICS_SOURCES.md']:
+              pathlib.Path(name).unlink(missing_ok=True)
+          PY
+          test -f LICENSE
+          git diff --exit-code "$BEFORE" -- LICENSE
+          git add README.md BORROWED.md PARITY.md docs/LYRICS_SOURCES.md
+          git commit -m 'tidy readme'
+          git push origin HEAD:main
+          echo "DOCS_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Shorten messages without changing dates or authors
+        env:
+          MESSAGE_MAP_B64: eyI1ZWUzYWRjYmJlM2U4MmY0MjFjYzM0YzNjOGViMDJjNDNkODA3NzY0IjogImFkZCBidWlsZCB3b3JrZmxvdyIsICJiZmQ5OGE0NTgyNzhhMDI4MDRkMjYxNzdkMzkxNzgyZWZlYTgxODRjIjogImFkZCBsaWNlbnNlIiwgIjEwNDFiODEzZjFkODM4YjUyMTA2ZDJhZWY3ZmYxOWVjYmZmOGIyZmIiOiAiZml4IHdyYXBwZXIgc2V0dXAiLCAiNzE4ZDdmNjJjYWNjYzRmMDE3YTYwOWJiMTAzNWY4M2Y5ZDY0Mjg3ZCI6ICJ1cGRhdGUgZ3JhZGxlIHdyYXBwZXIiLCAiNTJmZmZjMjE4ZmMyNDg0NGQ2ZjhhMWJiZGRmNjc5OWM0YWRjZGIwOSI6ICJhZGQgY3JlZGl0cyIsICIyOTM3ZWQ3NDQxODFkMzA1MjFkMTJhMWRiNTY0ZmYxNzA3YmZjYmUxIjogImFkZCBwYXRjaCB3b3JrZmxvdyIsICI3ZWQyMDg2ZGRkNDA0MDJjMDBiNTY3OWM2N2MxNzQ0ZTk1N2M5MjQ0IjogIndpcmUgcGxheWJhY2siLCAiZTY2MmU5MGE3MTc4ZGUyN2UyYjM4NzU1ZTljZjFmNzIxMmExM2ExNiI6ICJhZGQgZW11bGF0b3IgY2hlY2siLCAiNDUyMTkzOGVjMmNhMTAwMGYzZTgwMjhiYzliNGJiYmRkNDRmN2NiMiI6ICJsb2FkIGhvbWUgZmVlZCIsICJhNzI3ZTE1YThiNzI3OWI0MTJlNjUxNWUzYWExNmZmZjViMjNjZjNkIjogImZpeCBlbXVsYXRvciBzZXR1cCIsICJlNjA5MGI0MTY3MGQxOGNmMzUwZTIwZDQxZGQ0ZTk5MTU2MDdiMzgzIjogInBsYXliYWNrIGxvZ3MiLCAiNmMxODYzMThjMzNmYzlmNTVlMjI0NDM4NzE0ZmI1OGY0NWM2ZmJlYyI6ICJmaXggZW1wdHkgaG9tZSBmZWVkIiwgImY5ZjE2ZTQ4ZTA2ZjY3YWUzYzk4ZWUxZWQxN2Y4OWYyMGM1NWI0MDQiOiAiZml4IHRlc3QgdGFwcyIsICI1NzUzMWFiODI4YzViMDViODRhNDlhZjQ0YmMwODBiOTg1NzY5MDQwIjogImNoZWNrIGR1cGxpY2F0ZSB0aXRsZXMiLCAiYTBiYTQzMmViMzJhN2VlNDc2ZWIyODM5MTVkOTU1ZjdjMWI4MTFkYiI6ICJhZGQgdG9kbyBsaXN0IiwgIjY2YWI5OWQ3NGM1ODRjN2VmNDdiMzFiMzg1OWY3Y2ExYjk0ZmI1MmQiOiAicGxheWVyIGFuZCBxdWV1ZSBzY3JlZW5zIiwgIjhmNjEwNjIzN2E1OTZiZTU2MzJiZWY1NzVkMDI5ODZjYThlZTMxZDciOiAiZml4IHRlc3QgdGV4dCByZWFkaW5nIiwgIjIxMjc0NmQyOGYxNmQxZjMwOWVkYjlmZThlNDI0ZTg3MGEwMmViM2IiOiAid2FpdCBmb3IgaG9tZSBmZWVkIiwgImRkNjM2NTRlNDQ5Y2NiZGI1Y2YwYzZhMjA4Y2UzNjU0MTVhMDkzM2QiOiAicGljayB0ZXN0IHNvbmciLCAiNjNlODAwNmI3NmI2MzE4MjJlMGYwMTM4NzMxNWJlMmE1NmU0YTA1OCI6ICJzaG93IG1vcmUgaG9tZSBzaGVsdmVzIiwgIjk4YjI2ZWU3OWM1MTJhMjMzYWFkZGMyNGVlYzc3MTRlMTI2NWIzNmIiOiAiZml4IHBsYXliYWNrIGNoZWNrIiwgIjI4ZTIxNjcxODZjYTU5NTkzOWQwZGU2ZmFlYWYwYjE1MmFkZTNlM2MiOiAidHJhY2sgcGxheSBidXR0b24gdGFwcyIsICI0ZDMzYjdlNWU1ODNmYzU2ZjgxMTM1NWNlNDk5ZmUwMzM4ODI4Mjc0IjogInRpZHkgc29uZyB0ZXN0IGhlbHBlciIsICI4ZDFkYTY3NDM2MTA0YTc5Mjc4ZjAyMjY1YTVhY2Q3NDgwYTlmZThmIjogIm1vcmUgcGxheWJhY2sgbG9ncyIsICJkZDFkZjg1NTdlN2Y1MGY2YjhlZDY3M2I4ZDcxNjkyNzkzYTZhZDJiIjogImZpeCBzZXJ2aWNlIGJpbmRpbmciLCAiNTBkZGNiZjY0YjNjNWQwZmRjZGVmMDUzMTI1YTM3Y2FiY2E5NGI3OSI6ICJmaXggb2todHRwIGRlcGVuZGVuY3kiLCAiMDA2ZTc2MTc0MmExY2M5ZThhZTc4MDJjNjVhY2M5M2Q1Y2Y0N2RkMyI6ICJjaGVjayBrdG9yIHZlcnNpb25zIiwgImRlYTE4YzhiMmY4MjVkNzBiYjFlZTZhZTQ4M2E1ZWYxY2RhMDhkYzkiOiAiYWxpZ24ga3RvciB2ZXJzaW9ucyIsICIwNDQ3MjdlMjIwMzFjYzQwY2ZkYTBlYTI2MzFiNWY4M2Q3M2JlMWQ1IjogImhhbmRsZSBwbGF5YmFjayBlcnJvcnMiLCAiMjljMTIzZWI5MTJmYzMxZmNjMWY5MjU0NDg5NDI1OGJjNWJlM2IwOCI6ICJmaXggdG9rZW4gY29udGV4dCIsICJmN2U5Zjc0ZTllODdmNGQ2YzE0NmY0N2MwZWU4ZGJhNGNjZGI3NjhhIjogInRyeSBndWVzdCBhdWRpbyBmaXJzdCIsICI1NWFmNzg1NGNmMTNlYmU4Yzg4NDZiOGYwMDgzOWQyNDQ2NDdlNDE0IjogInNob3cgcGxheWJhY2sgZXJyb3JzIiwgImM5MzEwY2EyZTM2Mjk3ZmFhZTBkMTkwMDliNWY5MDIzYTllODU0YjgiOiAiZml4IGJhY2sgbmF2aWdhdGlvbiIsICIwMmQ5OTA5ZDZiMDdkYzg5NTkzZmZkNDcwZTY4ZTFlYTYxNGQ5MTJlIjogIndhaXQgZm9yIGFwcCBzY3JlZW4iLCAiZjE4YzIyZDZiNzM3OGQzZGEyMDNjMTMzZTcwODJjNTQ3NGY1NjYyZiI6ICJhZGQgc2VhcmNoIiwgIjM3ZDNiYzA2ZmZjYWEwMDA4NGViMWZmM2IyYWIyNjM3ODFhY2JkZDEiOiAiZml4IHNlYXJjaCBrZXlib2FyZCIsICIwMDA2YTUxNmRhZWZiYTFkMjNmNGMxMzNmNzFjZDgxNTk0YTE3MmUyIjogImZpbHRlciBzb25ncyBhbmQgYWRkIHJhZGlvIiwgIjg1ZDk1NjMwOTM4YTNkZjlhNTY2N2NiYjEzZmQ5N2U4OWU2NWY0MGEiOiAiZml4IHNlYXJjaCB0ZXN0IiwgIjAxZDQ0NjMxZTZhNTNlODBlNjg0NDUyYWQxNmIzYjZkMjk5YjMzMDUiOiAic3RvcCBwbGF5YmFjayBvbiB0YXNrIHJlbW92YWwiLCAiZTA4MTlmOWE3OWRmY2I5NGFlMzg5OTUzODJkMWE1NzhhZjUyYWJiMiI6ICJhZGQgbHlyaWNzIiwgImY0MWQ0M2JiNDc4YjY4MmJlYjA2MzFkNzNkZTBjYjQ3Y2Q4YTQ5NTIiOiAibHlyaWNzIHNvdXJjZSBzZXR0aW5ncyJ9
+          FILTER_BRANCH_SQUELCH_WARNING: '1'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,base64,pathlib
+          pathlib.Path('/tmp/oris-message-map.json').write_bytes(base64.b64decode(os.environ['MESSAGE_MAP_B64']))
+          pathlib.Path('/tmp/oris-message-filter.py').write_text('''import json,os,sys
+          original=sys.stdin.read()
+          mapping=json.load(open('/tmp/oris-message-map.json'))
+          message=mapping.get(os.environ['GIT_COMMIT'])
+          sys.stdout.write(message+'\\n' if message else original)
+          ''')
+          PY
+          git log --reverse --format='%an%x09%ae%x09%aI%x09%cn%x09%ce%x09%cI' HEAD > /tmp/before-people-dates.txt
+          original_tree=$(git rev-parse 'HEAD^{tree}')
+          git filter-branch --force --msg-filter 'python3 /tmp/oris-message-filter.py' -- main
+          test "$original_tree" = "$(git rev-parse 'HEAD^{tree}')"
+          git log --reverse --format='%an%x09%ae%x09%aI%x09%cn%x09%ce%x09%cI' HEAD > /tmp/after-people-dates.txt
+          cmp /tmp/before-people-dates.txt /tmp/after-people-dates.txt
+          test -f LICENSE
+          git push "--force-with-lease=refs/heads/main:$DOCS_HEAD" origin HEAD:main
+          echo "Backup: $BACKUP"
+          echo "New main: $(git rev-parse HEAD)"
+          git log -45 --format='%h %s'
