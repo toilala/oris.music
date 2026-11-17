@@ -19,7 +19,6 @@ the code stays close to its source. Replacements must be genuine rewrites
 | Queue helpers | EmptyQueue, ListQueue, YouTubeAlbumRadio (~85% Mochy) | BORROWED - rewrite planned |
 | Theme base | ui/theme/Type.kt (95%), ui/theme/Theme.kt (70%) | BORROWED - rewrite planned |
 | Small utilities | utils/DataStore.kt, models/MediaMetadata.kt (partial overlap) | BORROWED - rewrite planned |
-| Stream URL resolver | utils/YTPlayerUtils.kt carries a Metrolist Project (C) 2026 GPL-3.0 header (Metrolist lineage, https://github.com/mostafaalagamy/Metrolist), currently gutted | BORROWED - rewrite planned |
 | Gradle wrapper | gradlew, gradlew.bat, gradle-wrapper.jar (stock Gradle wrapper, Apache-2.0, via oris-music-foundation) | TOOLING - no rewrite needed |
 
 ## Original Oris code (no significant match in Mochy, Metrolist or oris-music-foundation)
@@ -35,4 +34,4 @@ the code stays close to its source. Replacements must be genuine rewrites
 
 (Each genuine rewrite lands here with its commit and verification evidence.)
 
-- (pending)
+- YTPlayerUtils.kt: REWRITTEN as genuine Oris code. The Metrolist-lineage stub (which returned a hardcoded demo MP3) was deleted outright and replaced with our own stream resolution over the app's InnerTubeXResolver; the Metrolist header went with the deleted code. Playback wiring (ResolvingDataSource in OrisMediaService) is new Oris code too. Engine internals (InnerTubeX library, innertube module, PoToken) remain borrowed as listed above.

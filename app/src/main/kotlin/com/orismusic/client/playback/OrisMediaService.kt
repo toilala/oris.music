@@ -30,7 +30,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.SimpleCache
@@ -682,14 +684,40 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .build()
     }
 
-    private fun createDataSourceFactory(): DefaultDataSource.Factory {
+    private fun createDataSourceFactory(): DataSource.Factory {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(20000)
             .setReadTimeoutMs(20000)
 
-        return DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val baseFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        return ResolvingDataSource.Factory(baseFactory) { dataSpec ->
+            val uri = dataSpec.uri
+            val host = uri.host?.lowercase()
+            val isYouTubeWatch = (host == "music.youtube.com" || host == "www.youtube.com" || host == "youtube.com") &&
+                uri.path?.startsWith("/watch") == true
+            if (!isYouTubeWatch) {
+                dataSpec
+            } else {
+                val videoId = uri.getQueryParameter("v")
+                if (videoId == null) {
+                    dataSpec
+                } else {
+                    val data = runBlocking {
+                        YTPlayerUtils.getPlaybackData(
+                            videoId,
+                            com.orismusic.client.constants.AudioQuality.AUTO,
+                            this@OrisMediaService
+                        )
+                    }
+                    dataSpec.buildUpon()
+                        .setUri(data.streamUrl)
+                        .setHttpRequestHeaders(dataSpec.httpRequestHeaders + YTPlayerUtils.headersFor(data.streamUrl))
+                        .build()
+                }
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {

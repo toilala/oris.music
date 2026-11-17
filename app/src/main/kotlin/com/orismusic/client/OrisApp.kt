@@ -49,6 +49,9 @@ class OrisApp : Application(), SingletonImageLoader.Factory {
             nm.createNotificationChannel(channel)
         }
 
+        // Warm the playback engine (player config, cipher, PoToken) off the first tap path.
+        runCatching { com.orismusic.client.utils.InnerTubeXResolver.init(this) }
+
         applicationScope.launch(Dispatchers.IO) {
             // Background initialization tasks
         }
