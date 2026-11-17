@@ -3,7 +3,7 @@
 package com.orismusic.client.utils.potoken
 
 import android.webkit.CookieManager
-import com.orismusic.client.utils.cipher.CipherDeobfuscator
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -11,7 +11,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-class PoTokenGenerator {
+class PoTokenGenerator(context: Context) {
+    private val applicationContext = context.applicationContext
     private val TAG = "PoTokenGenerator"
 
     /**
@@ -132,7 +133,7 @@ class PoTokenGenerator {
                     webPoTokenGenerator = null
                     webPoTokenStreamingPot = null
 
-                    val generator = PoTokenWebView.getNewPoTokenGenerator(CipherDeobfuscator.appContext)
+                    val generator = PoTokenWebView.getNewPoTokenGenerator(applicationContext)
                     webPoTokenStreamingPot = try {
                         generator.generatePoToken(webPoTokenSessionId!!)
                     } catch (e: Exception) {

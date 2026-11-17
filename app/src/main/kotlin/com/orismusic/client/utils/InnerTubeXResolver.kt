@@ -71,7 +71,7 @@ object InnerTubeXResolver {
   fun init(context: Context) {
     val app = context.applicationContext
     prefs = app.getSharedPreferences("innertubex_player_config", Context.MODE_PRIVATE)
-    poTokens = PoTokenGenerator()
+    poTokens = PoTokenGenerator(app)
     playerDir = File(app.filesDir, "innertubex_players").apply { mkdirs() }
     scope.launch { warm(WARM_DELAY_MS) }
   }
@@ -146,7 +146,7 @@ object InnerTubeXResolver {
         visitorData: String,
         cookie: String?
       ): PoTokenResult? =
-        poTokens?.getWebClientPoToken(videoId, visitorData)?.let { token ->
+        poTokens?.poTokenFor(videoId, visitorData)?.let { token ->
           PoTokenResult(
             playerRequestToken = token.playerRequestPoToken,
             streamingDataToken = token.streamingDataPoToken,
