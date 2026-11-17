@@ -58,6 +58,7 @@ import com.music.innertube.pages.HomePage
 import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.queues.ListQueue
+import timber.log.Timber
 import kotlinx.coroutines.launch
 
 private sealed interface HomeFeedState {
@@ -215,6 +216,9 @@ private fun HomeFeed(
                             is SongItem -> SongCard(
                                 song = item,
                                 onClick = {
+                                    Timber.tag("OrisTap").w(
+                                        "SONG TAPPED ${item.title} conn=${playerConnection != null}",
+                                    )
                                     playerConnection?.let { connection ->
                                         scope.launch {
                                             connection.playQueue(

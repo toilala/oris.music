@@ -224,6 +224,7 @@ class PlayerConnection(
     }
 
     fun playQueue(queue: Queue) {
+        Timber.tag("OrisTap").w("playQueue invoked: ${queue::class.simpleName}")
         if (!playerReadinessFlow.value) {
             Timber.tag(TAG).w("playQueue called before player ready; delegating to service")
         }

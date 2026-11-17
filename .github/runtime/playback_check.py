@@ -202,7 +202,7 @@ try:
     with open(os.path.join(EVIDENCE, "logcat.txt"), "w") as f:
         f.write(logcat)
     interesting = [l for l in logcat.splitlines()
-                   if re.search(r"FATAL|AndroidRuntime|OrisMedia|InnerTube|"
+                   if re.search(r"FATAL|AndroidRuntime|OrisMedia|OrisTap|InnerTube|"
                                 r"innertube|Resolving|Resolved|YouTube", l)]
     print("LOGCAT INTERESTING (last 40):", flush=True)
     for l in interesting[-40:]:
