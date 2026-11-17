@@ -702,7 +702,18 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .build()
     }
 
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun createDataSourceFactory(): DataSource.Factory {
+        val resolving = createResolvingFactory(this)
+        if (!::downloadCache.isInitialized) return resolving
+        // Songs saved for offline play come from the download cache; everything else streams.
+        return androidx.media3.datasource.cache.CacheDataSource.Factory()
+            .setCache(downloadCache)
+            .setCacheWriteDataSinkFactory(null)
+            .setUpstreamDataSourceFactory(resolving)
+    }
+
+    private fun createLegacyResolvingFactory(): DataSource.Factory {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf("User-Agent" to "OrisMusic/1.0"))
             .setAllowCrossProtocolRedirects(true)

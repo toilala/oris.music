@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -67,6 +70,7 @@ import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.currentSavedSong
 import android.os.SystemClock
+import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.utils.formatTime
@@ -124,12 +128,35 @@ fun NowPlayingScreen(
                     contentDescription = "Close player",
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = "Now playing",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
-            Spacer(modifier = Modifier.weight(1f))
+            val appCtx = LocalContext.current
+            remember { OfflineAudio.load(appCtx) }
+            val savedSongs = OfflineAudio.downloaded.collectAsState().value
+            val busy = OfflineAudio.inProgress.collectAsState().value
+            val isSaved = nowSong != null && savedSongs.any { it.id == nowSong.id }
+            val isBusy = nowSong != null && nowSong.id in busy
+            IconButton(
+                onClick = {
+                    nowSong?.let { if (isSaved) OfflineAudio.remove(appCtx, it.id) else OfflineAudio.download(appCtx, it) }
+                },
+                enabled = nowSong != null && !isBusy,
+            ) {
+                if (isBusy) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Filled.DownloadDone else Icons.Filled.Download,
+                        contentDescription = if (isSaved) "Remove offline copy" else "Save for offline",
+                        tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             var playlistMenu by remember { mutableStateOf(false) }
             val playlistStore = PlaylistStore.get(LocalContext.current)
             val userPlaylists = playlistStore.playlists.collectAsState().value

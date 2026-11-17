@@ -72,7 +72,7 @@ object PlaybackModule {
     ): SimpleCache {
         return SimpleCache(
             context.filesDir.resolve("download"),
-            LeastRecentlyUsedCacheEvictor(500 * 1024 * 1024), // 500MB
+            androidx.media3.datasource.cache.NoOpCacheEvictor(), // saved songs stay until removed
             databaseProvider,
         )
     }

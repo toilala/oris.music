@@ -2,6 +2,8 @@ package com.orismusic.client.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +53,7 @@ import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
 import com.orismusic.client.library.toPlayableItem
+import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.queues.ListQueue
 
@@ -63,6 +66,9 @@ fun LibraryScreen(
     val store = LibraryStore.get(LocalContext.current)
     val liked by store.liked.collectAsState()
     val history by store.history.collectAsState()
+    val appContext = LocalContext.current
+    remember { OfflineAudio.load(appContext) }
+    val saved by OfflineAudio.downloaded.collectAsState()
     val playlistStore = PlaylistStore.get(LocalContext.current)
     val playlists by playlistStore.playlists.collectAsState()
     var section by rememberSaveable { mutableIntStateOf(0) }
@@ -73,11 +79,13 @@ fun LibraryScreen(
     val songs = when {
         section == 0 -> liked
         section == 1 -> history
+        section == 3 -> saved
         else -> opened?.songs.orEmpty()
     }
     val title = when {
         section == 0 -> "Liked songs"
         section == 1 -> "Recently played"
+        section == 3 -> "Saved for offline"
         else -> opened?.name ?: "Playlists"
     }
 
@@ -116,7 +124,7 @@ fun LibraryScreen(
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
         )
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FilterChip(selected = section == 0, onClick = { section = 0 },
@@ -125,6 +133,8 @@ fun LibraryScreen(
                 label = { Text("Recent (${history.size})") })
             FilterChip(selected = section == 2, onClick = { section = 2; openPlaylist = null },
                 label = { Text("Playlists (${playlists.size})") })
+            FilterChip(selected = section == 3, onClick = { section = 3 },
+                label = { Text("Saved (${saved.size})") })
         }
         if (section == 2 && opened == null) {
             TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -220,8 +230,11 @@ fun LibraryScreen(
         } else if (songs.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (section == 0) "Tap the heart on the player to keep a song here."
-                    else "Songs you play will show up here.",
+                    text = when (section) {
+                        0 -> "Tap the heart on the player to keep a song here."
+                        3 -> "Tap the download button on the player to save a song for offline."
+                        else -> "Songs you play will show up here."
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(32.dp),
