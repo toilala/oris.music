@@ -41,10 +41,10 @@ def wait_label(label, seconds=25):
     print(adb('logcat', '-d', '-s', 'AndroidRuntime').decode(), flush=True)
     raise AssertionError(f'UI never showed {label}')
 
-def tap(label):
+def tap(label, bottom=True):
     wait_label(label)
     nodes = [n for n in tree().iter('node') if label in (n.get('text'), n.get('content-desc'))]
-    node = nodes[-1]  # Bottom navigation, not the Home header's duplicate Search icon.
+    node = nodes[-1] if bottom else nodes[0]
     points = list(map(int, re.findall(r'\d+', node.get('bounds'))))
     adb('shell', 'input', 'tap', str((points[0]+points[2])//2), str((points[1]+points[3])//2))
     time.sleep(1)
@@ -94,7 +94,7 @@ adb('shell', 'input', 'text', 'Yesterday')
 time.sleep(2)
 # Hide IME, then press the app's explicit Search button (not generic keyboard Enter).
 back()
-tap('Search')
+tap('Search', bottom=False)
 # Search is permitted; this check never taps a song or resolves an audio stream.
 end = time.monotonic()+45
 while time.monotonic() < end:
