@@ -33,12 +33,13 @@ jobs:
       - name: Run emulator playback check
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: 29
           arch: x86_64
           target: default
-          profile: pixel_6
-          emulator-options: -no-snapshot-save -noaudio -no-boot-anim -gpu swiftshader_indirect
-          disable-animations: true
+          profile: pixel_2
+          ram-size: 1536M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             python3 .github/runtime/playback_check.py
       - name: Upload runtime evidence
