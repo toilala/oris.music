@@ -123,6 +123,28 @@ fun SettingsScreen(
             TextButton(onClick = { lyricsSettings = true }) { Text("Lyrics providers") }
             Text("Choose sources and their priority order.", style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
+            Text("Your data", style = MaterialTheme.typography.titleMedium)
+            val libraryStore = remember(context) { com.orismusic.client.library.LibraryStore.get(context) }
+            val historyCount by libraryStore.history.collectAsState()
+            var cleared by remember { mutableStateOf(false) }
+            OutlinedButton(
+                onClick = { libraryStore.clearHistory(); cleared = true },
+                enabled = historyCount.isNotEmpty(),
+            ) { Text("Clear play history") }
+            Text(
+                if (cleared && historyCount.isEmpty()) "Play history cleared. Liked songs and playlists are untouched."
+                else "${historyCount.size} recently played songs are kept on this phone only.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider()
+            Text("About", style = MaterialTheme.typography.titleMedium)
+            val versionName = remember(context) {
+                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "dev"
+            }
+            Text("Oris Music $versionName", style = MaterialTheme.typography.bodyMedium)
+            Text("Free software under GPL-3.0. Built on Mochy Music and InnerTubeX; credits are in the README.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider()
             Text("Using Home or switching apps does not stop music. The recents setting only controls removal from recents.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
