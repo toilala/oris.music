@@ -35,7 +35,7 @@ jobs:
             keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
           fi
       - name: Build FOSS debug APK
-        run: ./gradlew :app:assembleFossDebug --console=plain --warning-mode summary
+        run: ./gradlew :app:assembleFossDebug :app:testFossDebugUnitTest --console=plain --warning-mode summary
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
