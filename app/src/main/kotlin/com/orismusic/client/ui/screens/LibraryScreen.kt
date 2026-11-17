@@ -157,8 +157,16 @@ fun LibraryScreen(
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            AsyncImage(
+                                model = p.songs.firstOrNull()?.thumbnail,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                            )
+                            Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(p.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                                Text(p.name, style = MaterialTheme.typography.titleMedium, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
                                 Text("${p.songs.size} songs", style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -241,8 +249,14 @@ fun LibraryScreen(
                 )
             }
         } else {
+            Text(
+                text = "$title  \u00b7  ${songs.size} ${if (songs.size == 1) "song" else "songs"}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+            )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -292,8 +306,8 @@ private fun SavedSongRow(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .size(52.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         )
         Spacer(Modifier.width(12.dp))
