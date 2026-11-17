@@ -768,6 +768,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     // Player.Listener callbacks
     override fun onPlaybackStateChanged(state: Int) {
         Timber.d("Playback state changed: $state")
+        if (state == Player.STATE_READY || state == Player.STATE_ENDED) fillUpcomingMusic()
     }
 
     override fun onPlayerError(error: PlaybackException) {
@@ -783,15 +784,57 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         // Handle playback errors, retry logic, etc.
     }
 
+    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+        currentMediaMetadata.value = mediaItem?.mediaMetadata
+        fillUpcomingMusic()
+    }
+
+    private fun fillUpcomingMusic() {
+        if (initialQueueLoading || runwayJob?.isActive == true || !currentQueue.hasNextPage()) return
+        if (player.mediaItemCount - player.currentMediaItemIndex > 3) return
+        val source = currentQueue
+        val generation = queueGeneration
+        runwayJob = scope.launch {
+            try {
+                val additions = source.nextPage()
+                if (generation != queueGeneration || source !== currentQueue) return@launch
+                val wasEnded = player.playbackState == Player.STATE_ENDED
+                val firstAdded = player.mediaItemCount
+                if (additions.isNotEmpty()) {
+                    player.addMediaItems(additions)
+                    if (wasEnded) { player.seekTo(firstAdded, 0L); player.prepare() }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Timber.w(failure, "Could not extend music queue; existing songs remain playable")
+            }
+        }
+    }
+
     // Queue methods for PlayerConnection
     fun playQueue(queue: Queue, playWhenReady: Boolean = true) {
+        queueGeneration++
+        val generation = queueGeneration
+        runwayJob?.cancel()
         scope.launch {
-            val status = queue.getInitialStatus()
-            Timber.d("playQueue called with ${status.items.size} items")
-            if (status.items.isNotEmpty()) {
-                player.setMediaItems(status.items, status.mediaItemIndex, status.position)
-                player.prepare()
-                player.playWhenReady = playWhenReady
+            initialQueueLoading = true
+            try {
+                val status = queue.getInitialStatus()
+                if (generation != queueGeneration) return@launch
+                currentQueue = queue
+                queueTitle = status.title
+                if (status.items.isNotEmpty()) {
+                    player.setMediaItems(status.items, status.mediaItemIndex, status.position)
+                    player.prepare()
+                    player.playWhenReady = playWhenReady
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Timber.e(failure, "Could not load selected queue")
+            } finally {
+                if (generation == queueGeneration) { initialQueueLoading = false; fillUpcomingMusic() }
             }
         }
     }

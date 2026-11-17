@@ -61,7 +61,8 @@ import com.music.innertube.models.SongItem
 import com.music.innertube.pages.HomePage
 import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.playback.PlayerConnection
-import com.orismusic.client.playback.queues.ListQueue
+import com.orismusic.client.playback.queues.MusicRadioQueue
+import com.orismusic.client.music.MusicCandidates
 import timber.log.Timber
 import kotlinx.coroutines.launch
 
@@ -223,8 +224,8 @@ private fun HomeFeed(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val songs = section.items.filterIsInstance<SongItem>()
-                    items(items = section.items, key = { "${section.title}-${it.id}" }) { item ->
+                    val songs = MusicCandidates.select(section.items.filterIsInstance<SongItem>())
+                    items(items = section.items.filter { it !is SongItem || it in songs }, key = { "${section.title}-${it.id}" }) { item ->
                         when (item) {
                             is SongItem -> SongCard(
                                 song = item,
@@ -235,11 +236,7 @@ private fun HomeFeed(
                                     playerConnection?.let { connection ->
                                         scope.launch {
                                             connection.playQueue(
-                                                ListQueue(
-                                                    title = section.title,
-                                                    items = songs.map { it.toMediaItem() },
-                                                    startIndex = songs.indexOfFirst { it.id == item.id }.coerceAtLeast(0),
-                                                ),
+                                                MusicRadioQueue(section.title, songs, item.id),
                                             )
                                         }
                                     }

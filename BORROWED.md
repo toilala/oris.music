@@ -43,3 +43,15 @@ the code stays close to its source. Replacements must be genuine rewrites
 - YTPlayerUtils.kt guest path: fresh Oris implementation informed by reading the visitor-first / VISIONOS-first approach in Mochy Music and oris-music-foundation YTPlayerUtils.kt. No source blocks copied. Accepts only direct HTTPS googlevideo audio without cipher or n-transform; unsupported formats remain with the credited InnerTubeX library. Existing innertube API module stays borrowed/GPL-3.0. Reference: https://github.com/toilala/oris-music-foundation
 
 - PlaybackDiagnostic and refusal handling: fresh Oris code. Shows provider status/reason on device without cookies/tokens/stream URLs; explicit bot-check refusal stops automatic load retries. This is a diagnostic build, not proof of working anonymous playback.
+
+## Music candidate policy and radio (Oris rewrite)
+
+Read Echo Music's OnlineSearchViewModel, RadioQueuePageFilter and
+RecommendationEngine at cb398f13 for ideas: Music search endpoints, preserving
+service relevance, track+artist de-duplication, and next/related radio candidates.
+Source: https://github.com/EchoMusicApp/Echo-Music
+No Echo blocks were pasted into MusicCandidates or MusicRadioQueue. These are
+new Oris implementations. Existing inherited YouTube/InnerTube parsers remain
+covered by the credits above. No claim is made that metadata proves original
+artist/channel ownership. SimpMusic lyrics is not integrated: its API explicitly
+rejects non-SimpMusic clients.

@@ -64,7 +64,11 @@ import com.music.innertube.models.YTItem
 import com.music.innertube.pages.SearchSummaryPage
 import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.playback.PlayerConnection
-import com.orismusic.client.playback.queues.ListQueue
+import com.orismusic.client.playback.queues.MusicRadioQueue
+import com.orismusic.client.music.MusicCandidates
+import com.music.innertube.pages.SearchSummary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 private sealed interface SearchState {
@@ -127,7 +131,25 @@ fun SearchScreen(
             value = SearchState.Idle
         } else {
             value = SearchState.Loading
-            value = YouTube.searchSummary(submittedQuery).fold(
+            val response = coroutineScope {
+                val summary = async { YouTube.searchSummary(submittedQuery) }
+                val catalog = async { YouTube.search(submittedQuery, YouTube.SearchFilter.FILTER_SONG) }
+                val summaryResult = summary.await()
+                val songResult = catalog.await()
+                summaryResult.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                songResult.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                if (summaryResult.isFailure && songResult.isFailure) summaryResult else {
+                    val groups = summaryResult.getOrNull()?.summaries.orEmpty()
+                    val songs = MusicCandidates.select(songResult.getOrNull()?.items.orEmpty().filterIsInstance<SongItem>() +
+                        groups.flatMap { it.items }.filterIsInstance<SongItem>())
+                    Result.success(SearchSummaryPage(
+                        listOf(SearchSummary("Songs", songs)) + groups.map { group ->
+                            group.copy(items = group.items.filter { it is AlbumItem || it is ArtistItem })
+                        }.filter { it.items.isNotEmpty() }
+                    ))
+                }
+            }
+            value = response.fold(
                 onSuccess = { page ->
                     if (page.summaries.any { it.items.isNotEmpty() }) {
                         SearchState.Ready(page)
@@ -236,12 +258,7 @@ fun SearchScreen(
                                         {
                                             scope.launch {
                                                 connection.playQueue(
-                                                    ListQueue(
-                                                        title = summary.title,
-                                                        items = songs.map { it.toMediaItem() },
-                                                        startIndex = songs.indexOfFirst { it.id == result.id }
-                                                            .coerceAtLeast(0),
-                                                    ),
+                                                    MusicRadioQueue(summary.title, songs, result.id),
                                                 )
                                             }
                                         }

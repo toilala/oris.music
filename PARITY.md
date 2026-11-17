@@ -59,3 +59,12 @@ user-facing, status per slice.
 ## Stage 10+ - advanced parity (later, individually scoped)
 - Crossmix/transitions, equalizer, Android widget, Android Auto, Discord RPC,
   scrobbling, import from other apps, canvas, recap, voice control
+
+## Music-only search and radio follow-up
+- [x] Search combines Music's Songs endpoint with safe catalog groups.
+- [x] Prefer audio for duplicate track/artist recordings, preserve service relevance,
+      reject podcast/UGC types, tolerate missing type with supporting album/artist metadata.
+- [x] Home/search queues can continue from YouTube Music radio pages; candidates share
+      the same policy and are de-duplicated across pages.
+- [ ] Listening-history/genre personalization (requires library history first).
+- Artist/channel ownership is not supplied as a verified fact by the current model.
