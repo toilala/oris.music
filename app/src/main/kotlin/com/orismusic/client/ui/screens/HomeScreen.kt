@@ -69,7 +69,10 @@ private sealed interface HomeFeedState {
 private suspend fun loadHomeFeed(): HomeFeedState =
     YouTube.home().fold(
         onSuccess = { page ->
-            if (page.sections.any { section -> section.items.filterIsInstance<SongItem>().isNotEmpty() }) {
+            // YouTube rotates anonymous home shelves; some rounds carry no song
+            // shelves at all. Show whatever came back - playlists included -
+            // and only call it empty when nothing parseable arrived.
+            if (page.sections.any { section -> section.items.isNotEmpty() }) {
                 HomeFeedState.Ready(page)
             } else {
                 HomeFeedState.Failed("The feed came back empty")
