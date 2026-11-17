@@ -68,3 +68,21 @@ user-facing, status per slice.
       the same policy and are de-duplicated across pages.
 - [ ] Listening-history/genre personalization (requires library history first).
 - Artist/channel ownership is not supplied as a verified fact by the current model.
+
+## Task removal and playback settings
+
+- Own-written Settings screen reached from the Home settings icon.
+- Keep playing after removal from recents defaults OFF. Home/app switching is unchanged.
+- OFF cancels service coroutines and resolver warm-up/requests, closes the token WebView, releases all players and session, abandons focus, removes the notification and stops the non-sticky service.
+- ON explicitly keeps playback on task removal. No scheduled playback jobs are created by this implementation.
+- Debug-only local-tone activity and OS task-removal checks test actual playback without depending on streamed audio. Not included in release builds.
+
+## Multi-source lyrics
+
+- Player opens Lyrics with Automatic or explicit source selection.
+- Automatic prefers synced LRCLIB, then keyless Better Lyrics TTML, then its keyless Kugou LRC endpoint. Good LRCLIB plain text is retained if none supplies timed lines; YouTube Music is the final fallback when other text is absent.
+- Artist/title/version/duration checks reduce wrong-recording LRCLIB matches; remaster labels can differ but live/remix labels are not erased.
+- Synced lines highlight and scroll with playback; timed lines seek on tap. Plain lyrics remain readable and labelled. TTML is line-synced here, not word-highlighted.
+- Requests have cancellation, limits/timeouts and a small successful-result memory cache. No disk lyric cache.
+- SimpMusic skipped because it explicitly refuses non-SimpMusic clients; QQ access returned unauthorized; Lyrics.ovh is plain-only and largely duplicates LRCLIB. No scraping or key impersonation.
+- A debug-only metadata screen exercises real lyric retrieval with no audio resolution. Release APKs do not contain the debug harness.

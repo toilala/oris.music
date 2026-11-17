@@ -47,6 +47,7 @@ class LocalPlaybackCheckActivity : Activity() {
         status = TextView(this).apply { text = "Preparing local audio"; textSize = 24f }
         val remove = Button(this).apply {
             text = "Remove this task"
+            isAllCaps = false
             setOnClickListener { finishAndRemoveTask() }
         }
         setContentView(LinearLayout(this).apply {

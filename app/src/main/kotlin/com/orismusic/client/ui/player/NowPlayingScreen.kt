@@ -29,6 +29,8 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,6 +59,11 @@ fun NowPlayingScreen(
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
+    if (lyricsOpen) {
+        LyricsPane(connection, onClose = { lyricsOpen = false })
+        return
+    }
     val metadata = connection.currentMetadata.collectAsState().value
     val isPlaying = connection.isPlaying.collectAsState()
     val duration = connection.duration.collectAsState()
@@ -93,7 +100,7 @@ fun NowPlayingScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.size(48.dp))
+            TextButton(onClick = { lyricsOpen = true }) { Text("Lyrics") }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

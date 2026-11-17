@@ -120,3 +120,4 @@ if __name__ == '__main__':
     assert not any(PKG in line for line in focus.splitlines() if 'mCurrentFocus' in line)
     print('PASS: idle player, nested Back, tab history, Home system exit; no playback network request', flush=True)
     subprocess.check_call(['python3', '.github/runtime/recents_check.py'])
+    subprocess.check_call(['python3', '.github/runtime/lyrics_check.py'])

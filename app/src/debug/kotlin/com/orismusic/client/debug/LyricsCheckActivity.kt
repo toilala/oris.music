@@ -1,0 +1,46 @@
+package com.orismusic.client.debug
+
+import android.content.*
+import android.os.*
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import com.orismusic.client.di.MusicDatabase
+import com.orismusic.client.playback.OrisMediaService
+import com.orismusic.client.playback.PlayerConnection
+import com.orismusic.client.ui.player.LyricsPane
+import com.orismusic.client.ui.theme.OrisTheme
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
+/** Metadata-only lyrics check: deliberately never prepares/resolves streamed audio. */
+@AndroidEntryPoint
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+class LyricsCheckActivity : ComponentActivity() {
+    @Inject lateinit var database: MusicDatabase
+    private var playerConnection: PlayerConnection? = null
+    private var bound = false
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val local = binder as OrisMediaService.MusicBinder
+            local.service.player.setMediaItem(MediaItem.Builder().setMediaId("wXTJBr9tt8Q")
+                .setMediaMetadata(MediaMetadata.Builder().setTitle("Yesterday").setArtist("The Beatles").setAlbumTitle("Help!").build()).build())
+            val connection = PlayerConnection(this@LyricsCheckActivity, local, database, lifecycleScope)
+            playerConnection = connection
+            setContent { OrisTheme { LyricsPane(connection, onClose = { finishAndRemoveTask() }) } }
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {}
+    }
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        startService(Intent(this, OrisMediaService::class.java))
+        bound = bindService(Intent(this, OrisMediaService::class.java), connection, Context.BIND_AUTO_CREATE)
+    }
+    override fun onDestroy() {
+        playerConnection?.dispose()
+        if (bound) unbindService(connection)
+        super.onDestroy()
+    }
+}

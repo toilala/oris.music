@@ -55,3 +55,11 @@ new Oris implementations. Existing inherited YouTube/InnerTube parsers remain
 covered by the credits above. No claim is made that metadata proves original
 artist/channel ownership. SimpMusic lyrics is not integrated: its API explicitly
 rejects non-SimpMusic clients.
+
+### Playback settings and task-removal shutdown
+
+The playback preference, Settings UI, shutdown coordination, cancellation additions and debug local-tone checks are independently written for Oris. Existing Android/Media3 lifecycle APIs and the inherited resolver/token components remain under their original credits. No Echo or Mochy implementation was pasted for this slice.
+
+### Multi-source lyrics
+
+Lyrics fetching, recording matching, LRC/TTML parsing and Compose UI are independently written for Oris after studying Echo/Mochy provider approaches. No provider implementation was copied. Source text is supplied by LRCLIB (https://lrclib.net), Better Lyrics (https://github.com/better-lyrics/api, GPL-3.0 service; including its Kugou adapter) and the existing YouTube Music client. Provider credit is visible in the lyrics view. Better Lyrics is called with an honest Oris User-Agent and no private key; public cache access can fail or be incomplete. No extension-only or SimpMusic credentials/client identity are used. Lyrics remain their authors' copyrighted works; availability through an API does not establish redistribution/display rights for a public release.
