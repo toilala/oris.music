@@ -39,3 +39,5 @@ the code stays close to its source. Replacements must be genuine rewrites
 - innertube HomePage.kt: ORIS EXTENSION to borrowed code. YouTube now serves home shelf songs as musicResponsiveListItemRenderer items, which the borrowed parser dropped, leaving the feed empty. Added fromResponsiveSongItem so home shelves parse as songs again. The module remains borrowed/credited; this fix is ours.
 
 - PoTokenGenerator.kt: small Oris integration fix to borrowed code, not a rewrite. Application context is supplied through its constructor instead of an uninitialized CipherDeobfuscator global. InnerTubeXResolver uses its suspend token entry point. Mochy provenance and GPL credit remain.
+
+- YTPlayerUtils.kt guest path: fresh Oris implementation informed by reading the visitor-first / VISIONOS-first approach in Mochy Music and oris-music-foundation YTPlayerUtils.kt. No source blocks copied. Accepts only direct HTTPS googlevideo audio without cipher or n-transform; unsupported formats remain with the credited InnerTubeX library. Existing innertube API module stays borrowed/GPL-3.0. Reference: https://github.com/toilala/oris-music-foundation

@@ -1,7 +1,10 @@
 /*
  * Oris Music stream resolution.
  *
- * Genuine Oris implementation for the rebuild: resolves a YouTube Music
+ * Oris direct-client implementation informed by the anonymous playback
+ * approach in Mochy Music / oris-music-foundation. No source blocks copied.
+ * Existing API and extractor dependencies remain GPL-3.0; see BORROWED.md.
+ * Resolves a YouTube Music
  * video id to a playable audio stream through the app's InnerTubeXResolver
  * (InnerTubeX library, GPL-3.0, Metrolist Group) and exposes the request
  * headers each resolved stream requires.
@@ -10,6 +13,11 @@ package com.orismusic.client.utils
 
 import com.orismusic.client.constants.AudioQuality
 import java.io.IOException
+import com.music.innertube.YouTube
+import com.music.innertube.models.YouTubeClient.Companion.VISIONOS
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.CancellationException
 import com.metrolist.innertubex.extraction.StreamResolveException
@@ -17,7 +25,49 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 object YTPlayerUtils {
-    private const val logTag = "YTPlayerUtils"
+    private val visitorLock = Mutex()
+    private val directHeaders = ConcurrentHashMap<String, Map<String, String>>()
+
+    // Informed by foundation's anonymous visitor bootstrap and VISIONOS-first
+    // strategy. A refusal is not treated as proof that an account is required.
+    private suspend fun directAnonymous(videoId: String, maxKbps: Int): PlaybackData? {
+        visitorLock.withLock {
+            if (YouTube.visitorData.isNullOrBlank()) {
+                YouTube.refreshVisitorData().onFailure {
+                    Timber.tag(TAG).w("Anonymous visitor bootstrap failed: ${it::class.simpleName}")
+                }
+            }
+        }
+        val response = YouTube.player(videoId, null, VISIONOS, null, null).getOrElse {
+            if (it is CancellationException) throw it
+            Timber.tag(TAG).w("Direct client request failed: ${it::class.simpleName}")
+            return null
+        }
+        if (response.playabilityStatus.status != "OK") {
+            Timber.tag(TAG).w("Direct VISIONOS status=${response.playabilityStatus.status}")
+            return null
+        }
+        val formats = response.streamingData?.adaptiveFormats.orEmpty().filter {
+            it.isAudio && it.isOriginal && !it.url.isNullOrBlank() &&
+                it.signatureCipher.isNullOrBlank() && it.cipher.isNullOrBlank() &&
+                android.net.Uri.parse(it.url).getQueryParameter("n") == null
+        }
+        val format = formats.filter { it.bitrate.toLong() <= maxKbps.toLong() * 1000 }.maxByOrNull { it.bitrate }
+            ?: formats.minByOrNull { it.bitrate } ?: return null
+        val url = format.url ?: return null
+        val uri = android.net.Uri.parse(url)
+        if (uri.scheme != "https" || uri.host?.endsWith(".googlevideo.com") != true) return null
+        if (directHeaders.size > 64) directHeaders.clear()
+        directHeaders[url] = mapOf(
+            "User-Agent" to VISIONOS.userAgent,
+            "Accept" to "*/*",
+            "Accept-Language" to "en-US,en;q=0.9",
+            "Referer" to "https://www.youtube.com/",
+            "Origin" to "https://www.youtube.com",
+        )
+        Timber.tag(TAG).d("Resolved $videoId via VISIONOS-direct (${format.bitrate / 1000}kbps)")
+        return PlaybackData(url, videoId, mimeType = format.mimeType.substringBefore(';'), bitrate = format.bitrate)
+    }
     private const val TAG = "YTPlayerUtils"
 
     @Volatile var forceOpusEnabled: Boolean = false
@@ -58,6 +108,7 @@ object YTPlayerUtils {
             else -> Int.MAX_VALUE
         }
         Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps)")
+        directAnonymous(videoId, maxKbps)?.let { return@withContext it }
         val extracted = try {
             InnerTubeXResolver.extract(videoId = videoId, maxKbps = maxKbps)
                 ?: throw IOException("No playable stream found for $videoId")
@@ -85,7 +136,7 @@ object YTPlayerUtils {
 
     /** Headers a media fetch for [url] must carry, when the engine minted it. */
     fun headersFor(url: String): Map<String, String> =
-        InnerTubeXResolver.headersFor(url) ?: emptyMap()
+        directHeaders[url] ?: InnerTubeXResolver.headersFor(url) ?: emptyMap()
 
     enum class PlaybackEngine {
         POTOKEN,
