@@ -22,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
-import com.orismusic.client.playback.queues.ListQueue
 import com.orismusic.client.ui.screens.HomeScreen
 import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -71,11 +70,7 @@ class MainActivity : ComponentActivity() {
         val previous = playerConnection
         playerConnection = PlayerConnection(this, binder, database, lifecycleScope).also { connection ->
             lifecycleScope.launch {
-                connection.isPlayerInitialized.collect { ready ->
-                    if (ready) {
-                        playDemoTrack(connection)
-                    }
-                }
+                connection.isPlayerInitialized.collect { /* player ready; playback starts from user taps */ }
             }
         }
         previous?.dispose()
@@ -124,21 +119,4 @@ class MainActivity : ComponentActivity() {
         playerConnection = null
     }
 
-    private fun playDemoTrack(connection: PlayerConnection) {
-        val mediaItem = androidx.media3.common.MediaItem.fromUri("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3")
-            .buildUpon()
-            .setMediaMetadata(
-                androidx.media3.common.MediaMetadata.Builder()
-                    .setTitle("Demo Track")
-                    .setArtist("SoundHelix")
-                    .build()
-            )
-            .build()
-
-        val queue = ListQueue(
-            title = "Demo",
-            items = listOf(mediaItem)
-        )
-        connection.playQueue(queue)
-    }
 }
