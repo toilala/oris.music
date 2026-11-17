@@ -9,20 +9,41 @@ import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
+import com.orismusic.client.ui.player.MiniPlayer
+import com.orismusic.client.ui.player.NowPlayingScreen
 import com.orismusic.client.ui.screens.HomeScreen
+import com.orismusic.client.ui.screens.QueueScreen
 import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
@@ -30,13 +51,21 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
+private enum class MainTab(val label: String) {
+    Home("Home"),
+    Search("Search"),
+    Library("Library"),
+    Queue("Queue"),
+}
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var database: com.orismusic.client.di.MusicDatabase
 
-    private var playerConnection: PlayerConnection? = null
+    // Compose state so screens see the connection as soon as the service binds.
+    private val connectionState = mutableStateOf<PlayerConnection?>(null)
     private var isBound = false
 
     private val serviceConnection = object : ServiceConnection {
@@ -48,7 +77,6 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to create PlayerConnection")
                     lifecycleScope.launch {
-                        // Retry after a short delay
                         delay(500)
                         try {
                             connectTo(service)
@@ -61,14 +89,14 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            playerConnection?.dispose()
-            playerConnection = null
+            connectionState.value?.dispose()
+            connectionState.value = null
         }
     }
 
     private fun connectTo(binder: OrisMediaService.MusicBinder) {
-        val previous = playerConnection
-        playerConnection = PlayerConnection(this, binder, database, lifecycleScope).also { connection ->
+        val previous = connectionState.value
+        connectionState.value = PlayerConnection(this, binder, database, lifecycleScope).also { connection ->
             lifecycleScope.launch {
                 connection.isPlayerInitialized.collect { /* player ready; playback starts from user taps */ }
             }
@@ -82,14 +110,89 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OrisTheme {
+                val connection = connectionState.value
+                var selectedTab by remember { mutableIntStateOf(MainTab.Home.ordinal) }
+                var showPlayer by remember { mutableStateOf(false) }
+
                 Surface(
-                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    HomeScreen(
-                        modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-                        playerConnection = playerConnection,
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            bottomBar = {
+                                Column {
+                                    connection?.let {
+                                        MiniPlayer(
+                                            connection = it,
+                                            onExpand = { showPlayer = true },
+                                        )
+                                    }
+                                    NavigationBar {
+                                        MainTab.entries.forEach { tab ->
+                                            NavigationBarItem(
+                                                selected = selectedTab == tab.ordinal,
+                                                onClick = { selectedTab = tab.ordinal },
+                                                icon = {
+                                                    Icon(
+                                                        imageVector = when (tab) {
+                                                            MainTab.Home -> Icons.Filled.Home
+                                                            MainTab.Search -> Icons.Filled.Search
+                                                            MainTab.Library -> Icons.Filled.LibraryMusic
+                                                            MainTab.Queue -> Icons.Filled.QueueMusic
+                                                        },
+                                                        contentDescription = tab.label,
+                                                    )
+                                                },
+                                                label = { Text(tab.label) },
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                        ) { innerPadding ->
+                            when (MainTab.entries[selectedTab]) {
+                                MainTab.Home -> HomeScreen(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding),
+                                    playerConnection = connection,
+                                )
+                                MainTab.Queue -> QueueScreen(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding),
+                                    connection = connection,
+                                )
+                                MainTab.Search -> ComingSoonTab(
+                                    title = "Search",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding),
+                                )
+                                MainTab.Library -> ComingSoonTab(
+                                    title = "Library",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding),
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = showPlayer && connection != null,
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it }),
+                        ) {
+                            connection?.let {
+                                NowPlayingScreen(
+                                    connection = it,
+                                    onCollapse = { showPlayer = false },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -115,8 +218,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        playerConnection?.dispose()
-        playerConnection = null
+        connectionState.value?.dispose()
+        connectionState.value = null
     }
 
+}
+
+@Composable
+private fun ComingSoonTab(title: String, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Text(
+            text = "$title arrives in a later stage",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(24.dp),
+        )
+    }
 }

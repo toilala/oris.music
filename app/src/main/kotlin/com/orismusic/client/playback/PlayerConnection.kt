@@ -374,6 +374,37 @@ class PlayerConnection(
         }
     }
 
+    fun seekToIndex(index: Int) {
+        try {
+            if (index in 0 until player.mediaItemCount) {
+                player.seekTo(index, 0L)
+                player.playWhenReady = true
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in seekToIndex")
+        }
+    }
+
+    fun toggleShuffle() {
+        try {
+            player.shuffleModeEnabled = !player.shuffleModeEnabled
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in toggleShuffle")
+        }
+    }
+
+    fun toggleRepeatMode() {
+        try {
+            player.repeatMode = when (player.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in toggleRepeatMode")
+        }
+    }
+
     fun seekToNext() {
         try {
 
