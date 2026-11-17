@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -56,6 +58,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
+import androidx.compose.ui.platform.LocalContext
+import com.orismusic.client.library.LibraryStore
+import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.utils.formatTime
 
@@ -85,6 +90,11 @@ fun NowPlayingScreen(
     val canSkipNext = connection.canSkipNext.collectAsState()
 
     var dragPosition by remember { mutableStateOf<Float?>(null) }
+    val library = LibraryStore.get(LocalContext.current)
+    val likedSongs = library.liked.collectAsState().value
+    val currentIndex = connection.currentMediaItemIndex.collectAsState().value
+    val nowSong = remember(metadata, currentIndex) { connection.currentSavedSong() }
+    val isLiked = nowSong != null && likedSongs.any { it.id == nowSong.id }
 
     Column(
         modifier = modifier
@@ -113,6 +123,13 @@ fun NowPlayingScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = { nowSong?.let { library.toggleLike(it) } }, enabled = nowSong != null) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = if (isLiked) "Remove from liked songs" else "Like song",
+                    tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             TextButton(onClick = { lyricsOpen = true }) { Text("Lyrics") }
         }
 
