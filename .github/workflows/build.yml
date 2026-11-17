@@ -1,0 +1,46 @@
+name: Oris Rebuilt Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths-ignore: ['README.md', 'BORROWED.md', 'LICENSE', 'docs/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rebuilt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Prepare debug signing
+        run: |
+          chmod +x gradlew
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
+          fi
+      - name: Build FOSS debug APK
+        run: ./gradlew :app:assembleFossDebug --console=plain --warning-mode summary
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oris-rebuilt-foss-debug
+          path: app/build/outputs/apk/foss/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14
