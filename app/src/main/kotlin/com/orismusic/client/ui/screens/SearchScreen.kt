@@ -89,6 +89,7 @@ private sealed interface SearchState {
 fun SearchScreen(
     connection: PlayerConnection?,
     modifier: Modifier = Modifier,
+    onOpen: (DetailTarget) -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var submittedQuery by rememberSaveable { mutableStateOf("") }
@@ -262,7 +263,7 @@ fun SearchScreen(
                                                 )
                                             }
                                         }
-                                    } else null,
+                                    } else result.toDetailTarget()?.let { target -> { onOpen(target) } },
                                 )
                             }
                         }

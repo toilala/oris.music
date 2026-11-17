@@ -122,6 +122,8 @@ class MainActivity : ComponentActivity() {
                 val connection = connectionState.value
                 var navigation by rememberSaveable { mutableStateOf(NavigationState()) }
                 var settingsOpen by rememberSaveable { mutableStateOf(false) }
+                var detail by rememberSaveable { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
+                var detailBack by rememberSaveable { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
                 val tabState = rememberSaveableStateHolder()
                 val selectedTab = navigation.currentTab
                 val showPlayer = navigation.playerOpen
@@ -133,6 +135,10 @@ class MainActivity : ComponentActivity() {
                 }
                 BackHandler(enabled = navigation.canGoBack) {
                     navigation = navigation.back()
+                }
+                BackHandler(enabled = detail != null && !navigation.playerOpen && !settingsOpen) {
+                    detail = detailBack
+                    detailBack = null
                 }
 
                 Surface(
@@ -154,7 +160,7 @@ class MainActivity : ComponentActivity() {
                                         MainTab.entries.forEach { tab ->
                                             NavigationBarItem(
                                                 selected = selectedTab == tab.ordinal,
-                                                onClick = { navigation = navigation.select(tab.ordinal) },
+                                                onClick = { detail = null; detailBack = null; navigation = navigation.select(tab.ordinal) },
                                                 icon = {
                                                     Icon(
                                                         imageVector = when (tab) {
@@ -173,6 +179,16 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         ) { innerPadding ->
+                            val openDetail = detail
+                            if (openDetail != null) {
+                                com.orismusic.client.ui.screens.DetailScreen(
+                                    target = openDetail,
+                                    connection = connection,
+                                    onBack = { detail = detailBack; detailBack = null },
+                                    onOpen = { next -> detailBack = openDetail; detail = next },
+                                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                )
+                            } else
                             tabState.SaveableStateProvider(selectedTab) {
                             when (MainTab.entries[selectedTab]) {
                                 MainTab.Home -> HomeScreen(
@@ -193,6 +209,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 MainTab.Search -> SearchScreen(
                                     connection = connection,
+                                    onOpen = { detail = it; detailBack = null },
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(innerPadding),
