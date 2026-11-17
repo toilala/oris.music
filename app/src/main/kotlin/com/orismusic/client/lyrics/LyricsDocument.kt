@@ -1,7 +1,8 @@
 package com.orismusic.client.lyrics
 
 data class LyricLine(val timeMs: Long?, val text: String)
-data class LyricsDocument(val source: String, val lines: List<LyricLine>) {
+data class LyricCredit(val label: String, val url: String)
+data class LyricsDocument(val source: String, val lines: List<LyricLine>, val credits: List<LyricCredit> = emptyList()) {
     val timed: Boolean get() = lines.any { it.timeMs != null }
 }
 
@@ -13,7 +14,8 @@ fun readLrc(value: String): List<LyricLine> {
     val output = mutableListOf<LyricLine>()
     value.lineSequence().forEach { raw ->
         val stamps = clock.findAll(raw).toList()
-        val text = raw.replace(clock, "").trim()
+        val text = raw.replace(clock, "").replace(Regex("<\\d+:\\d{2}(?:[.:]\\d{1,3})?>"), "")
+            .replace(Regex("\\{(?:agent:[^}]+|bg)}"), "").trim()
         if (stamps.isEmpty()) {
             if (text.isNotBlank() && !text.startsWith("[")) output += LyricLine(null, text)
         } else stamps.forEach { match ->

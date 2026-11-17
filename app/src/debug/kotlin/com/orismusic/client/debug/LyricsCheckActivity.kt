@@ -25,7 +25,7 @@ class LyricsCheckActivity : ComponentActivity() {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val local = binder as OrisMediaService.MusicBinder
-            local.service.player.setMediaItem(MediaItem.Builder().setMediaId("wXTJBr9tt8Q")
+            local.service.player.setMediaItem(MediaItem.Builder().setUri("file:///metadata-only-not-prepared.wav").setMediaId("wXTJBr9tt8Q")
                 .setMediaMetadata(MediaMetadata.Builder().setTitle("Yesterday").setArtist("The Beatles").setAlbumTitle("Help!").build()).build())
             val connection = PlayerConnection(this@LyricsCheckActivity, local, database, lifecycleScope)
             playerConnection = connection

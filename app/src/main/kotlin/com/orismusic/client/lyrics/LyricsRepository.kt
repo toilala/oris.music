@@ -19,9 +19,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import java.io.IOException
 
+private class LyricsHttpFailure(val status: Int) : IOException("Lyrics source returned $status")
+
 /** Bounded, independently written adapters. No copied keys or client impersonation. */
 object LyricsRepository {
-    val sources = listOf("Automatic", "LRCLIB", "Better Lyrics", "Better Lyrics: Kugou", "YouTube Music")
     private val cache = ConcurrentHashMap<String, LyricsDocument>()
     private val http = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(6, TimeUnit.SECONDS).callTimeout(8, TimeUnit.SECONDS).build()
@@ -38,7 +39,7 @@ object LyricsRepository {
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val text = response.use {
-                        check(it.isSuccessful) { "Lyrics source returned ${it.code}" }
+                        if (!it.isSuccessful) throw LyricsHttpFailure(it.code)
                         val body = it.body ?: error("Empty lyrics response")
                         check(body.contentLength() <= 2_000_000) { "Lyrics response too large" }
                         body.source().let { input ->
@@ -57,39 +58,47 @@ object LyricsRepository {
         })
     }
 
-    suspend fun load(id: String, title: String, artist: String, album: String, durationSeconds: Int, source: String): LyricsDocument? {
-        val key = "$id|$title|$artist|$album|$durationSeconds|$source"
+    private val failedUntil = ConcurrentHashMap<String, Long>()
+
+    suspend fun load(id: String, title: String, artist: String, album: String, durationSeconds: Int,
+        source: String, options: LyricsOptions = restoreLyricsOptions(emptyList(), null)): LyricsDocument? {
+        val choices = options.enabled().filter { source == "automatic" || it.id == source }
+        val key = "$id|$title|$artist|$album|$durationSeconds|$source|${choices.map { it.id }}"
         cache[key]?.let { return it }
-        val choices = if (source == "Automatic") sources.drop(1) else listOf(source)
         var plainFallback: LyricsDocument? = null
         for (choice in choices) {
-            val lines = try {
+            if (source == "automatic" && (failedUntil[choice.id] ?: 0) > System.currentTimeMillis()) continue
+            val result = try {
                 withTimeoutOrNull(9000) {
-                    when (choice) {
-                        "LRCLIB" -> catalog(title, artist, album, durationSeconds)
-                        "Better Lyrics", "Better Lyrics: Kugou" -> {
-                            val path = if (choice == "Better Lyrics") "getLyrics" else "kugou/getLyrics"
+                    val lines: List<LyricLine> = when (choice.id) {
+                        "lrclib" -> catalog(title, artist, album, durationSeconds)
+                        "better", "kugou" -> {
+                            val path = if (choice.id == "better") "getLyrics" else "kugou/getLyrics"
                             val query = "s=${encode(title)}&a=${encode(artist)}&al=${encode(album)}&d=${durationSeconds.coerceAtLeast(0)}"
                             val payload = JSONObject(get("https://lyrics-api.boidu.dev/$path?$query"))
-                            if (choice == "Better Lyrics") {
-                                payload.optString("ttml").takeIf { it.isNotBlank() }?.let(::readTtml).orEmpty()
-                            } else readLrc(payload.optString("lyrics"))
+                            if (choice.id == "better") payload.optString("ttml").takeIf { it.isNotBlank() }?.let(::readTtml).orEmpty()
+                            else readLrc(payload.optString("lyrics"))
                         }
-                        "YouTube Music" -> {
-                            // Do not replace good plain text with another untimed provider in Automatic mode.
-                            if (source == "Automatic" && plainFallback != null) emptyList()
-                            else YouTube.next(WatchEndpoint(videoId=id)).getOrThrow().lyricsEndpoint
-                                ?.let { YouTube.lyrics(it).getOrThrow() }?.let(::readLrc).orEmpty()
-                        }
+                        "youly" -> return@withTimeoutOrNull ExtraLyricsSources.youly(title, artist, album, durationSeconds, ::get)
+                        "pax" -> return@withTimeoutOrNull ExtraLyricsSources.pax(title, artist, album, durationSeconds, ::get)
+                        "unison" -> return@withTimeoutOrNull ExtraLyricsSources.unison(id, title, artist, durationSeconds, ::get)
+                        "youtube_subtitles" -> YouTube.transcript(id).getOrThrow().let(::readLrc)
+                        "youtube_music" -> YouTube.next(WatchEndpoint(videoId=id)).getOrThrow().lyricsEndpoint
+                            ?.let { YouTube.lyrics(it).getOrThrow() }?.let(::readLrc).orEmpty()
                         else -> emptyList()
                     }
-                }.orEmpty()
+                    lines.takeIf { it.any { line -> line.text.isNotBlank() } }?.let { LyricsDocument(choice.name, it) }
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { emptyList() }
-            val result = lines.takeIf { it.any { line -> line.text.isNotBlank() } }?.let { LyricsDocument(choice, it) }
+            catch (error: Exception) {
+                // Do not hammer a failing/blocked provider on every track. Manual source choice is an explicit retry.
+                if (error !is LyricsHttpFailure || error.status != 404) failedUntil[choice.id] = System.currentTimeMillis() + 5*60_000
+                null
+            }
             if (result != null) {
-                if (source != "Automatic" || result.timed) return remember(key, result)
-                if (plainFallback == null) plainFallback = result
+                val credited = if (result.credits.isEmpty()) result.copy(credits = listOf(LyricCredit("Lyrics from ${choice.name}", choice.website))) else result
+                if (source != "automatic" || credited.timed) return remember(key, credited)
+                if (plainFallback == null) plainFallback = credited
             }
         }
         return plainFallback?.let { remember(key, it) }

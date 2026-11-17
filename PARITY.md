@@ -80,9 +80,10 @@ user-facing, status per slice.
 ## Multi-source lyrics
 
 - Player opens Lyrics with Automatic or explicit source selection.
-- Automatic prefers synced LRCLIB, then keyless Better Lyrics TTML, then its keyless Kugou LRC endpoint. Good LRCLIB plain text is retained if none supplies timed lines; YouTube Music is the final fallback when other text is absent.
+- Automatic follows saved user order and enabled sources, preferring a synced result while retaining a plain fallback. The registry contains Echo's nine sources; availability caveats are explicit rather than claiming all nine work.
+- Settings and the Lyrics dropdown expose provider order and enable/disable choices, persisted locally. Restore defaults is available.
 - Artist/title/version/duration checks reduce wrong-recording LRCLIB matches; remaster labels can differ but live/remix labels are not erased.
 - Synced lines highlight and scroll with playback; timed lines seek on tap. Plain lyrics remain readable and labelled. TTML is line-synced here, not word-highlighted.
 - Requests have cancellation, limits/timeouts and a small successful-result memory cache. No disk lyric cache.
-- SimpMusic skipped because it explicitly refuses non-SimpMusic clients; QQ access returned unauthorized; Lyrics.ovh is plain-only and largely duplicates LRCLIB. No scraping or key impersonation.
+- SimpMusic is unavailable under its client restriction. YouLyPlus/PaxSenix are optional, off by default after 502/403 validation. Unison reads require linked provider/submitter credit. KuGou uses Better Lyrics' keyless route. Full source audit: [docs/LYRICS_SOURCES.md](docs/LYRICS_SOURCES.md).
 - A debug-only metadata screen exercises real lyric retrieval with no audio resolution. Release APKs do not contain the debug harness.

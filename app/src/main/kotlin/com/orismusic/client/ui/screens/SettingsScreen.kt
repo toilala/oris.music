@@ -15,6 +15,11 @@ import com.orismusic.client.settings.PlaybackPreferences
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    var lyricsSettings by remember { mutableStateOf(false) }
+    if (lyricsSettings) {
+        LyricsProviderSettings(onBack = { lyricsSettings = false })
+        return
+    }
     val context = LocalContext.current
     val preferences = remember(context) { PlaybackPreferences(context) }
     var keepPlaying by remember { mutableStateOf(preferences.keepPlayingAfterTaskRemoval) }
@@ -43,6 +48,9 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     keepPlaying = it
                 })
             }
+            HorizontalDivider()
+            TextButton(onClick = { lyricsSettings = true }) { Text("Lyrics providers") }
+            Text("Choose sources and their priority order.", style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
             Text("Using Home or switching apps does not stop music. This setting only controls removal from recents.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
