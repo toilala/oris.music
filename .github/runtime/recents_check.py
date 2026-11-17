@@ -57,7 +57,7 @@ def local_audio():
     # Start a fresh task with this activity as its root. Removing a child activity
     # above MainActivity does not remove the app task and cannot test onTaskRemoved.
     adb('shell', 'am', 'force-stop', PKG)
-    adb('shell', 'am', 'start', '-n', COMPONENT, '--activity-new-task', '--activity-clear-task')
+    adb('shell', 'am', 'start', '-n', COMPONENT, '-f', '0x10008000')
     wait_label('Local audio playing', seconds=30)
     assert_running()
 

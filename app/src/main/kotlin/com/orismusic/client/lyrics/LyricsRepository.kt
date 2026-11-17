@@ -30,7 +30,7 @@ object LyricsRepository {
 
     private suspend fun get(url: String): String = suspendCancellableCoroutine { continuation ->
         val call = http.newCall(Request.Builder().url(url)
-            .header("User-Agent", "OrisMusic (+https://github.com/toilala/oris-music-rebuilt)").build())
+            .header("User-Agent", "OrisMusic (+https://github.com/toilala/oris.music)").build())
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) {
@@ -62,6 +62,7 @@ object LyricsRepository {
 
     suspend fun load(id: String, title: String, artist: String, album: String, durationSeconds: Int,
         source: String, options: LyricsOptions = restoreLyricsOptions(emptyList(), null)): LyricsDocument? {
+        android.util.Log.d("OrisLyrics", "Lookup artistPresent=${artist.isNotBlank()} duration=$durationSeconds source=$source")
         val choices = options.enabled().filter { source == "automatic" || it.id == source }
         val key = "$id|$title|$artist|$album|$durationSeconds|$source|${choices.map { it.id }}"
         cache[key]?.let { return it }
@@ -91,10 +92,12 @@ object LyricsRepository {
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
+                android.util.Log.w("OrisLyrics", "${choice.id}: ${error.javaClass.simpleName}: ${error.message}")
                 // Do not hammer a failing/blocked provider on every track. Manual source choice is an explicit retry.
                 if (error !is LyricsHttpFailure || error.status != 404) failedUntil[choice.id] = System.currentTimeMillis() + 5*60_000
                 null
             }
+            android.util.Log.d("OrisLyrics", "${choice.id}: lines=${result?.lines?.size ?: 0}")
             if (result != null) {
                 val credited = if (result.credits.isEmpty()) result.copy(credits = listOf(LyricCredit("Lyrics from ${choice.name}", choice.website))) else result
                 if (source != "automatic" || credited.timed) return remember(key, credited)

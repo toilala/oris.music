@@ -3,13 +3,14 @@
 from playback_check import adb, tap, wait_label, tree, screen, PKG
 import time
 
-def wait_text(fragment, seconds=45):
+def wait_text(fragment, seconds=100):
     end = time.monotonic()+seconds
     while time.monotonic() < end:
         for node in tree().iter('node'):
             if fragment in (node.get('text') or ''):
                 return node
         time.sleep(1)
+    print('LYRICS_DIAGNOSTICS', adb('logcat', '-d', '-s', 'OrisLyrics').decode(), flush=True)
     screen('lyrics_failure')
     raise AssertionError('Lyrics view did not show '+fragment)
 
