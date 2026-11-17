@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
@@ -280,6 +281,8 @@ fun LibraryScreen(
                         liked = liked.any { it.id == song.id },
                         onClick = { play(songs, index) },
                         onToggleLike = { store.toggleLike(song) },
+                        playlists = playlists.map { it.id to it.name },
+                        onAddToPlaylist = { id -> playlistStore.add(id, song) },
                     )
                 }
             }
@@ -293,7 +296,10 @@ private fun SavedSongRow(
     liked: Boolean,
     onClick: () -> Unit,
     onToggleLike: () -> Unit,
+    playlists: List<Pair<String, String>> = emptyList(),
+    onAddToPlaylist: (String) -> Unit = {},
 ) {
+    var menu by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,6 +326,24 @@ private fun SavedSongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        Box {
+            IconButton(onClick = { menu = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "Add to playlist",
+                    tint = MaterialTheme.colorScheme.outline)
+            }
+            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (playlists.isEmpty()) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Make a playlist first") }, onClick = { menu = false })
+                }
+                playlists.forEach { (id, name) ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(name) },
+                        onClick = { onAddToPlaylist(id); menu = false },
+                    )
+                }
+            }
         }
         IconButton(onClick = onToggleLike) {
             Icon(
