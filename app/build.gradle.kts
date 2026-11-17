@@ -202,6 +202,8 @@ configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.12.0")
         force("com.squareup.okhttp3:logging-interceptor:4.12.0")
-        exclude(group = "com.squareup.okhttp3", module = "okhttp-android")
+        // okhttp-android must stay: since OkHttp 4.12 the `okhttp` module
+        // redirects Android consumers to it, and excluding it strips every
+        // okhttp3 class from the APK (runtime NoClassDefFoundError).
     }
 }
