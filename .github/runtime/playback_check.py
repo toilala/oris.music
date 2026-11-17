@@ -23,8 +23,11 @@ def screen(name):
         print(f'ORIS_IMAGE {name} {encoded[start:start+3000]}', flush=True)
 
 def tree():
-    adb('shell', 'uiautomator', 'dump', '/sdcard/oris-nav.xml')
-    return ET.fromstring(adb('shell', 'cat', '/sdcard/oris-nav.xml'))
+    try:
+        adb('shell', 'uiautomator', 'dump', '/sdcard/oris-nav.xml')
+        return ET.fromstring(adb('shell', 'cat', '/sdcard/oris-nav.xml'))
+    except (subprocess.CalledProcessError, ET.ParseError):
+        return ET.Element('hierarchy')
 
 def wait_label(label, seconds=25):
     end = time.monotonic() + seconds
@@ -34,6 +37,8 @@ def wait_label(label, seconds=25):
             if label in (node.get('text'), node.get('content-desc')):
                 return node
         time.sleep(1)
+    screen('failure')
+    print(adb('logcat', '-d', '-s', 'AndroidRuntime').decode(), flush=True)
     raise AssertionError(f'UI never showed {label}')
 
 def tap(label):
@@ -53,6 +58,7 @@ adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
 adb('shell', 'am', 'start', '-n', PKG+'/com.orismusic.client.MainActivity')
+wait_label('Home', seconds=60)
 tap('Queue')
 wait_label('Nothing queued yet. Pick a song on Home.')
 screen('queue')
