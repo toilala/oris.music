@@ -161,6 +161,7 @@ fun SearchScreen(
                 trailingIcon = {
                     if (query.isNotEmpty()) IconButton(onClick = {
                         query = ""; submittedQuery = ""; suggestions = emptyList()
+                        keyboard?.hide(); focus.clearFocus()
                     }) { Icon(Icons.Filled.Clear, "Clear search") }
                 },
                 singleLine = true,

@@ -92,7 +92,9 @@ xy = list(map(int, re.findall(r'\d+', edit.get('bounds'))))
 adb('shell', 'input', 'tap', str((xy[0]+xy[2])//2), str((xy[1]+xy[3])//2))
 adb('shell', 'input', 'text', 'Yesterday')
 time.sleep(2)
-adb('shell', 'input', 'keyevent', '66')
+# Hide IME, then press the app's explicit Search button (not generic keyboard Enter).
+back()
+tap('Search')
 # Search is permitted; this check never taps a song or resolves an audio stream.
 end = time.monotonic()+45
 while time.monotonic() < end:
