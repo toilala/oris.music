@@ -6,6 +6,7 @@ import com.music.innertube.models.Artist
 import com.music.innertube.models.ArtistItem
 import com.music.innertube.models.BrowseEndpoint
 import com.music.innertube.models.MusicCarouselShelfRenderer
+import com.music.innertube.models.MusicResponsiveListItemRenderer
 import com.music.innertube.models.MusicTwoRowItemRenderer
 import com.music.innertube.models.PlaylistItem
 import com.music.innertube.models.SectionListRenderer
@@ -13,6 +14,9 @@ import com.music.innertube.models.SongItem
 import com.music.innertube.models.YTItem
 import com.music.innertube.models.oddElements
 import com.music.innertube.models.filterExplicit
+import com.music.innertube.models.looksLikeTimestamp
+import com.music.innertube.models.splitBySeparator
+import com.music.innertube.utils.parseTime
 import com.music.innertube.models.filterVideoSongs
 import kotlinx.serialization.Serializable
 
@@ -54,13 +58,46 @@ data class HomePage(
                     label = renderer.header.musicCarouselShelfBasicHeaderRenderer.strapline?.runs?.firstOrNull()?.text,
                     thumbnail = renderer.header.musicCarouselShelfBasicHeaderRenderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl(),
                     endpoint = renderer.header.musicCarouselShelfBasicHeaderRenderer.moreContentButton?.buttonRenderer?.navigationEndpoint?.browseEndpoint,
-                    items = renderer.contents.mapNotNull {
-                        it.musicTwoRowItemRenderer
-                    }.mapNotNull {
-                        fromMusicTwoRowItemRenderer(it)
+                    items = renderer.contents.mapNotNull { content ->
+                        content.musicTwoRowItemRenderer?.let { fromMusicTwoRowItemRenderer(it) }
+                            ?: content.musicResponsiveListItemRenderer?.let { fromResponsiveSongItem(it) }
                     }.ifEmpty {
                         return null
                     }
+                )
+            }
+
+            // Oris addition: home shelves now also carry songs as responsive list items
+            // (for example "Song mixes"); the old two-row-only parse dropped them and the
+            // feed came back empty. Parse those items as songs too.
+            private fun fromResponsiveSongItem(renderer: MusicResponsiveListItemRenderer): SongItem? {
+                val id = renderer.playlistItemData?.videoId
+                    ?: renderer.overlay?.musicItemThumbnailOverlayRenderer?.content
+                        ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId
+                    ?: return null
+                val secondaryLineRuns = renderer.flexColumns.getOrNull(1)
+                    ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()
+                return SongItem(
+                    id = id,
+                    title = renderer.flexColumns.firstOrNull()
+                        ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()?.text
+                        ?: return null,
+                    artists = secondaryLineRuns?.firstOrNull()?.oddElements()?.map {
+                        Artist(name = it.text, id = it.navigationEndpoint?.browseEndpoint?.browseId)
+                    }?.filter { !it.name.looksLikeTimestamp() }.orEmpty(),
+                    album = renderer.flexColumns.getOrNull(2)?.musicResponsiveListItemFlexColumnRenderer
+                        ?.text?.runs?.firstOrNull()?.let {
+                            Album(name = it.text, id = it.navigationEndpoint?.browseEndpoint?.browseId ?: return@let null)
+                        },
+                    duration = renderer.fixedColumns?.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer
+                        ?.text?.runs?.firstOrNull()?.text?.parseTime(),
+                    musicVideoType = renderer.musicVideoType,
+                    thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,
+                    explicit = renderer.badges?.find {
+                        it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
+                    } != null,
+                    endpoint = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content
+                        ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint,
                 )
             }
 
