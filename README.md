@@ -1,6 +1,6 @@
 # Oris Music
 
-An Android music player I'm working on. Search, playback, queues and lyrics are in. There's still plenty to fix.
+An Android music player I'm working on. Search, playback, queues, lyrics, liked songs, playlists, album and artist pages, offline saving, sleep timer and playback speed are in. There's still plenty to fix.
 
 ## Build
 
