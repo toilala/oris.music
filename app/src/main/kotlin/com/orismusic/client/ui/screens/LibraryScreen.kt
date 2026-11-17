@@ -16,10 +16,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -43,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.orismusic.client.library.LibraryStore
+import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.PlayerConnection
@@ -57,9 +63,23 @@ fun LibraryScreen(
     val store = LibraryStore.get(LocalContext.current)
     val liked by store.liked.collectAsState()
     val history by store.history.collectAsState()
+    val playlistStore = PlaylistStore.get(LocalContext.current)
+    val playlists by playlistStore.playlists.collectAsState()
     var section by rememberSaveable { mutableIntStateOf(0) }
-    val songs = if (section == 0) liked else history
-    val title = if (section == 0) "Liked songs" else "Recently played"
+    var openPlaylist by rememberSaveable { mutableStateOf<String?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    val opened = playlists.firstOrNull { it.id == openPlaylist }
+    val songs = when {
+        section == 0 -> liked
+        section == 1 -> history
+        else -> opened?.songs.orEmpty()
+    }
+    val title = when {
+        section == 0 -> "Liked songs"
+        section == 1 -> "Recently played"
+        else -> opened?.name ?: "Playlists"
+    }
 
     fun play(list: List<SavedSong>, start: Int, shuffle: Boolean = false) {
         val c = connection ?: return
@@ -68,6 +88,27 @@ fun LibraryScreen(
             startIndex = if (shuffle) 0 else start))
     }
 
+    if (creating) {
+        AlertDialog(
+            onDismissRequest = { creating = false; newName = "" },
+            title = { Text("New playlist") },
+            text = {
+                OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true,
+                    label = { Text("Name") })
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val id = playlistStore.create(newName)
+                        creating = false; newName = ""
+                        openPlaylist = id
+                    },
+                    enabled = newName.isNotBlank(),
+                ) { Text("Create") }
+            },
+            dismissButton = { TextButton(onClick = { creating = false; newName = "" }) { Text("Cancel") } },
+        )
+    }
     Column(modifier = modifier) {
         Text(
             text = "Library",
@@ -82,8 +123,101 @@ fun LibraryScreen(
                 label = { Text("Liked (${liked.size})") })
             FilterChip(selected = section == 1, onClick = { section = 1 },
                 label = { Text("Recent (${history.size})") })
+            FilterChip(selected = section == 2, onClick = { section = 2; openPlaylist = null },
+                label = { Text("Playlists (${playlists.size})") })
         }
-        if (songs.isEmpty()) {
+        if (section == 2 && opened == null) {
+            TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text("New playlist")
+            }
+            if (playlists.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Make a playlist, then add songs from the player.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(32.dp),
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(playlists, key = { _, p -> p.id }) { _, p ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { openPlaylist = p.id }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(p.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                                Text("${p.songs.size} songs", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (section == 2 && opened != null) {
+            Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { openPlaylist = null }) { Text("All playlists") }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { playlistStore.delete(opened.id); openPlaylist = null }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete playlist")
+                }
+            }
+            Text(opened.name, style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(horizontal = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (songs.isEmpty()) {
+                Text("Nothing here yet. Open a song's player and add it to this playlist.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp))
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(onClick = { play(songs, 0) }, enabled = connection != null) {
+                        Icon(Icons.Filled.PlayArrow, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Play")
+                    }
+                    OutlinedButton(onClick = { play(songs, 0, shuffle = true) }, enabled = connection != null) {
+                        Icon(Icons.Filled.Shuffle, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Shuffle")
+                    }
+                }
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { play(songs, index) }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AsyncImage(
+                                model = song.thumbnail,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                                Text(song.artist, style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                            }
+                            IconButton(onClick = { playlistStore.remove(opened.id, song.id) }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Remove from playlist")
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (songs.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = if (section == 0) "Tap the heart on the player to keep a song here."

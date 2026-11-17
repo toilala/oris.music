@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -63,6 +64,7 @@ import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import com.orismusic.client.library.LibraryStore
+import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.currentSavedSong
 import android.os.SystemClock
 import com.orismusic.client.playback.PlayerConnection
@@ -128,6 +130,27 @@ fun NowPlayingScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.weight(1f))
+            var playlistMenu by remember { mutableStateOf(false) }
+            val playlistStore = PlaylistStore.get(LocalContext.current)
+            val userPlaylists = playlistStore.playlists.collectAsState().value
+            Box {
+                IconButton(onClick = { playlistMenu = true }, enabled = nowSong != null) {
+                    Icon(Icons.Filled.PlaylistAdd, contentDescription = "Add to playlist",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = playlistMenu, onDismissRequest = { playlistMenu = false }) {
+                    if (userPlaylists.isEmpty()) {
+                        DropdownMenuItem(text = { Text("Make a playlist in Library first") },
+                            onClick = { playlistMenu = false })
+                    }
+                    userPlaylists.forEach { p ->
+                        DropdownMenuItem(
+                            text = { Text(p.name) },
+                            onClick = { nowSong?.let { playlistStore.add(p.id, it) }; playlistMenu = false },
+                        )
+                    }
+                }
+            }
             var timerMenu by remember { mutableStateOf(false) }
             val timerEnd = SleepTimer.endsAt.collectAsState().value
             Box {
