@@ -93,25 +93,26 @@ def tap_content_desc(root, desc):
 
 
 def find_song_target(root):
-    """First in-feed duplicated text (song title) with bounds; None if the
-    current shelves carry no song cards."""
+    """First clickable in-feed card. Song cards are clickable Compose nodes;
+    playlist cards, headers and chrome are not (or are excluded by label),
+    so this skips playlist-only shelves. None if no song card is present."""
     chrome = {"OrisMusic", "Refresh home feed", "Search", "Settings",
               "Home", "Library", "Queue"}
-    headers = {"Quick picks", "Song mixes", "Throwbacks", "Tap retry"}
-    counts = {}
     for n in root.iter("node"):
-        t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
-        if t:
-            counts[t] = counts.get(t, 0) + 1
-    for n in root.iter("node"):
-        t = (n.get("text") or "").strip() or (n.get("content-desc") or "").strip()
-        if not t or t in chrome or t in headers or len(t) < 4:
+        if n.get("clickable") != "true":
             continue
-        if counts.get(t, 0) < 2:
+        texts = set()
+        for d in n.iter("node"):
+            for attr in ("text", "content-desc"):
+                v = (d.get(attr) or "").strip()
+                if v:
+                    texts.add(v)
+        if texts & chrome:
             continue
         c = node_center(n)
         if c:
-            return c[0], c[1], t
+            label = sorted(texts)[0] if texts else "?"
+            return c[0], c[1], label
     return None
 
 def focus():
