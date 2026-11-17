@@ -11,6 +11,8 @@ package com.orismusic.client.utils
 import com.orismusic.client.constants.AudioQuality
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.CancellationException
+import com.metrolist.innertubex.extraction.StreamResolveException
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
@@ -56,10 +58,22 @@ object YTPlayerUtils {
             else -> Int.MAX_VALUE
         }
         Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps)")
-        val extracted = InnerTubeXResolver.extract(
-            videoId = videoId,
-            maxKbps = maxKbps,
-        ) ?: throw IOException("No playable stream found for $videoId")
+        val extracted = try {
+            InnerTubeXResolver.extract(videoId = videoId, maxKbps = maxKbps)
+                ?: throw IOException("No playable stream found for $videoId")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: StreamResolveException) {
+            Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
+            failure.diagnostics?.attempts?.forEach { attempt ->
+                Timber.tag(TAG).w(
+                    "Client ${attempt.clientName}/${attempt.profileId}: ${attempt.outcome}",
+                )
+            }
+            // ExoPlayer's loading contract expects IOException for a normal
+            // network/extraction failure, not an unexpected runtime exception.
+            throw IOException("Cannot resolve $videoId: ${failure.reason}", failure)
+        }
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")
         PlaybackData(
             streamUrl = extracted.url,

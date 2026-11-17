@@ -205,17 +205,16 @@ try:
     interesting = [l for l in logcat.splitlines()
                    if re.search(r"FATAL|AndroidRuntime|OrisMedia|OrisTap|InnerTube|MainActivity|"
                                 r"PlayerConnection|ServiceConnection|Binding|"
-                                r"innertube|Resolving|Resolved|YouTube", l)]
-    print("LOGCAT INTERESTING (last 80):", flush=True)
-    for l in interesting[-80:]:
-        print(l[:200], flush=True)
-    result["resolved_log"] = ("Resolving stream" in logcat) or \
-        ("Resolved" in logcat)
+                                r"innertube|Resolving|Resolved|YTPlayerUtils|YouTube|BitChord", l)]
+    print("LOGCAT INTERESTING (last 500):", flush=True)
+    for l in interesting[-500:]:
+        print(l[:1000], flush=True)
+    result["resolved_log"] = bool(re.search(r"YTPlayerUtils: Resolved [A-Za-z0-9_-]+ via", logcat))
 
     playing = result["state"] == 3
     advancing = len(result["positions"]) >= 2 and \
         result["positions"][-1] > result["positions"][0] >= 0
-    result["ok"] = bool(result["feed_loaded"] and (playing or advancing)
+    result["ok"] = bool(result["feed_loaded"] and playing and advancing
                         and result["resolved_log"])
 finally:
     with open(os.path.join(EVIDENCE, "result.txt"), "w") as f:
