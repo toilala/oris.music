@@ -15,6 +15,9 @@ import com.orismusic.client.ui.navigation.NavigationState
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -206,8 +209,8 @@ class MainActivity : ComponentActivity() {
 
                         AnimatedVisibility(
                             visible = showPlayer && connection != null,
-                            enter = slideInVertically(initialOffsetY = { it }),
-                            exit = slideOutVertically(targetOffsetY = { it }),
+                            enter = slideInVertically(animationSpec = spring(dampingRatio = 0.88f, stiffness = 300f), initialOffsetY = { it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                         ) {
                             connection?.let {
                                 NowPlayingScreen(

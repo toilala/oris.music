@@ -37,7 +37,7 @@ fun LyricsProviderSettings(onBack: () -> Unit) {
                 TextButton(onClick = { save(restoreLyricsOptions(emptyList(), null)) }) { Text("Restore default order and sources") }
             }
             itemsIndexed(options.ordered(), key = { _, source -> source.id }) { index, source ->
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().animateItem()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${index+1}. ${source.name}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)

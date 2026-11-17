@@ -1,6 +1,11 @@
 package com.orismusic.client.ui.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -98,9 +103,18 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
                     }
                     LazyColumn(state=list, contentPadding=PaddingValues(24.dp), verticalArrangement=Arrangement.spacedBy(20.dp)) {
                         itemsIndexed(lyrics.lines) { index, line ->
+                            val selected = index == active
+                            val ink by animateColorAsState(
+                                if (selected || !lyrics.timed) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f), label = "lyric ink")
+                            val emphasis by animateFloatAsState(if (selected) 1f else 0.96f,
+                                animationSpec = spring(stiffness = 260f), label = "lyric emphasis")
                             Text(line.text.ifBlank { "♪" }, style=MaterialTheme.typography.headlineSmall,
-                                color=if (index == active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier=Modifier.fillMaxWidth().then(if (line.timeMs != null)
+                                color=ink,
+                                modifier=Modifier.fillMaxWidth().graphicsLayer {
+                                    transformOrigin = TransformOrigin(0f, 0.5f)
+                                    scaleX = emphasis; scaleY = emphasis
+                                }.then(if (line.timeMs != null)
                                     Modifier.clickable { connection.player.seekTo(line.timeMs) } else Modifier))
                         }
                     }

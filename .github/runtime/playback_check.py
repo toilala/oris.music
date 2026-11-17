@@ -119,5 +119,9 @@ if __name__ == '__main__':
     focus = adb('shell', 'dumpsys', 'window').decode()
     assert not any(PKG in line for line in focus.splitlines() if 'mCurrentFocus' in line)
     print('PASS: idle player, nested Back, tab history, Home system exit; no playback network request', flush=True)
-    subprocess.check_call(['python3', '.github/runtime/recents_check.py'])
-    subprocess.check_call(['python3', '.github/runtime/lyrics_check.py'])
+    # Run both checks even if one fails, so a lifecycle regression cannot hide lyric evidence.
+    failures = []
+    for check in ['recents_check.py', 'lyrics_check.py']:
+        result = subprocess.run(['python3', '.github/runtime/'+check])
+        if result.returncode: failures.append(check)
+    if failures: raise AssertionError('Runtime checks failed: '+', '.join(failures))

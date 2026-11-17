@@ -1,6 +1,17 @@
 package com.orismusic.client.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,7 +90,9 @@ fun NowPlayingScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp),
+            .statusBarsPadding().navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(
@@ -105,17 +118,20 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        Crossfade(targetState = metadata?.artworkUri?.toString(), label = "player artwork") { artwork ->
         AsyncImage(
-            model = metadata?.artworkUri?.toString(),
+            model = artwork,
             contentDescription = metadata?.title?.toString(),
             contentScale = ContentScale.Crop,
             modifier = Modifier
+                .widthIn(max = 380.dp)
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         )
 
+        }
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
@@ -189,9 +205,14 @@ fun NowPlayingScreen(
                     modifier = Modifier.size(36.dp),
                 )
             }
+            val playPress = remember { MutableInteractionSource() }
+            val pressed by playPress.collectIsPressedAsState()
+            val playScale by animateFloatAsState(if (pressed) 0.9f else 1f,
+                animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f), label = "play press")
             FilledIconButton(
+                interactionSource = playPress,
                 onClick = { if (isPlaying.value) connection.pause() else connection.play() },
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier.size(64.dp).graphicsLayer { scaleX = playScale; scaleY = playScale },
                 colors = IconButtonDefaults.filledIconButtonColors(),
             ) {
                 Icon(

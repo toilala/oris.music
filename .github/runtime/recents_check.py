@@ -18,12 +18,13 @@ def assert_running():
 def assert_stopped():
     end = time.monotonic() + 20
     while time.monotonic() < end:
-        if 'ServiceRecord{' not in services():
+        if 'com.orismusic.client.playback.OrisMediaService}' not in services():
             break
         time.sleep(1)
     dump = services()
     print('SERVICE_AFTER_REMOVAL', dump, flush=True)
-    assert 'ServiceRecord{' not in dump, dump
+    print('SHUTDOWN_TRACE', adb('logcat', '-d', '-s', 'OrisMediaService').decode(), flush=True)
+    assert 'com.orismusic.client.playback.OrisMediaService}' not in dump, dump
     notifications = adb('shell', 'dumpsys', 'notification').decode()
     active = [line for line in notifications.splitlines() if 'NotificationRecord(' in line and PKG in line]
     assert not active, active
@@ -53,7 +54,10 @@ def set_keep_playing(value):
     assert (switch_node().get('checked') == 'true') == value
 
 def local_audio():
-    adb('shell', 'am', 'start', '-n', COMPONENT)
+    # Start a fresh task with this activity as its root. Removing a child activity
+    # above MainActivity does not remove the app task and cannot test onTaskRemoved.
+    adb('shell', 'am', 'force-stop', PKG)
+    adb('shell', 'am', 'start', '-n', COMPONENT, '--activity-new-task', '--activity-clear-task')
     wait_label('Local audio playing', seconds=30)
     assert_running()
 
