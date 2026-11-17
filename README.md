@@ -1,72 +1,23 @@
-# OrisMusic
+# Oris Music
 
-A clean, modern Android music player built with Jetpack Compose, Media3/ExoPlayer, and Material 3.
+An Android music player I'm working on. Search, playback, queues and lyrics are in. There's still plenty to fix.
 
-## Features
+## Build
 
-- **Modern Architecture**: Built with Jetpack Compose, Hilt DI, and Media3/ExoPlayer
-- **Material 3 Design**: Dark theme with custom color palette
-- **Background Playback**: Media3 Session service for foreground playback
-- **Clean UI**: Bottom sheet player, transport controls, progress slider
-- **Extensible**: Modular structure ready for YouTube, local files, and streaming sources
-
-## Tech Stack
-
-- **UI**: Jetpack Compose with Material 3
-- **Media**: Media3 ExoPlayer (media3-session, media3-exoplayer, media3-ui)
-- **DI**: Hilt (Dagger)
-- **Networking**: Ktor + OkHttp
-- **Images**: Coil 3
-- **Database**: Room
-- **Async**: Kotlin Coroutines + Flow
-- **Serialization**: Kotlinx Serialization
-- **Build**: Gradle Kotlin DSL with version catalog
-
-## Project Structure
+Use JDK 17 and the Android SDK, then run:
 
 ```
-app/
-├── src/main/
-│   ├── kotlin/com/orismusic/client/
-│   │   ├── di/              # Hilt modules
-│   │   ├── ui/
-│   │   │   ├── theme/       # Material 3 theme, typography
-│   │   │   ├── player/      # PlayerControls, BottomSheetPlayer
-│   │   │   └── screens/     # Home, Search, Library, Queue, Settings
-│   │   ├── OrisApp.kt       # Application class
-│   │   └── MainActivity.kt  # Main activity with navigation
-│   └── res/
-│       ├── values/          # Strings, themes
-│       └── xml/             # Backup rules
+./gradlew :app:assembleFossDebug
 ```
 
-## Building
+The APK ends up in `app/build/outputs/apk/foss/debug/`.
 
-1. Copy `local.properties.template` to `local.properties` and set your Android SDK path
-2. Run `./gradlew assembleDebug` (Linux/Mac) or `gradlew.bat assembleDebug` (Windows)
+## Credits and license
 
-## Requirements
+GPL-3.0. See [LICENSE](LICENSE). Existing copyright and license notices in the source still apply.
 
-- Android Studio Koala or later
-- JDK 21
-- Android SDK 36
-- Min SDK 26 (Android 8.0)
-
-## Architecture Notes
-
-- **Dark-only theme** (like Mochy) - avoids light mode issues
-- **Media3 Session** for system integration (notifications, lock screen, Android Auto)
-- **Hilt** for dependency injection
-- **Compose Navigation** for screen navigation
-- **Bottom sheet player** that expands/collapses
-
-## Next Steps
-
-- [ ] Add YouTube Music source (using InnerTube/NewPipeExtractor)
-- [ ] Add local media scanner
-- [ ] Implement search functionality
-- [ ] Add playlist management
-- [ ] Add equalizer/DSP
-- [ ] Add lyrics support
-- [ ] Add Cast support (GMS flavor)
-- [ ] Add offline downloads
+- [Mochy Music](https://github.com/realidkroo/Mochy-Music): the inherited `innertube` client, token/cipher code, some queue helpers, theme and small utilities. These parts are borrowed GPL code, not all written from scratch here.
+- [Metrolist / InnerTubeX](https://github.com/MetrolistGroup/innertubex): stream extraction library and inherited playback lineage. The old YTPlayerUtils stub was replaced; InnerTubeX and other credited engine parts remain.
+- [Echo Music](https://github.com/EchoMusicApp/Echo-Music) and Mochy: references for the new search/radio and lyrics work. Those Oris implementations were written separately, not pasted.
+- Lyrics come from [LRCLIB](https://lrclib.net), [Better Lyrics](https://github.com/better-lyrics/api) (also the KuGou route), [Unison](https://github.com/better-lyrics/unison), [YouLyPlus](https://github.com/ibratabian17/LyricsPlus), [PaxSenix](https://lyrics.paxsenix.org/) and YouTube, where available. Provider and required submitter credits are shown in the app. Some sources are optional or unavailable; SimpMusic is disabled because its service restricts other clients. Lyrics still belong to their owners. API access is not a grant of redistribution rights.
+- Gradle wrapper: Apache-2.0, brought over through [oris-music-foundation](https://github.com/toilala/oris-music-foundation). Other libraries keep their own licenses.
