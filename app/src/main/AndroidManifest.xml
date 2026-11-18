@@ -37,11 +37,113 @@
             android:launchMode="singleTop"
             android:theme="@style/Theme.OrisMusic"
             android:windowSoftInputMode="adjustResize">
+        </activity>
+
+        <!-- Launcher icon variants. Exactly one alias is enabled at a time (Settings > Appearance > App icon). -->
+        <activity-alias
+            android:name=".icon.Turntable"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Paper"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_paper"
+            android:roundIcon="@mipmap/ic_v_paper"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Spiral"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_spiral"
+            android:roundIcon="@mipmap/ic_v_spiral"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Eclipse"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_eclipse"
+            android:roundIcon="@mipmap/ic_v_eclipse"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Ink"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_ink"
+            android:roundIcon="@mipmap/ic_v_ink"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Chalk"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_chalk"
+            android:roundIcon="@mipmap/ic_v_chalk"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Dusk"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_dusk"
+            android:roundIcon="@mipmap/ic_v_dusk"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Sage"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_sage"
+            android:roundIcon="@mipmap/ic_v_sage"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Media Session Service -->
         <service

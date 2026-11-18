@@ -13,6 +13,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import com.orismusic.client.R
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.settings.PlaybackPreferences
 import androidx.datastore.preferences.core.edit
@@ -154,6 +162,35 @@ fun SettingsScreen(
                     onValueChangeFinished = { look.save() },
                     valueRange = 0.2f..1f,
                 )
+            }
+            var chosenIcon by remember { mutableStateOf(com.orismusic.client.settings.AppIcons.current(context)) }
+            Column {
+                Text("App icon", style = MaterialTheme.typography.titleMedium)
+                Text("Pick how Oris looks on your home screen. Your launcher may take a few seconds to update, and the app can close once while it switches.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    com.orismusic.client.settings.AppIcons.variants.forEach { v ->
+                        val selected = v == chosenIcon
+                        Column(
+                            Modifier.width(76.dp).clip(MaterialTheme.shapes.medium)
+                                .clickable { chosenIcon = v; com.orismusic.client.settings.AppIcons.select(context, v) }
+                                .semantics { contentDescription = "App icon " + v.label },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Box(
+                                Modifier.size(64.dp).clip(CircleShape)
+                                    .border(if (selected) 2.dp else 0.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Image(painterResource(v.preview), null, Modifier.requiredSize(104.dp))
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(v.label, style = MaterialTheme.typography.labelSmall, maxLines = 2,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(4.dp))
             SectionTitle("Lyrics")
