@@ -185,6 +185,13 @@ fun DetailScreen(
                     c.playQueue(ListQueue(title = content.title, items = ordered.map { it.toMediaItem() },
                         startIndex = if (shuffle) 0 else start))
                 }
+                // A single or one-track release is just a song: play it now instead of showing a page.
+                androidx.compose.runtime.LaunchedEffect(content) {
+                    if (target.kind != "artist" && content.songs.size == 1 && connection != null) {
+                        play(0)
+                        onBack()
+                    }
+                }
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item(key = "header") {
                         Column(
