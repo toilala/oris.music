@@ -9,7 +9,7 @@ import time
 import xml.etree.ElementTree as ET
 
 OUT = 'runtime-evidence'
-PKG = 'com.orismusic.client.debug'
+PKG = 'toilala.oris.debug'
 os.makedirs(OUT, exist_ok=True)
 
 def adb(*args):

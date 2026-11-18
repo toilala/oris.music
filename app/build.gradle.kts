@@ -14,7 +14,7 @@ android {
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        applicationId = "com.orismusic.client"
+        applicationId = "toilala.oris"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
