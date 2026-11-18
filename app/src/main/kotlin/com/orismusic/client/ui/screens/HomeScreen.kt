@@ -61,6 +61,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -123,90 +125,216 @@ fun HomeScreen(
         value = loadHomeFeed()
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 20.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList(), refreshTick) {
+        value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
+    }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val hasHistory = LibraryStore.get(context).history.collectAsState().value.isNotEmpty()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(modifier = modifier) { outerPadding ->
+        Box(Modifier.fillMaxSize().padding(outerPadding)) {
+            Aurora(Modifier.align(Alignment.TopCenter), scroll)
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = { refreshing = true; refreshTick++ },
+                modifier = Modifier.fillMaxSize(),
             ) {
-                OrisLogo(Modifier.size(30.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = "Oris",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
-    ) { outerPadding ->
-        val innerPadding = PaddingValues(0.dp)
-        Column(Modifier.fillMaxSize().padding(outerPadding)) {
-        MoodChips(onMood = { SearchRequest.pending = it; onSearch() })
-        JumpBackIn(playerConnection)
-        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = { refreshing = true; refreshTick++ },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        ) {
-        when (val state = feed) {
-            HomeFeedState.Loading -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                repeat(2) {
-                    Column {
-                        Box(
-                            Modifier.padding(horizontal = 20.dp, vertical = 10.dp).width(150.dp).height(18.dp)
-                                .clip(RoundedCornerShape(8.dp)).shimmer(),
-                        )
-                        Row(
-                            Modifier.padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) { repeat(3) { SkeletonCard() } }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                ) {
+                    item(key = "header") { HomeHeader(scroll) }
+                    item(key = "moods") { MoodChips(onMood = { SearchRequest.pending = it; onSearch() }) }
+                    if (hasHistory) item(key = "jump") { JumpBackIn(playerConnection) }
+                    when (val state = feed) {
+                        HomeFeedState.Loading -> item(key = "loading") {
+                            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                repeat(2) {
+                                    Column {
+                                        Box(
+                                            Modifier.padding(horizontal = 20.dp, vertical = 10.dp).width(150.dp).height(18.dp)
+                                                .clip(RoundedCornerShape(8.dp)).shimmer(),
+                                        )
+                                        Row(
+                                            Modifier.padding(horizontal = 16.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) { repeat(3) { SkeletonCard() } }
+                                    }
+                                }
+                            }
+                        }
+                        is HomeFeedState.Failed -> item(key = "failed") {
+                            Column(
+                                Modifier.fillMaxWidth().padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text("Could not load your home feed", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = state.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                                Text(
+                                    text = "Tap retry",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(12.dp))
+                                        .clickable { refreshTick++ }.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                        is HomeFeedState.Ready -> feedItems(state.page, newAlbums, playerConnection, onOpen, scope)
                     }
                 }
             }
-            is HomeFeedState.Failed -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = "Could not load your home feed",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = state.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Text(
-                    text = "Tap retry",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { refreshTick++ }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+        }
+    }
+}
+
+/** Slow drifting colour behind the header. It scrolls away at half speed. */
+@Composable
+private fun Aurora(modifier: Modifier, scroll: () -> Int) {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "aurora")
+    val a by t.animateFloat(
+        0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(13000, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.RepeatMode.Reverse,
+        ), label = "a",
+    )
+    val b by t.animateFloat(
+        1f, 0f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(17000, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.RepeatMode.Reverse,
+        ), label = "b",
+    )
+    val warm = MaterialTheme.colorScheme.tertiary
+    val cool = MaterialTheme.colorScheme.primary
+    androidx.compose.foundation.Canvas(
+        modifier.fillMaxWidth().height(460.dp).graphicsLayer {
+            translationY = -scroll() * 0.5f
+            alpha = (1f - scroll() / 700f).coerceIn(0f, 1f)
+        },
+    ) {
+        val w = size.width
+        val h = size.height
+        val c1 = androidx.compose.ui.geometry.Offset(w * (0.1f + 0.6f * a), h * (0.12f + 0.2f * b))
+        val c2 = androidx.compose.ui.geometry.Offset(w * (0.9f - 0.6f * a), h * (0.3f + 0.2f * a))
+        drawCircle(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                listOf(warm.copy(alpha = 0.30f), androidx.compose.ui.graphics.Color.Transparent), center = c1, radius = w * 0.75f,
+            ), radius = w * 0.75f, center = c1,
+        )
+        drawCircle(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                listOf(cool.copy(alpha = 0.18f), androidx.compose.ui.graphics.Color.Transparent), center = c2, radius = w * 0.7f,
+            ), radius = w * 0.7f, center = c2,
+        )
+    }
+}
+
+/** Logo, name and a time-aware greeting. Lifts and fades as the page scrolls. */
+@Composable
+private fun HomeHeader(scroll: () -> Int) {
+    val hour = remember { java.time.LocalTime.now().hour }
+    val greeting = when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        in 17..21 -> "Good evening"
+        else -> "Still up?"
+    }
+    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "spin")
+    val angle by spin.animateFloat(
+        0f, 360f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing),
+        ), label = "angle",
+    )
+    val reveal = remember { androidx.compose.animation.core.Animatable(0f) }
+    val reveal2 = remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        launch { reveal.animateTo(1f, androidx.compose.animation.core.spring(0.7f, 120f)) }
+        kotlinx.coroutines.delay(140)
+        reveal2.animateTo(1f, androidx.compose.animation.core.spring(0.75f, 100f))
+    }
+    Column(
+        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 10.dp).graphicsLayer {
+            translationY = scroll() * 0.35f
+            alpha = (1f - scroll() / 420f).coerceIn(0f, 1f)
+        },
+    ) {
+        Row(
+            Modifier.graphicsLayer { alpha = reveal.value; translationY = (1f - reveal.value) * -30f },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OrisLogo(Modifier.size(30.dp).graphicsLayer { rotationZ = angle })
+            Spacer(Modifier.width(10.dp))
+            Text("Oris", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+        }
+        Text(
+            greeting,
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 18.dp).graphicsLayer {
+                alpha = reveal2.value; translationY = (1f - reveal2.value) * 50f
+            },
+        )
+        Text(
+            "What are we listening to?",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp).graphicsLayer {
+                alpha = reveal2.value; translationY = (1f - reveal2.value) * 70f
+            },
+        )
+    }
+}
+
+/** Quick mood searches. Each chip springs in, tinted with its own colour. */
+@Composable
+private fun MoodChips(onMood: (String) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val moods = listOf(
+        Triple("Chill", "chill music", androidx.compose.ui.graphics.Color(0xFF6FB6C9)),
+        Triple("Hype", "hype workout music", androidx.compose.ui.graphics.Color(0xFFE0745A)),
+        Triple("Focus", "focus music", androidx.compose.ui.graphics.Color(0xFF9B8FE0)),
+        Triple("Late night", "late night music", androidx.compose.ui.graphics.Color(0xFF7C8FBF)),
+        Triple("Nepali", "nepali songs", androidx.compose.ui.graphics.Color(0xFFD9A441)),
+    )
+    Row(
+        Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        moods.forEachIndexed { index, (label, query, accent) ->
+            val pop = remember { androidx.compose.animation.core.Animatable(0f) }
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(300L + index * 70L)
+                pop.animateTo(1f, androidx.compose.animation.core.spring(0.55f, 260f))
             }
-            is HomeFeedState.Ready -> HomeFeed(
-                page = state.page,
-                playerConnection = playerConnection,
-                contentPadding = innerPadding,
-                onOpen = onOpen,
-                refreshKey = refreshTick,
-            )
-        }
-        }
+            Row(
+                Modifier
+                    .graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = pop.value.coerceIn(0f, 1f) }
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(accent.copy(alpha = 0.32f), scheme.surfaceContainerHigh),
+                        ),
+                    )
+                    .pressClickable({ onMood(query) })
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(accent))
+                Spacer(Modifier.width(8.dp))
+                Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
+            }
         }
     }
 }
@@ -232,38 +360,6 @@ fun OrisLogo(modifier: Modifier = Modifier) {
         drawPath(arm, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(2.6f * k,
             cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
         drawCircle(ink, radius = 3.5f * k, center = p(69f, 39f))
-    }
-}
-
-/** Quick mood searches, each in its own accent colour. */
-@Composable
-private fun MoodChips(onMood: (String) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val moods = listOf(
-        "Chill" to "chill music",
-        "Hype" to "hype workout music",
-        "Focus" to "focus music",
-        "Late night" to "late night music",
-        "Nepali" to "nepali songs",
-    )
-    androidx.compose.foundation.layout.Row(
-        Modifier.padding(top = 4.dp, bottom = 8.dp)
-            .horizontalScroll(androidx.compose.foundation.rememberScrollState())
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        moods.forEach { (label, query) ->
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                color = scheme.onSurface,
-                modifier = Modifier
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
-                    .background(scheme.surfaceContainerHigh)
-                    .pressClickable({ onMood(query) })
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-            )
-        }
     }
 }
 
@@ -304,66 +400,135 @@ private fun JumpBackIn(connection: PlayerConnection?) {
     }
 }
 
-@Composable
-private fun HomeFeed(
+private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
     page: HomePage,
+    newAlbums: List<com.music.innertube.models.AlbumItem>,
     playerConnection: PlayerConnection?,
-    contentPadding: PaddingValues,
-    onOpen: (DetailTarget) -> Unit = {},
-    refreshKey: Int = 0,
+    onOpen: (DetailTarget) -> Unit,
+    scope: kotlinx.coroutines.CoroutineScope,
 ) {
-    val scope = rememberCoroutineScope()
-    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList(), refreshKey) {
-        value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
-    }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            top = contentPadding.calculateTopPadding(),
-            bottom = contentPadding.calculateBottomPadding() + 16.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item(key = "new-releases") { NewReleases(newAlbums, onOpen) }
-        itemsIndexed(
-            // The feed often has its own "New releases" row; ours already covers it, so show only one.
-            items = page.sections.filter { it.items.isNotEmpty() && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
-            key = { _, it -> it.title },
-        ) { sectionIndex, section ->
-            Column(Modifier.entrance(sectionIndex)) {
-                SectionHeader(title = section.title)
-                val songs = MusicCandidates.select(section.items.filterIsInstance<SongItem>())
-                com.orismusic.client.ui.components.OrbitRow(
-                    items = section.items.filter { it !is SongItem || it in songs },
-                    key = { "${section.title}-${it.id}" },
-                ) { item, _, orbit ->
-                    run {
-                        when (item) {
-                            is SongItem -> SongCard(
-                                modifier = orbit,
-                                song = item,
-                                onClick = {
-                                    Timber.tag("OrisTap").w(
-                                        "SONG TAPPED ${item.title} conn=${playerConnection != null}",
-                                    )
-                                    playerConnection?.let { connection ->
-                                        scope.launch {
-                                            connection.playQueue(
-                                                MusicRadioQueue(section.title, songs, item.id),
-                                            )
-                                        }
-                                    }
-                                },
-                            )
-                            else -> GenericCard(
-                                modifier = orbit,
-                                title = item.title,
-                                thumbnail = item.thumbnail,
-                                onClick = item.toDetailTarget()?.let { target -> { onOpen(target) } },
-                            )
-                        }
-                    }
+    if (newAlbums.isNotEmpty()) item(key = "hero") { HeroPager(newAlbums, onOpen) }
+    itemsIndexed(
+        // The feed often has its own "New releases" row; the hero above already covers it.
+        items = page.sections.filter { it.items.isNotEmpty() && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
+        key = { _, it -> it.title },
+    ) { sectionIndex, section ->
+        Column(Modifier.entrance(sectionIndex)) {
+            SectionHeader(title = section.title)
+            val songs = MusicCandidates.select(section.items.filterIsInstance<SongItem>())
+            com.orismusic.client.ui.components.OrbitRow(
+                items = section.items.filter { it !is SongItem || it in songs },
+                key = { "${section.title}-${it.id}" },
+            ) { item, _, orbit ->
+                when (item) {
+                    is SongItem -> SongCard(
+                        modifier = orbit,
+                        song = item,
+                        onClick = {
+                            Timber.tag("OrisTap").w("SONG TAPPED ${item.title} conn=${playerConnection != null}")
+                            playerConnection?.let { connection ->
+                                scope.launch {
+                                    connection.playQueue(MusicRadioQueue(section.title, songs, item.id))
+                                }
+                            }
+                        },
+                    )
+                    else -> GenericCard(
+                        modifier = orbit,
+                        title = item.title,
+                        thumbnail = item.thumbnail,
+                        onClick = item.toDetailTarget()?.let { target -> { onOpen(target) } },
+                    )
                 }
+            }
+        }
+    }
+}
+
+/** Big swipeable new-release cards: the cover drifts against the card, neighbours tilt and shrink. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HeroPager(albums: List<com.music.innertube.models.AlbumItem>, onOpen: (DetailTarget) -> Unit) {
+    val items = remember(albums) { albums.take(8) }
+    val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { items.size })
+    androidx.compose.runtime.LaunchedEffect(items.size) {
+        while (true) {
+            kotlinx.coroutines.delay(5000)
+            if (!pager.isScrollInProgress && items.size > 1) {
+                pager.animateScrollToPage((pager.currentPage + 1) % items.size)
+            }
+        }
+    }
+    Column {
+        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("New releases", style = MaterialTheme.typography.titleLarge)
+        }
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pager,
+            contentPadding = PaddingValues(horizontal = 44.dp),
+            pageSpacing = 14.dp,
+            modifier = Modifier.padding(top = 10.dp),
+        ) { page ->
+            val album = items[page]
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(320.dp)
+                    .graphicsLayer {
+                        val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
+                        val near = 1f - kotlin.math.abs(off).coerceIn(0f, 1f)
+                        val sc = 0.86f + 0.14f * near
+                        scaleX = sc; scaleY = sc
+                        alpha = 0.55f + 0.45f * near
+                        rotationY = off * -14f
+                        cameraDistance = 14f * density
+                    }
+                    .clip(RoundedCornerShape(30.dp))
+                    .pressClickable({ album.toDetailTarget()?.let(onOpen) }, 0.98f),
+            ) {
+                Artwork(
+                    album.thumbnail,
+                    Modifier.fillMaxSize().graphicsLayer {
+                        val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
+                        scaleX = 1.25f; scaleY = 1.25f
+                        translationX = off * size.width * 0.12f
+                    },
+                    RoundedCornerShape(0.dp), album.title, 900,
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0.45f to androidx.compose.ui.graphics.Color.Transparent,
+                            1f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.78f),
+                        ),
+                    ),
+                )
+                Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
+                    Text("NEW", style = MaterialTheme.typography.labelSmall,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f))
+                    Text(album.title, style = MaterialTheme.typography.headlineSmall,
+                        color = androidx.compose.ui.graphics.Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    val who = album.artists?.joinToString { it.name }.orEmpty()
+                    if (who.isNotEmpty()) Text(who, style = MaterialTheme.typography.bodyMedium,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f), maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            repeat(items.size) { i ->
+                val active = pager.currentPage == i
+                val w by androidx.compose.animation.core.animateDpAsState(
+                    if (active) 22.dp else 6.dp,
+                    androidx.compose.animation.core.spring(0.6f, 400f), label = "dot",
+                )
+                Box(
+                    Modifier.padding(horizontal = 3.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
+                        .background(if (active) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceContainerHighest),
+                )
             }
         }
     }
@@ -420,19 +585,3 @@ private fun GenericCard(
     }
 }
 
-/** Fresh albums from the YouTube Music explore page. Hidden when it cannot load. */
-@Composable
-private fun NewReleases(albums: List<com.music.innertube.models.AlbumItem>, onOpen: (DetailTarget) -> Unit) {
-    if (albums.isEmpty()) return
-    Column {
-        SectionHeader(title = "New releases")
-        com.orismusic.client.ui.components.OrbitRow(items = albums, key = { "new-${it.browseId}" }) { album, _, orbit ->
-            GenericCard(
-                modifier = orbit,
-                title = album.title,
-                thumbnail = album.thumbnail,
-                onClick = { album.toDetailTarget()?.let(onOpen) },
-            )
-        }
-    }
-}
