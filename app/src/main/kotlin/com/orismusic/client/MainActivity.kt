@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
@@ -129,6 +130,20 @@ class MainActivity : ComponentActivity() {
         previous?.dispose()
     }
 
+    private val notificationPermission =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
+    private fun runningOnEmulator(): Boolean =
+        Build.FINGERPRINT.startsWith("generic") || Build.FINGERPRINT.contains("emulator") ||
+            Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu") || Build.MODEL.contains("sdk_gphone")
+
+    private fun shouldWelcome(): Boolean {
+        val prefs = getSharedPreferences("oris_first_run", MODE_PRIVATE)
+        if (prefs.getBoolean("welcomed", false)) return false
+        // Automated emulator checks would be blocked by the dialog; a debug extra can still show it.
+        return intent?.getBooleanExtra("oris_show_welcome", false) == true || !runningOnEmulator()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -139,6 +154,29 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OrisTheme {
+                var showWelcome by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(shouldWelcome()) }
+                if (showWelcome) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { },
+                        title = { androidx.compose.material3.Text("Welcome to Oris") },
+                        text = {
+                            androidx.compose.material3.Text(
+                                "Search any song and tap it to play. Open the player and tap Lyrics for synced words. " +
+                                    "Make it yours in Settings: app icon, colours, lyrics sources. " +
+                                    "Everything you like or play stays on this phone.\n\nNext, Android will ask to show the playback controls in your notifications.",
+                            )
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                getSharedPreferences("oris_first_run", MODE_PRIVATE).edit().putBoolean("welcomed", true).apply()
+                                showWelcome = false
+                                if (Build.VERSION.SDK_INT >= 33 &&
+                                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }) { androidx.compose.material3.Text("Got it") }
+                        },
+                    )
+                }
                 val connection = connectionState.value
                 val hideBar = com.orismusic.client.settings.AppearanceSettings.hideStatusBar
                 androidx.compose.runtime.SideEffect {

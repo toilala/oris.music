@@ -236,6 +236,27 @@ fun SettingsScreen(
             Text("Oris Music $versionName", style = MaterialTheme.typography.bodyMedium)
             Text("Made by ${com.orismusic.client.settings.Support.AUTHOR}", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Free software under GPL-3.0. No ads, no tracking, no account.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            var showCredits by remember { mutableStateOf(false) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    runCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/toilala/oris.music"))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }) { Text("Source code") }
+                OutlinedButton(onClick = { showCredits = !showCredits }) { Text(if (showCredits) "Hide credits" else "Credits") }
+            }
+            if (showCredits) {
+                Text(
+                    "Oris builds on open source work: the innertube client and parts of the queue and theme code come from Mochy Music, " +
+                        "stream extraction from Metrolist / InnerTubeX. Lyrics come from LRCLIB, Better Lyrics, Unison, YouLyPlus, PaxSenix " +
+                        "and YouTube where available; lyrics belong to their owners. Full notices are in the repository (LICENSE and README).",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (com.orismusic.client.settings.Support.TIP_URL.isNotBlank()) {
                 FilledTonalButton(onClick = {
                     runCatching {

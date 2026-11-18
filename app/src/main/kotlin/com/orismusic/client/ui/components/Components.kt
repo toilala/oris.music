@@ -115,11 +115,24 @@ fun Artwork(
 ) {
     val context = LocalContext.current
     val request = remember(url) { ImageRequest.Builder(context).data(url).crossfade(300).build() }
+    var loaded by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
+    var failed by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
+    // A soft pulse while the cover loads, so empty boxes read as "loading" and not "broken".
+    val base = MaterialTheme.colorScheme.surfaceVariant
+    val pulse = if (loaded || failed || url.isNullOrBlank()) base else {
+        val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "cover pulse")
+        val a by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.RepeatMode.Reverse), label = "cover pulse alpha")
+        androidx.compose.ui.graphics.lerp(base, MaterialTheme.colorScheme.surfaceContainerHigh, a)
+    }
     AsyncImage(
         model = request,
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
-        modifier = modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant),
+        onSuccess = { loaded = true },
+        onError = { failed = true },
+        modifier = modifier.clip(shape).background(pulse),
     )
 }
 

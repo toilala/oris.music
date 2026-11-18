@@ -203,6 +203,7 @@ fun HomeScreen(
                 playerConnection = playerConnection,
                 contentPadding = innerPadding,
                 onOpen = onOpen,
+                refreshKey = refreshTick,
             )
         }
         }
@@ -309,9 +310,10 @@ private fun HomeFeed(
     playerConnection: PlayerConnection?,
     contentPadding: PaddingValues,
     onOpen: (DetailTarget) -> Unit = {},
+    refreshKey: Int = 0,
 ) {
     val scope = rememberCoroutineScope()
-    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList()) {
+    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList(), refreshKey) {
         value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
     }
     LazyColumn(
