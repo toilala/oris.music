@@ -54,3 +54,13 @@
 
 # Keep Timber
 -keep class timber.log.** { *; }
+# Release build: desktop-only classes that Android never has
+-dontwarn java.lang.management.**
+-dontwarn javax.script.**
+-dontwarn org.mozilla.javascript.**
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.schabi.newpipe.** { *; }
+-keep class com.orismusic.client.** { *; }
+-keepattributes *Annotation*, InnerClasses, Signature, EnclosingMethod
+-keepclassmembers class **$$serializer { *; }
+-keepclassmembers class * { @kotlinx.serialization.Serializable *; }
