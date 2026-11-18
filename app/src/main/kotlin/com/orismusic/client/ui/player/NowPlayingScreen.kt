@@ -127,6 +127,7 @@ fun NowPlayingScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(Color.Black)
             .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.75f), tint.copy(alpha = 0.25f), Color.Black)))
             .statusBarsPadding().navigationBarsPadding()
             .verticalScroll(rememberScrollState())
