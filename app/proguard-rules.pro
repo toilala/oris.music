@@ -64,3 +64,12 @@
 -keepattributes *Annotation*, InnerClasses, Signature, EnclosingMethod
 -keepclassmembers class **$$serializer { *; }
 -keepclassmembers class * { @kotlinx.serialization.Serializable *; }
+-dontwarn com.google.re2j.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+-dontwarn org.slf4j.**
+-dontwarn javax.annotation.**
+-dontwarn org.jspecify.**
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn sun.misc.**
