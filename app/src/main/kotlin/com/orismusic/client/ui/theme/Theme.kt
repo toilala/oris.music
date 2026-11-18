@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 
 /**
  * OrisMusic renders dark-only.
@@ -46,9 +47,15 @@ fun OrisTheme(
                 onBackground = Color.White,
                 surface = Color.Black,
                 onSurface = Color.White,
-                surfaceVariant = Color(0xFF1A1A1A),
-                onSurfaceVariant = Color.White,
-                surfaceTint = Color.Black
+                surfaceVariant = Color(0xFF171717),
+                onSurfaceVariant = Color(0xFFB4B4B4),
+                surfaceTint = Color.Black,
+                surfaceContainer = Color(0xFF101010),
+                surfaceContainerLow = Color(0xFF0B0B0B),
+                surfaceContainerHigh = Color(0xFF1C1C1C),
+                surfaceContainerHighest = Color(0xFF262626),
+                outline = Color(0xFF6A6A6A),
+                outlineVariant = Color(0xFF2B2B2B),
             )
         } else {
             lightColorScheme(
@@ -87,6 +94,13 @@ fun OrisTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = typography,
+        shapes = androidx.compose.material3.Shapes(
+            extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+            small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+        ),
     ) {
         ProvideTextStyle(
             value = typography.bodyLarge,

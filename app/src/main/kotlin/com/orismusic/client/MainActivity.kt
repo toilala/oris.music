@@ -17,6 +17,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -193,8 +194,17 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                                 )
                             } else
-                            tabState.SaveableStateProvider(selectedTab) {
-                            when (MainTab.entries[selectedTab]) {
+                            androidx.compose.animation.AnimatedContent(
+                                targetState = selectedTab,
+                                transitionSpec = {
+                                    (fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60)) +
+                                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(260, delayMillis = 60), initialScale = 0.97f))
+                                        .togetherWith(fadeOut(androidx.compose.animation.core.tween(120)))
+                                },
+                                label = "tabs",
+                            ) { tabIndex ->
+                            tabState.SaveableStateProvider(tabIndex) {
+                            when (MainTab.entries[tabIndex]) {
                                 MainTab.Home -> HomeScreen(
                                     onOpen = { detail = it; detailBack = null },
                                     onSettings = { settingsOpen = true },
@@ -225,6 +235,7 @@ class MainActivity : ComponentActivity() {
                                         .fillMaxSize()
                                         .padding(innerPadding),
                                 )
+                            }
                             }
                             }
                         }
