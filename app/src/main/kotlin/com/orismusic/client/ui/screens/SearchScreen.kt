@@ -3,6 +3,7 @@ package com.orismusic.client.ui.screens
 import android.content.Context
 import org.json.JSONArray
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
@@ -20,6 +21,7 @@ import com.orismusic.client.search.rememberQuery
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
+import com.orismusic.client.ui.components.shimmer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -188,6 +190,13 @@ fun SearchScreen(
                     }) { Icon(Icons.Filled.Clear, "Clear search") }
                 },
                 singleLine = true,
+                shape = RoundedCornerShape(28.dp),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    focusedBorderColor = MaterialTheme.colorScheme.outline,
+                    unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
                     onSearch = { submit(query) },
@@ -226,15 +235,20 @@ fun SearchScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(24.dp),
                 )
-                SearchState.Loading -> Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Searching...", style = MaterialTheme.typography.bodyLarge)
+                SearchState.Loading -> Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    Text("Searching...", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    repeat(6) {
+                        Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)).shimmer())
+                            Spacer(Modifier.width(14.dp))
+                            Column {
+                                Box(Modifier.width(180.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
+                                Spacer(Modifier.height(8.dp))
+                                Box(Modifier.width(110.dp).height(11.dp).clip(RoundedCornerShape(6.dp)).shimmer())
+                            }
+                        }
+                    }
                 }
                 is SearchState.Failed -> Column(Modifier.padding(24.dp)) {
                     Text(state.message, color = MaterialTheme.colorScheme.error)
@@ -279,44 +293,16 @@ private fun SearchResultRow(
     item: YTItem,
     onClick: (() -> Unit)?,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AsyncImage(
-            model = item.thumbnail,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = when (item) {
-                    is SongItem -> item.artists.joinToString { it.name }
-                        .ifBlank { "Song" }
-                    is AlbumItem -> "Album" + (item.artists?.firstOrNull()?.name?.let { " - $it" } ?: "")
-                    is ArtistItem -> "Artist"
-                    is PlaylistItem -> "Playlist" + (item.author?.name?.let { " - $it" } ?: "")
-                    else -> "Result"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    com.orismusic.client.ui.components.SongRow(
+        title = item.title,
+        subtitle = when (item) {
+            is SongItem -> item.artists.joinToString { it.name }.ifBlank { "Song" }
+            is AlbumItem -> "Album" + (item.artists?.firstOrNull()?.name?.let { " - $it" } ?: "")
+            is ArtistItem -> "Artist"
+            is PlaylistItem -> "Playlist" + (item.author?.name?.let { " - $it" } ?: "")
+            else -> "Result"
+        },
+        thumbnail = item.thumbnail,
+        onClick = { onClick?.invoke() },
+    )
 }

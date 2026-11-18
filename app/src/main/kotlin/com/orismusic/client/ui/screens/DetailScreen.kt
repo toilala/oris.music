@@ -1,6 +1,8 @@
 package com.orismusic.client.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.shadow
+import com.orismusic.client.ui.components.shimmer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -138,13 +140,37 @@ fun DetailScreen(
         )
     }
 
-    Column(modifier = modifier.background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
+    val tint by androidx.compose.animation.animateColorAsState(
+        targetValue = com.orismusic.client.ui.components.rememberArtworkColor(target.thumbnail)
+            ?: androidx.compose.ui.graphics.Color(0xFF202020),
+        animationSpec = androidx.compose.animation.core.tween(600),
+        label = "detail tint",
+    )
+    Column(
+        modifier = modifier
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(tint.copy(alpha = 0.65f), androidx.compose.ui.graphics.Color.Black), endY = 1400f))
+            .statusBarsPadding(),
+    ) {
         IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
         when (val s = state) {
-            DetailState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            DetailState.Loading -> Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(Modifier.size(220.dp).clip(RoundedCornerShape(20.dp)).shimmer())
+                Spacer(Modifier.height(16.dp))
+                Box(Modifier.width(200.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).shimmer())
+                Spacer(Modifier.height(24.dp))
+                repeat(5) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)).shimmer())
+                        Spacer(Modifier.width(14.dp))
+                        Box(Modifier.width(170.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
+                    }
+                }
             }
             DetailState.Failed -> Column(Modifier.padding(24.dp)) {
                 Text("This page could not load. Check your connection and try again.",
@@ -165,14 +191,12 @@ fun DetailScreen(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            AsyncImage(
-                                model = content.thumbnail ?: target.thumbnail,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(180.dp)
-                                    .clip(RoundedCornerShape(if (target.kind == "artist") 90.dp else 16.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                            val artShape = RoundedCornerShape(if (target.kind == "artist") 110.dp else 24.dp)
+                            com.orismusic.client.ui.components.Artwork(
+                                url = content.thumbnail ?: target.thumbnail,
+                                shape = artShape,
+                                modifier = Modifier.size(220.dp)
+                                    .shadow(20.dp, artShape),
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(content.title, style = MaterialTheme.typography.headlineSmall,
@@ -235,22 +259,5 @@ fun DetailScreen(
 
 @Composable
 private fun DetailRow(title: String, subtitle: String, thumbnail: String?, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AsyncImage(
-            model = thumbnail,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
+    com.orismusic.client.ui.components.SongRow(title = title, subtitle = subtitle, thumbnail = thumbnail, onClick = onClick)
 }
