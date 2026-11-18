@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">OrisMusic</string>
+    <string name="app_name">Oris</string>
     <string name="media_playback_channel_name">Media Playback</string>
     <string name="media_playback_channel_desc">Notifications for media playback controls</string>
     <string name="music_player">OrisMusic Player</string>

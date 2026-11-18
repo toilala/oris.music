@@ -140,7 +140,7 @@ fun NowPlayingScreen(
             )
         }
         // Full-bleed artwork that fades into the background below it.
-        Crossfade(targetState = art, label = "hero art", modifier = Modifier.fillMaxWidth().fillMaxHeight(0.72f).align(Alignment.TopCenter)) { url ->
+        Crossfade(targetState = art, label = "hero art", modifier = Modifier.fillMaxWidth().aspectRatio(1f).align(Alignment.TopCenter)) { url ->
             com.orismusic.client.ui.components.Artwork(
                 url,
                 Modifier.fillMaxSize()
@@ -149,7 +149,7 @@ fun NowPlayingScreen(
                     .drawWithContent {
                         drawContent()
                         drawRect(
-                            Brush.verticalGradient(0.45f to Color.Black, 1f to Color.Transparent),
+                            Brush.verticalGradient(0.8f to Color.Black, 1f to Color.Transparent),
                             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                         )
                     },

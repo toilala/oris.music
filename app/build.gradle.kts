@@ -54,7 +54,11 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
             storePassword = "android"
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            // One fixed, non-secret debug key so every debug build installs over the previous one.
+            // It is only for debug builds; release signing never uses it.
+            val sharedDebugKey = file("debug-signing/oris-debug.jks")
+            storeFile = if (sharedDebugKey.exists()) sharedDebugKey
+                else file("${System.getProperty("user.home")}/.android/debug.keystore")
         }
     }
 

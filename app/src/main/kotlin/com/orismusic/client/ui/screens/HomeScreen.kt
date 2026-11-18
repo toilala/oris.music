@@ -311,6 +311,9 @@ private fun HomeFeed(
     onOpen: (DetailTarget) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList()) {
+        value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -319,9 +322,10 @@ private fun HomeFeed(
         ),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        item(key = "new-releases") { NewReleases(onOpen) }
+        item(key = "new-releases") { NewReleases(newAlbums, onOpen) }
         itemsIndexed(
-            items = page.sections.filter { it.items.isNotEmpty() },
+            // The feed often has its own "New releases" row; ours already covers it, so show only one.
+            items = page.sections.filter { it.items.isNotEmpty() && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
             key = { _, it -> it.title },
         ) { sectionIndex, section ->
             Column(Modifier.entrance(sectionIndex)) {
@@ -416,10 +420,7 @@ private fun GenericCard(
 
 /** Fresh albums from the YouTube Music explore page. Hidden when it cannot load. */
 @Composable
-private fun NewReleases(onOpen: (DetailTarget) -> Unit) {
-    val albums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList()) {
-        value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
-    }
+private fun NewReleases(albums: List<com.music.innertube.models.AlbumItem>, onOpen: (DetailTarget) -> Unit) {
     if (albums.isEmpty()) return
     Column {
         SectionHeader(title = "New releases")
