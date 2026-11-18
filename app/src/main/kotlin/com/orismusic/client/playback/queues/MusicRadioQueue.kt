@@ -21,7 +21,12 @@ class MusicRadioQueue(
     private var finished = false
     override suspend fun getInitialStatus(): Queue.Status {
         filter.reset(); cursor = null; started = false; finished = false
-        val initial = filter.filter(songs)
+        // The song the user tapped always plays first. Before, a tapped song that lost the duplicate
+        // check (or looked like a non-music upload) was dropped and a different one started instead.
+        val tapped = songs.firstOrNull { it.id == selectedId }
+        if (tapped != null) filter.claim(tapped)
+        val others = filter.filter(songs.filter { it.id != selectedId }).map { it.id }.toSet()
+        val initial = songs.filter { it.id == selectedId || it.id in others }
         return Queue.Status(name, initial.map { it.toMediaItem() }, initial.indexOfFirst { it.id == selectedId }.coerceAtLeast(0))
     }
     override fun hasNextPage(): Boolean = !finished

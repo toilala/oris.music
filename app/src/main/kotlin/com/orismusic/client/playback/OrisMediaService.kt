@@ -811,6 +811,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     // Player.Listener callbacks
     override fun onPlaybackStateChanged(state: Int) {
         Timber.d("Playback state changed: $state")
+        if (state == Player.STATE_READY) errorRetries = 0
         if (state == Player.STATE_READY || state == Player.STATE_ENDED) fillUpcomingMusic()
     }
 
@@ -823,8 +824,28 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         // Handle playback stats
     }
 
+    private var errorRetries = 0
+    private var errorMediaId: String? = null
+
+    /** A stream that fails to load used to leave the player idle, so the user had to tap play again. Retry, then skip. */
     private fun handlePlaybackError(error: PlaybackException) {
-        // Handle playback errors, retry logic, etc.
+        val id = player.currentMediaItem?.mediaId
+        if (id != errorMediaId) { errorMediaId = id; errorRetries = 0 }
+        errorRetries++
+        val keepPlaying = player.playWhenReady
+        scope.launch {
+            if (errorRetries <= 3) {
+                delay(500L * errorRetries)
+                if (player.currentMediaItem?.mediaId != id) return@launch
+                player.prepare()
+                player.playWhenReady = keepPlaying
+            } else if (player.hasNextMediaItem()) {
+                errorRetries = 0
+                player.seekToNextMediaItem()
+                player.prepare()
+                player.playWhenReady = keepPlaying
+            }
+        }
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
