@@ -16,6 +16,10 @@ import androidx.compose.foundation.horizontalScroll
 import com.orismusic.client.playback.EqualizerController
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.settings.PlaybackPreferences
+import androidx.datastore.preferences.core.edit
+import com.orismusic.client.utils.dataStore
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /** Applies saved playback settings to the live player. Safe to call any time. */
 fun PlaybackPreferences.applyTo(connection: PlayerConnection?) {
@@ -54,7 +58,7 @@ fun SettingsScreen(
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Playback", style = MaterialTheme.typography.titleMedium)
+            SectionTitle("Playback")
             SettingSwitch(
                 title = "Keep playing after app is removed from recents",
                 detail = if (keepPlaying) "On: music can continue after you swipe the app away."
@@ -73,6 +77,15 @@ fun SettingsScreen(
                 skipSilence = it
                 preferences.applyTo(connection)
             }
+            val btScope = rememberCoroutineScope()
+            val resumeBt by remember(context) {
+                context.dataStore.data.map { it[com.orismusic.client.constants.ResumeOnBluetoothConnectKey] ?: false }
+            }.collectAsState(initial = false)
+            SettingSwitch(
+                title = "Resume on Bluetooth",
+                detail = "Start playing again when a Bluetooth speaker or headphones connect.",
+                checked = resumeBt,
+            ) { v -> btScope.launch { context.dataStore.edit { it[com.orismusic.client.constants.ResumeOnBluetoothConnectKey] = v } } }
             SettingSwitch(
                 title = "Sleep timer",
                 detail = if (com.orismusic.client.settings.AppearanceSettings.sleepTimerButton) "On: the player shows a sleep timer button."
@@ -101,12 +114,12 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Text("Look", style = MaterialTheme.typography.titleMedium)
+            SectionTitle("Appearance")
             val look = com.orismusic.client.settings.AppearanceSettings
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 SettingSwitch(
                     title = "Wallpaper colours",
-                    detail = if (look.dynamicColor) "On: colours follow your Android wallpaper (Material You)." else "Off: the Oris plum and lime palette.",
+                    detail = if (look.dynamicColor) "On: colours follow your Android wallpaper (Material You)." else "Off: the Oris warm neutral palette.",
                     checked = look.dynamicColor,
                 ) { look.dynamicColor = it; look.save() }
             }
@@ -139,7 +152,7 @@ fun SettingsScreen(
                 )
             }
             Spacer(Modifier.height(4.dp))
-            Text("Equalizer", style = MaterialTheme.typography.titleMedium)
+            SectionTitle("Equalizer")
             val eq by EqualizerController.state.collectAsState()
             if (!eq.available) {
                 Text("The equalizer shows up once a song has played.",
@@ -167,11 +180,11 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Text("Lyrics", style = MaterialTheme.typography.titleMedium)
+            SectionTitle("Lyrics")
             TextButton(onClick = { lyricsSettings = true }) { Text("Lyrics providers") }
             Text("Choose sources and their priority order.", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(4.dp))
-            Text("Your data", style = MaterialTheme.typography.titleMedium)
+            SectionTitle("Your data")
             val libraryStore = remember(context) { com.orismusic.client.library.LibraryStore.get(context) }
             val historyCount by libraryStore.history.collectAsState()
             var cleared by remember { mutableStateOf(false) }
@@ -184,17 +197,30 @@ fun SettingsScreen(
                 else "${historyCount.size} recently played songs are kept on this phone only.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            var imagesCleared by remember { mutableStateOf(false) }
+            OutlinedButton(onClick = {
+                val loader = coil3.SingletonImageLoader.get(context)
+                loader.memoryCache?.clear(); loader.diskCache?.clear(); imagesCleared = true
+            }) { Text("Clear image cache") }
+            Text(if (imagesCleared) "Image cache cleared." else "Covers are cached so they load faster. Clearing is safe.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
-            Text("About", style = MaterialTheme.typography.titleMedium)
+            SectionTitle("About")
             val versionName = remember(context) {
                 runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "dev"
             }
             Text("Oris Music $versionName", style = MaterialTheme.typography.bodyMedium)
-            Text("Free software under GPL-3.0. Built on Mochy Music and InnerTubeX; credits are in the README.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(4.dp))
-            Text("Using Home or switching apps does not stop music. The recents setting only controls removal from recents.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Made by ${com.orismusic.client.settings.Support.AUTHOR}", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (com.orismusic.client.settings.Support.TIP_URL.isNotBlank()) {
+                FilledTonalButton(onClick = {
+                    runCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(com.orismusic.client.settings.Support.TIP_URL))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }) { Text("Buy me a coffee") }
+            }
         }
     }
 }
@@ -220,4 +246,14 @@ private fun SettingSwitch(title: String, detail: String, checked: Boolean, onCha
         )
     }
     }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 12.dp),
+    )
 }

@@ -26,6 +26,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
@@ -261,17 +265,52 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
+                        val playerDrag = remember { androidx.compose.animation.core.Animatable(0f) }
+                        val dragScope = androidx.compose.runtime.rememberCoroutineScope()
+                        androidx.compose.runtime.LaunchedEffect(showPlayer) { if (showPlayer) playerDrag.snapTo(0f) }
                         AnimatedVisibility(
                             visible = showPlayer && connection != null,
-                            enter = slideInVertically(animationSpec = spring(dampingRatio = 0.88f, stiffness = 300f), initialOffsetY = { it }) + fadeIn(),
-                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                            enter = slideInVertically(animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f), initialOffsetY = { it * 2 / 3 }) +
+                                fadeIn(androidx.compose.animation.core.tween(220)) +
+                                androidx.compose.animation.scaleIn(spring(0.9f, 320f), initialScale = 0.9f,
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
+                            exit = slideOutVertically(androidx.compose.animation.core.tween(260), targetOffsetY = { it * 2 / 3 }) +
+                                fadeOut(androidx.compose.animation.core.tween(220)) +
+                                androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(260), targetScale = 0.9f,
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
                         ) {
                             connection?.let {
-                                NowPlayingScreen(
-                                    connection = it,
-                                    onCollapse = { navigation = navigation.closePlayer() },
-                                    onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
-                                )
+                                androidx.compose.foundation.layout.Box(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            translationY = playerDrag.value
+                                            val f = (playerDrag.value / size.height).coerceIn(0f, 1f)
+                                            scaleX = 1f - 0.08f * f; scaleY = 1f - 0.08f * f
+                                            alpha = 1f - 0.5f * f
+                                        }
+                                        .pointerInput(Unit) {
+                                            detectVerticalDragGestures(
+                                                onDragEnd = {
+                                                    dragScope.launch {
+                                                        if (playerDrag.value > 220f) navigation = navigation.closePlayer()
+                                                        else playerDrag.animateTo(0f, spring(0.7f, 400f))
+                                                    }
+                                                },
+                                                onDragCancel = { dragScope.launch { playerDrag.animateTo(0f) } },
+                                                onVerticalDrag = { change, amount ->
+                                                    change.consume()
+                                                    dragScope.launch { playerDrag.snapTo((playerDrag.value + amount).coerceAtLeast(0f)) }
+                                                },
+                                            )
+                                        },
+                                ) {
+                                    NowPlayingScreen(
+                                        connection = it,
+                                        onCollapse = { navigation = navigation.closePlayer() },
+                                        onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
+                                    )
+                                }
                             }
                         }
                     }
@@ -336,7 +375,7 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
     }
     androidx.compose.animation.AnimatedContent(
         targetState = collapsed,
-        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
         contentAlignment = androidx.compose.ui.Alignment.Center,
         transitionSpec = {
             (fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60)) +

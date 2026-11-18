@@ -94,6 +94,7 @@ fun MiniPlayer(
                             when {
                                 x > 150f -> { offX.animateTo(900f, tween(140)); connection.seekToPrevious(); offX.snapTo(-900f); offX.animateTo(0f, androidx.compose.animation.core.spring(0.7f, 300f)) }
                                 x < -150f -> { offX.animateTo(-900f, tween(140)); connection.seekToNext(); offX.snapTo(900f); offX.animateTo(0f, androidx.compose.animation.core.spring(0.7f, 300f)) }
+                                y < -90f -> { launch { offY.animateTo(0f, androidx.compose.animation.core.spring(0.75f, 320f)) }; onExpand() }
                                 y > 100f -> { offY.animateTo(500f, tween(160)); connection.pause(); dismissed = true; offY.snapTo(0f) }
                                 else -> { launch { offX.animateTo(0f, androidx.compose.animation.core.spring(0.6f, 400f)) }; offY.animateTo(0f, androidx.compose.animation.core.spring(0.6f, 400f)) }
                             }
@@ -103,8 +104,8 @@ fun MiniPlayer(
                     onDrag = { change, drag ->
                         change.consume()
                         scope.launch {
-                            if (kotlin.math.abs(drag.x) >= kotlin.math.abs(drag.y) && offY.value < 8f) offX.snapTo(offX.value + drag.x)
-                            else offY.snapTo((offY.value + drag.y).coerceAtLeast(0f))
+                            if (kotlin.math.abs(drag.x) >= kotlin.math.abs(drag.y) && kotlin.math.abs(offY.value) < 8f) offX.snapTo(offX.value + drag.x)
+                            else offY.snapTo((offY.value + drag.y).coerceAtLeast(-260f))
                         }
                     },
                 )

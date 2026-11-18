@@ -2,6 +2,7 @@ package com.orismusic.client.ui.player
 
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.ui.draw.drawWithContent
@@ -227,7 +228,20 @@ private fun NowPlayingContent(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
-
+            val shareContext = androidx.compose.ui.platform.LocalContext.current
+            IconButton(onClick = {
+                val id = connection.player.currentMediaItem?.mediaId.orEmpty()
+                if (id.isNotBlank()) runCatching {
+                    val text = (metadata?.title?.toString().orEmpty() + " https://music.youtube.com/watch?v=" + id).trim()
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
+                    }
+                    shareContext.startActivity(android.content.Intent.createChooser(send, "Share song")
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }) {
+                Icon(imageVector = Icons.Rounded.Share, contentDescription = "Share song")
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
