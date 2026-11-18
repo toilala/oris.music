@@ -116,6 +116,9 @@ fun NowPlayingScreen(
         animationSpec = androidx.compose.animation.core.tween(700),
         label = "player tint",
     )
+    // Sized from the screen height so the controls stay on screen without scrolling.
+    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val artSize = minOf(360, (screenHeightDp * 0.34f).toInt()).dp
     val artScale by animateFloatAsState(
         targetValue = if (isPlaying.value) 1f else 0.86f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 180f),
@@ -160,14 +163,12 @@ fun NowPlayingScreen(
                 contentDescription = metadata?.title?.toString(),
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
-                    .widthIn(max = 380.dp)
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
+                    .size(artSize)
                     .graphicsLayer { scaleX = artScale; scaleY = artScale }
                     .shadow(24.dp, RoundedCornerShape(28.dp)),
             )
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = metadata?.title?.toString().orEmpty(),
