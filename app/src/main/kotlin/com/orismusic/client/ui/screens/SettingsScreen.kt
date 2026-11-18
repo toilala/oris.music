@@ -91,6 +91,44 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(4.dp))
+            Text("Look", style = MaterialTheme.typography.titleMedium)
+            val look = com.orismusic.client.settings.AppearanceSettings
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                SettingSwitch(
+                    title = "Wallpaper colours",
+                    detail = if (look.dynamicColor) "On: colours follow your Android wallpaper (Material You)." else "Off: the Oris plum and lime palette.",
+                    checked = look.dynamicColor,
+                ) { look.dynamicColor = it; look.save() }
+            }
+            SettingSwitch(
+                title = "Pure black",
+                detail = "Black backgrounds for OLED screens.",
+                checked = look.amoled,
+            ) { look.amoled = it; look.save() }
+            SettingSwitch(
+                title = "Adaptive player background",
+                detail = "The player takes its colours from the song artwork.",
+                checked = look.adaptiveBackground,
+            ) { look.adaptiveBackground = it; look.save() }
+            if (look.adaptiveBackground) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.orismusic.client.settings.BackgroundMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = look.backgroundMode == mode,
+                            onClick = { look.backgroundMode = mode; look.save() },
+                            label = { Text(mode.label) },
+                        )
+                    }
+                }
+                Text("Intensity", style = MaterialTheme.typography.bodyMedium)
+                Slider(
+                    value = look.intensity,
+                    onValueChange = { look.intensity = it },
+                    onValueChangeFinished = { look.save() },
+                    valueRange = 0.2f..1f,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
             Text("Equalizer", style = MaterialTheme.typography.titleMedium)
             val eq by EqualizerController.state.collectAsState()
             if (!eq.available) {

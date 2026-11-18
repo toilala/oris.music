@@ -28,10 +28,13 @@ fun OrisTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    com.orismusic.client.settings.AppearanceSettings.init(context)
+    val useDynamic = com.orismusic.client.settings.AppearanceSettings.dynamicColor && Build.VERSION.SDK_INT >= 31
+    val amoledOn = com.orismusic.client.settings.AppearanceSettings.amoled
 
     // Dynamic (Material You) colour is deliberately not used - the app ships its own palette.
     // The branch is gone rather than dead-but-present: dynamic*ColorScheme is API 31.
-    val baseColorScheme = run {
+    val baseColorScheme = if (useDynamic) androidx.compose.material3.dynamicDarkColorScheme(context) else run {
 
         if (darkTheme) {
             darkColorScheme(
@@ -82,11 +85,12 @@ fun OrisTheme(
         }
     }
 
-    val colorScheme = remember(baseColorScheme, pureBlack, darkTheme) {
-        if (darkTheme && pureBlack) {
+    val colorScheme = remember(baseColorScheme, pureBlack, darkTheme, amoledOn) {
+        if (darkTheme && (pureBlack || amoledOn)) {
             baseColorScheme.copy(
                 surface = Color.Black,
-                background = Color.Black
+                background = Color.Black,
+                surfaceContainerLow = Color.Black,
             )
         } else {
             baseColorScheme

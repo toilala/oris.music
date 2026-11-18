@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -89,6 +90,29 @@ fun NowPlayingScreen(
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val look = com.orismusic.client.settings.AppearanceSettings
+    val blurred = look.adaptiveBackground && look.backgroundMode == com.orismusic.client.settings.BackgroundMode.Blur
+    val art = connection.currentMetadata.collectAsState().value?.artworkUri?.toString()
+    Box(modifier.fillMaxSize().background(Color.Black)) {
+        if (blurred) {
+            com.orismusic.client.ui.components.Artwork(
+                art,
+                Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.25f + 0.6f * look.intensity },
+                androidx.compose.ui.graphics.RectangleShape,
+            )
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.7f)))))
+        }
+        NowPlayingContent(connection, onCollapse, blurred)
+    }
+}
+
+@Composable
+private fun NowPlayingContent(
+    connection: PlayerConnection,
+    onCollapse: () -> Unit,
+    blurredBackground: Boolean,
+    modifier: Modifier = Modifier,
+) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     if (lyricsOpen) {
         LyricsPane(connection, onClose = { lyricsOpen = false })
@@ -127,8 +151,17 @@ fun NowPlayingScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.75f), tint.copy(alpha = 0.25f), Color.Black)))
+            .then(if (blurredBackground) Modifier else Modifier.background(Color.Black))
+            .then(
+                if (blurredBackground) Modifier
+                else if (!com.orismusic.client.settings.AppearanceSettings.adaptiveBackground ||
+                    com.orismusic.client.settings.AppearanceSettings.backgroundMode == com.orismusic.client.settings.BackgroundMode.Solid
+                ) Modifier.background(MaterialTheme.colorScheme.background)
+                else {
+                    val k = com.orismusic.client.settings.AppearanceSettings.intensity
+                    Modifier.background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.95f * k), tint.copy(alpha = 0.3f * k), Color.Black)))
+                },
+            )
             .statusBarsPadding().navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 8.dp),
