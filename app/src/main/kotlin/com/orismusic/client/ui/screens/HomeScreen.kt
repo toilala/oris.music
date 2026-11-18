@@ -217,20 +217,20 @@ fun OrisLogo(modifier: Modifier = Modifier) {
     val warm = MaterialTheme.colorScheme.tertiary
     val hole = MaterialTheme.colorScheme.background
     androidx.compose.foundation.Canvas(modifier) {
-        // Same drawing as the launcher icon: a record on a turntable with its tone arm.
+        // Same drawing as the launcher icon: a record with its tone arm resting on it, all inside the ring.
         val k = size.minDimension / 64f
-        fun p(x: Float, y: Float) = androidx.compose.ui.geometry.Offset((x - 21f) * k, (y - 22f) * k)
-        val disc = p(50f, 58f)
-        drawCircle(ink, radius = 24f * k, center = disc, style = androidx.compose.ui.graphics.drawscope.Stroke(3.2f * k))
-        drawCircle(ink.copy(alpha = 0.45f), radius = 17f * k, center = disc, style = androidx.compose.ui.graphics.drawscope.Stroke(1.2f * k))
+        fun p(x: Float, y: Float) = androidx.compose.ui.geometry.Offset((x - 22f) * k, (y - 22f) * k)
+        val disc = p(54f, 54f)
+        drawCircle(ink, radius = 25f * k, center = disc, style = androidx.compose.ui.graphics.drawscope.Stroke(3f * k))
+        drawCircle(ink.copy(alpha = 0.45f), radius = 18f * k, center = disc, style = androidx.compose.ui.graphics.drawscope.Stroke(1.2f * k))
         drawCircle(warm, radius = 7f * k, center = disc)
         drawCircle(hole, radius = 1.8f * k, center = disc)
         val arm = androidx.compose.ui.graphics.Path().apply {
-            moveTo(p(80f, 30f).x, p(80f, 30f).y); lineTo(p(68f, 38f).x, p(68f, 38f).y); lineTo(p(60f, 52f).x, p(60f, 52f).y)
+            moveTo(p(69f, 39f).x, p(69f, 39f).y); lineTo(p(62f, 44f).x, p(62f, 44f).y); lineTo(p(58.5f, 49f).x, p(58.5f, 49f).y)
         }
-        drawPath(arm, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(3f * k,
+        drawPath(arm, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(2.6f * k,
             cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-        drawCircle(ink, radius = 4f * k, center = p(80f, 30f))
+        drawCircle(ink, radius = 3.5f * k, center = p(69f, 39f))
     }
 }
 
