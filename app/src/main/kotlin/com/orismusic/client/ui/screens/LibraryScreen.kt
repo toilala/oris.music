@@ -176,7 +176,7 @@ fun LibraryScreen(
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Artwork(p.songs.firstOrNull()?.thumbnail, Modifier.size(58.dp), RoundedCornerShape(14.dp))
+                            Artwork(p.songs.firstOrNull()?.thumbnail, Modifier.size(58.dp), RoundedCornerShape(14.dp), px = 300)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(p.name, style = MaterialTheme.typography.titleMedium, maxLines = 1,

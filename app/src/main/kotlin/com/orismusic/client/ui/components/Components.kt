@@ -106,15 +106,33 @@ fun Modifier.entrance(index: Int = 0): Modifier = composed {
 }
 
 /** Cover art with a soft placeholder and a crossfade when it arrives. */
+/**
+ * YouTube Music hands out small cover URLs (60 to 226 px). Their image host serves any size from the same
+ * path, so ask for the size we actually draw. Other hosts are left alone.
+ */
+fun upscaleCover(url: String?, px: Int): String? {
+    if (url.isNullOrBlank()) return url
+    if (!url.contains("googleusercontent.com") && !url.contains("ggpht.com")) return url
+    var out: String = url
+    Regex("=w(\\d+)-h(\\d+)").find(out)?.let { m ->
+        if (m.groupValues[1] == m.groupValues[2] && m.groupValues[1].toInt() < px) out = out.replace(m.value, "=w$px-h$px")
+    }
+    Regex("=s(\\d+)").find(out)?.let { m ->
+        if (m.groupValues[1].toInt() < px) out = out.replace(m.value, "=s$px")
+    }
+    return out
+}
+
 @Composable
 fun Artwork(
     url: String?,
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
     contentDescription: String? = null,
+    px: Int = 600,
 ) {
     val context = LocalContext.current
-    val request = remember(url) { ImageRequest.Builder(context).data(url).crossfade(300).build() }
+    val request = remember(url, px) { ImageRequest.Builder(context).data(upscaleCover(url, px)).crossfade(300).build() }
     var loaded by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
     var failed by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
     // A soft pulse while the cover loads, so empty boxes read as "loading" and not "broken".
@@ -168,7 +186,7 @@ fun SongRow(
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(thumbnail, Modifier.size(54.dp), RoundedCornerShape(10.dp))
+        Artwork(thumbnail, Modifier.size(54.dp), RoundedCornerShape(10.dp), px = 300)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(

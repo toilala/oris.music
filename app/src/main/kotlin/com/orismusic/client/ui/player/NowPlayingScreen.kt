@@ -137,6 +137,7 @@ fun NowPlayingScreen(
                 art,
                 Modifier.fillMaxSize().blur(60.dp).graphicsLayer { alpha = 0.2f + 0.5f * k },
                 androidx.compose.ui.graphics.RectangleShape,
+                px = 200,
             )
         }
         // Full-bleed artwork that fades into the background below it.
@@ -155,6 +156,7 @@ fun NowPlayingScreen(
                     },
                 androidx.compose.ui.graphics.RectangleShape,
                 null,
+                px = 1200,
             )
         }
         // Soft shade at the top so the status bar and close button stay readable.

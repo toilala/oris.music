@@ -120,7 +120,7 @@ fun MiniPlayer(
                 .padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(artwork, Modifier.size(46.dp), androidx.compose.foundation.shape.CircleShape, metadata.title?.toString())
+            Artwork(artwork, Modifier.size(46.dp), androidx.compose.foundation.shape.CircleShape, metadata.title?.toString(), px = 300)
             Spacer(modifier = Modifier.width(12.dp))
             AnimatedContent(
                 targetState = metadata.title?.toString().orEmpty() to metadata.artist?.toString().orEmpty(),

@@ -264,7 +264,7 @@ fun SettingsScreen(
                             android.net.Uri.parse(com.orismusic.client.settings.Support.TIP_URL))
                             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
-                }) { Text("Buy me a coffee") }
+                }) { Text("Buy me a momo") }
             }
         }
     }

@@ -204,6 +204,7 @@ fun DetailScreen(
                                 shape = artShape,
                                 modifier = Modifier.size(220.dp)
                                     .shadow(20.dp, artShape),
+                                px = 800,
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(content.title, style = MaterialTheme.typography.headlineSmall,
