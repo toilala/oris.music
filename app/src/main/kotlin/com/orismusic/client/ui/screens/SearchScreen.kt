@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import android.content.Context
 import org.json.JSONArray
 import androidx.compose.foundation.layout.Arrangement
@@ -203,8 +204,8 @@ fun SearchScreen(
                 ),
             )
 
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
-                Button(onClick = { submit(query) }, enabled = query.isNotBlank()) { Text("Search") }
+            if (query.isNotBlank()) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
+                Button(onClick = { submit(query) }) { Text("Search") }
             }
             if (suggestions.isNotEmpty()) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -224,17 +225,26 @@ fun SearchScreen(
                 }
                 recent.take(6).forEach { text ->
                     TextButton(onClick = { submit(text) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                        Text(text, Modifier.fillMaxWidth())
+                        Icon(Icons.Filled.Search, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(14.dp))
+                        Text(text, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
             when (val state = results) {
-                SearchState.Idle -> Text(
-                    text = "Search YouTube Music",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(24.dp),
-                )
+                SearchState.Idle -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 20.dp)) {
+                    Text(
+                        text = "Search YouTube Music",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Lo-fi beats", "Workout", "Nepali hits", "Chill", "Focus").forEach { tag ->
+                            androidx.compose.material3.AssistChip(onClick = { query = tag; submit(tag) }, label = { Text(tag) })
+                        }
+                    }
+                }
                 SearchState.Loading -> Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
                     Text("Searching...", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
