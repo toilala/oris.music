@@ -1,5 +1,10 @@
 package com.orismusic.client.ui.player
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -89,20 +94,55 @@ fun NowPlayingScreen(
     connection: PlayerConnection,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
+    onQueue: () -> Unit = {},
 ) {
     val look = com.orismusic.client.settings.AppearanceSettings
-    val blurred = look.adaptiveBackground && look.backgroundMode == com.orismusic.client.settings.BackgroundMode.Blur
+    val mode = look.backgroundMode
+    val adaptive = look.adaptiveBackground
     val art = connection.currentMetadata.collectAsState().value?.artworkUri?.toString()
-    Box(modifier.fillMaxSize().background(Color.Black)) {
-        if (blurred) {
+    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
+    val tint by androidx.compose.animation.animateColorAsState(
+        targetValue = com.orismusic.client.ui.components.rememberArtworkColor(art) ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = androidx.compose.animation.core.tween(700),
+        label = "player tint",
+    )
+    val base = MaterialTheme.colorScheme.background
+    val k = look.intensity
+    val floor = if (!adaptive || mode == com.orismusic.client.settings.BackgroundMode.Solid) base
+        else androidx.compose.ui.graphics.lerp(base, tint, 0.38f * k)
+    val heroBlur by androidx.compose.animation.core.animateDpAsState(if (lyricsOpen) 36.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(450), label = "hero blur")
+    val heroAlpha by animateFloatAsState(if (lyricsOpen) 0.35f else 1f,
+        animationSpec = androidx.compose.animation.core.tween(450), label = "hero alpha")
+    Box(modifier.fillMaxSize().background(floor)) {
+        if (adaptive && mode == com.orismusic.client.settings.BackgroundMode.Blur) {
             com.orismusic.client.ui.components.Artwork(
                 art,
-                Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.25f + 0.6f * look.intensity },
+                Modifier.fillMaxSize().blur(60.dp).graphicsLayer { alpha = 0.2f + 0.5f * k },
                 androidx.compose.ui.graphics.RectangleShape,
             )
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.7f)))))
         }
-        NowPlayingContent(connection, onCollapse, blurred)
+        // Full-bleed artwork that fades into the background below it.
+        Crossfade(targetState = art, label = "hero art", modifier = Modifier.fillMaxWidth().fillMaxHeight(0.72f).align(Alignment.TopCenter)) { url ->
+            com.orismusic.client.ui.components.Artwork(
+                url,
+                Modifier.fillMaxSize()
+                    .graphicsLayer { alpha = heroAlpha; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .blur(heroBlur)
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            Brush.verticalGradient(0.45f to Color.Black, 1f to Color.Transparent),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    },
+                androidx.compose.ui.graphics.RectangleShape,
+                null,
+            )
+        }
+        // Soft shade at the top so the status bar and close button stay readable.
+        Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
+        NowPlayingContent(connection, onCollapse, onQueue, lyricsOpen, setLyricsOpen = { lyricsOpen = it })
     }
 }
 
@@ -110,14 +150,11 @@ fun NowPlayingScreen(
 private fun NowPlayingContent(
     connection: PlayerConnection,
     onCollapse: () -> Unit,
-    blurredBackground: Boolean,
+    onQueue: () -> Unit,
+    lyricsOpen: Boolean,
+    setLyricsOpen: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
-    if (lyricsOpen) {
-        LyricsPane(connection, onClose = { lyricsOpen = false })
-        return
-    }
     val metadata = connection.currentMetadata.collectAsState().value
     val isPlaying = connection.isPlaying.collectAsState()
     val duration = connection.duration.collectAsState()
@@ -151,19 +188,7 @@ private fun NowPlayingContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .then(if (blurredBackground) Modifier else Modifier.background(Color.Black))
-            .then(
-                if (blurredBackground) Modifier
-                else if (!com.orismusic.client.settings.AppearanceSettings.adaptiveBackground ||
-                    com.orismusic.client.settings.AppearanceSettings.backgroundMode == com.orismusic.client.settings.BackgroundMode.Solid
-                ) Modifier.background(MaterialTheme.colorScheme.background)
-                else {
-                    val k = com.orismusic.client.settings.AppearanceSettings.intensity
-                    Modifier.background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.95f * k), tint.copy(alpha = 0.3f * k), Color.Black)))
-                },
-            )
             .statusBarsPadding().navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -191,19 +216,19 @@ private fun NowPlayingContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Crossfade(targetState = artworkUrl, label = "player artwork") { artwork ->
-            com.orismusic.client.ui.components.Artwork(
-                url = artwork,
-                contentDescription = metadata?.title?.toString(),
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier
-                    .size(artSize)
-                    .graphicsLayer { scaleX = artScale; scaleY = artScale }
-                    .shadow(24.dp, RoundedCornerShape(28.dp)),
-            )
+        Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp)) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = lyricsOpen,
+                enter = fadeIn(androidx.compose.animation.core.tween(350)),
+                exit = fadeOut(androidx.compose.animation.core.tween(250)),
+            ) {
+                LyricsPane(connection, onClose = { setLyricsOpen(false) }, embedded = true)
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
 
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
         Text(
             text = metadata?.title?.toString().orEmpty(),
             style = MaterialTheme.typography.headlineSmall,
@@ -221,83 +246,6 @@ private fun NowPlayingContent(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val appCtx = LocalContext.current
-            remember { OfflineAudio.load(appCtx) }
-            val savedSongs = OfflineAudio.downloaded.collectAsState().value
-            val busy = OfflineAudio.inProgress.collectAsState().value
-            val isSaved = nowSong != null && savedSongs.any { it.id == nowSong.id }
-            val isBusy = nowSong != null && nowSong.id in busy
-            IconButton(
-                onClick = {
-                    nowSong?.let { if (isSaved) OfflineAudio.remove(appCtx, it.id) else OfflineAudio.download(appCtx, it) }
-                },
-                enabled = nowSong != null && !isBusy,
-            ) {
-                if (isBusy) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        imageVector = if (isSaved) Icons.Filled.DownloadDone else Icons.Filled.Download,
-                        contentDescription = if (isSaved) "Remove offline copy" else "Save for offline",
-                        tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            var playlistMenu by remember { mutableStateOf(false) }
-            val playlistStore = PlaylistStore.get(LocalContext.current)
-            val userPlaylists = playlistStore.playlists.collectAsState().value
-            Box {
-                IconButton(onClick = { playlistMenu = true }, enabled = nowSong != null) {
-                    Icon(Icons.Filled.PlaylistAdd, contentDescription = "Add to playlist",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                DropdownMenu(expanded = playlistMenu, onDismissRequest = { playlistMenu = false }) {
-                    if (userPlaylists.isEmpty()) {
-                        DropdownMenuItem(text = { Text("Make a playlist in Library first") },
-                            onClick = { playlistMenu = false })
-                    }
-                    userPlaylists.forEach { p ->
-                        DropdownMenuItem(
-                            text = { Text(p.name) },
-                            onClick = { nowSong?.let { playlistStore.add(p.id, it) }; playlistMenu = false },
-                        )
-                    }
-                }
-            }
-            var timerMenu by remember { mutableStateOf(false) }
-            val timerEnd = SleepTimer.endsAt.collectAsState().value
-            Box {
-                IconButton(onClick = { timerMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.Timer,
-                        contentDescription = "Sleep timer",
-                        tint = if (timerEnd != null) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(expanded = timerMenu, onDismissRequest = { timerMenu = false }) {
-                    if (timerEnd != null) {
-                        val left = ((timerEnd - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
-                        DropdownMenuItem(
-                            text = { Text("Turn off timer ($left min left)") },
-                            onClick = { SleepTimer.cancel(); timerMenu = false },
-                        )
-                    }
-                    listOf(15, 30, 45, 60).forEach { minutes ->
-                        DropdownMenuItem(
-                            text = { Text("Stop after $minutes min") },
-                            onClick = {
-                                SleepTimer.start(minutes) { connection.pause() }
-                                timerMenu = false
-                            },
-                        )
-                    }
-                }
             }
             IconButton(onClick = { nowSong?.let { library.toggleLike(it) } }, enabled = nowSong != null) {
                 Icon(
@@ -306,9 +254,8 @@ private fun NowPlayingContent(
                     tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = { lyricsOpen = true }) { Text("Lyrics") }
         }
-
+        Spacer(modifier = Modifier.height(8.dp))
         Spacer(modifier = Modifier.height(16.dp))
 
         val durationMs = duration.value.coerceAtLeast(0L)
@@ -373,7 +320,7 @@ private fun NowPlayingContent(
                 interactionSource = playPress,
                 onClick = { if (isPlaying.value) connection.pause() else connection.play() },
                 modifier = Modifier.size(76.dp).graphicsLayer { scaleX = playScale; scaleY = playScale },
-                colors = IconButtonDefaults.filledIconButtonColors(),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.background),
             ) {
                 Crossfade(isPlaying.value, label = "play icon") { playing ->
                     Icon(
@@ -405,5 +352,94 @@ private fun NowPlayingContent(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val appCtx = LocalContext.current
+            remember { OfflineAudio.load(appCtx) }
+            val savedSongs = OfflineAudio.downloaded.collectAsState().value
+            val busy = OfflineAudio.inProgress.collectAsState().value
+            val isSaved = nowSong != null && savedSongs.any { it.id == nowSong.id }
+            val isBusy = nowSong != null && nowSong.id in busy
+            IconButton(
+                onClick = {
+                    nowSong?.let { if (isSaved) OfflineAudio.remove(appCtx, it.id) else OfflineAudio.download(appCtx, it) }
+                },
+                enabled = nowSong != null && !isBusy,
+            ) {
+                if (isBusy) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Filled.DownloadDone else Icons.Filled.Download,
+                        contentDescription = if (isSaved) "Remove offline copy" else "Save for offline",
+                        tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            var playlistMenu by remember { mutableStateOf(false) }
+            val playlistStore = PlaylistStore.get(LocalContext.current)
+            val userPlaylists = playlistStore.playlists.collectAsState().value
+            Box {
+                IconButton(onClick = { playlistMenu = true }, enabled = nowSong != null) {
+                    Icon(Icons.Filled.PlaylistAdd, contentDescription = "Add to playlist",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = playlistMenu, onDismissRequest = { playlistMenu = false }) {
+                    if (userPlaylists.isEmpty()) {
+                        DropdownMenuItem(text = { Text("Make a playlist in Library first") },
+                            onClick = { playlistMenu = false })
+                    }
+                    userPlaylists.forEach { p ->
+                        DropdownMenuItem(
+                            text = { Text(p.name) },
+                            onClick = { nowSong?.let { playlistStore.add(p.id, it) }; playlistMenu = false },
+                        )
+                    }
+                }
+            }
+            if (com.orismusic.client.settings.AppearanceSettings.sleepTimerButton) {
+            var timerMenu by remember { mutableStateOf(false) }
+            val timerEnd = SleepTimer.endsAt.collectAsState().value
+            Box {
+                IconButton(onClick = { timerMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.Timer,
+                        contentDescription = "Sleep timer",
+                        tint = if (timerEnd != null) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(expanded = timerMenu, onDismissRequest = { timerMenu = false }) {
+                    if (timerEnd != null) {
+                        val left = ((timerEnd - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
+                        DropdownMenuItem(
+                            text = { Text("Turn off timer ($left min left)") },
+                            onClick = { SleepTimer.cancel(); timerMenu = false },
+                        )
+                    }
+                    listOf(15, 30, 45, 60).forEach { minutes ->
+                        DropdownMenuItem(
+                            text = { Text("Stop after $minutes min") },
+                            onClick = {
+                                SleepTimer.start(minutes) { connection.pause() }
+                                timerMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            }
+            IconButton(onClick = onQueue) {
+                Icon(Icons.Filled.QueueMusic, contentDescription = "Open queue", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = { setLyricsOpen(!lyricsOpen) }) {
+                Text("Lyrics", color = if (lyricsOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+
     }
 }

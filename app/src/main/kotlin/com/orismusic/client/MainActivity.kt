@@ -187,9 +187,9 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 label = { Text(tab.label) },
                                                 colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                    indicatorColor = MaterialTheme.colorScheme.primary,
-                                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
                                                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 ),
@@ -273,6 +273,7 @@ class MainActivity : ComponentActivity() {
                                 NowPlayingScreen(
                                     connection = it,
                                     onCollapse = { navigation = navigation.closePlayer() },
+                                    onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
                                 )
                             }
                         }

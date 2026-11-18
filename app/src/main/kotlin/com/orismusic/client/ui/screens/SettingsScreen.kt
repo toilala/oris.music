@@ -73,6 +73,16 @@ fun SettingsScreen(
                 skipSilence = it
                 preferences.applyTo(connection)
             }
+            SettingSwitch(
+                title = "Sleep timer",
+                detail = if (com.orismusic.client.settings.AppearanceSettings.sleepTimerButton) "On: the player shows a sleep timer button."
+                else "Off: no sleep timer button on the player.",
+                checked = com.orismusic.client.settings.AppearanceSettings.sleepTimerButton,
+            ) {
+                com.orismusic.client.settings.AppearanceSettings.sleepTimerButton = it
+                com.orismusic.client.settings.AppearanceSettings.save()
+                if (!it) com.orismusic.client.playback.SleepTimer.cancel()
+            }
             Column {
                 Text("Playback speed", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))

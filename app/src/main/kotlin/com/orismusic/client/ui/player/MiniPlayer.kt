@@ -72,7 +72,7 @@ fun MiniPlayer(
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 4.dp)
             .clip(shape)
-            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.55f).compositeOver(base), base)))
+            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.3f).compositeOver(base), base)))
             .pressClickable(onExpand, 0.985f),
     ) {
         Row(

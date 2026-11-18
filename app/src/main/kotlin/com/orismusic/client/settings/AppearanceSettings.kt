@@ -25,6 +25,8 @@ object AppearanceSettings {
     var amoled by mutableStateOf(false)
     var adaptiveBackground by mutableStateOf(true)
     var backgroundMode by mutableStateOf(BackgroundMode.Gradient)
+    /** Show the sleep timer button on the player. Off by default. */
+    var sleepTimerButton by mutableStateOf(false)
     var intensity by mutableFloatStateOf(0.75f)
 
     fun init(context: Context) {
@@ -35,6 +37,7 @@ object AppearanceSettings {
         amoled = prefs.getBoolean("amoled", false)
         adaptiveBackground = prefs.getBoolean("adaptive", true)
         backgroundMode = BackgroundMode.entries.firstOrNull { it.name == prefs.getString("mode", "") } ?: BackgroundMode.Gradient
+        sleepTimerButton = prefs.getBoolean("sleep_button", false)
         intensity = prefs.getFloat("intensity", 0.75f)
     }
 
@@ -44,6 +47,7 @@ object AppearanceSettings {
             ?.putBoolean("amoled", amoled)
             ?.putBoolean("adaptive", adaptiveBackground)
             ?.putString("mode", backgroundMode.name)
+            ?.putBoolean("sleep_button", sleepTimerButton)
             ?.putFloat("intensity", intensity)
             ?.apply()
     }

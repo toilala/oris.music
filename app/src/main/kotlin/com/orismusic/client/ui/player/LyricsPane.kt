@@ -28,7 +28,7 @@ import kotlinx.coroutines.CancellationException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
+fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Boolean = false) {
     val metadata by connection.currentMetadata.collectAsState()
     val position by connection.currentPosition.collectAsState()
     val duration by connection.duration.collectAsState()
@@ -43,7 +43,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
     var options by remember { mutableStateOf(preferences.read()) }
     var showProviderSettings by rememberSaveable { mutableStateOf(false) }
     val uri = LocalUriHandler.current
-    if (showProviderSettings) {
+    if (showProviderSettings && !embedded) {
         LyricsProviderSettings(onBack = { options = preferences.read(); showProviderSettings = false })
         return
     }
@@ -73,18 +73,21 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
         label = "lyrics glow")
     val look = com.orismusic.client.settings.AppearanceSettings
     val wash = if (look.adaptiveBackground && look.backgroundMode != com.orismusic.client.settings.BackgroundMode.Solid) look.intensity else 0f
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(Modifier.fillMaxSize(), color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
-            .statusBarsPadding().navigationBarsPadding()) {
+            .then(if (embedded) Modifier else Modifier
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
+                .statusBarsPadding().navigationBarsPadding())) {
             Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onClose) { Text("Back to player") }
+                if (embedded) Spacer(Modifier.width(1.dp)) else TextButton(onClick = onClose) { Text("Back to player") }
                 Box {
                     TextButton(onClick = { expanded = true }) { Text(sourceName) }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         DropdownMenuItem(text = { Text("Automatic") }, onClick = { source = "automatic"; expanded = false })
-                        DropdownMenuItem(text = { Text("Provider settings") }, onClick = { expanded = false; showProviderSettings = true })
-                        HorizontalDivider()
+                        if (!embedded) {
+                            DropdownMenuItem(text = { Text("Provider settings") }, onClick = { expanded = false; showProviderSettings = true })
+                            HorizontalDivider()
+                        }
                         options.ordered().forEach { provider ->
                             val enabled = provider.available && provider.id !in options.disabled
                             DropdownMenuItem(text = { Text(provider.name + if (enabled) "" else " (disabled)") },
@@ -93,12 +96,14 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
                     }
                 }
             }
+            if (!embedded) {
             Text("Lyrics", Modifier.padding(horizontal=24.dp), style=MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary)
             Text(title.ifBlank { "No song selected" }, Modifier.padding(horizontal=24.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Text(artist, Modifier.padding(horizontal=24.dp, vertical=2.dp), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
             when {
                 loading -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(24.dp))
                 document == null -> Column(Modifier.padding(24.dp)) {
@@ -115,7 +120,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
                             Text(credit.label, style=MaterialTheme.typography.labelSmall)
                         }
                     }
-                    LazyColumn(state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
+                    LazyColumn(state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (embedded) 140.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
                         itemsIndexed(lyrics.lines) { index, line ->
                             val selected = index == active
                             val distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active)
@@ -129,7 +134,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit) {
                                 animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
                             val soften by animateFloatAsState(if (!lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(4) * 1.2f),
                                 label = "lyric blur")
-                            Text(line.text.ifBlank { "\u266a" }, style=MaterialTheme.typography.headlineMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                            Text(line.text.ifBlank { "\u266a" }, style=(if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                                 color=ink,
                                 modifier=Modifier.fillMaxWidth()
                                     .then(if (soften > 0.1f) Modifier.blur(soften.dp) else Modifier)

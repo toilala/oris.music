@@ -232,11 +232,11 @@ fun HomeScreen(
 private fun MoodChips(onMood: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val moods = listOf(
-        Triple("Chill", "chill music", scheme.tertiary),
-        Triple("Hype", "hype workout music", scheme.secondary),
-        Triple("Focus", "focus music", scheme.primary),
-        Triple("Late night", "late night music", androidx.compose.ui.graphics.Color(0xFF5AC8FF)),
-        Triple("Nepali", "nepali songs", scheme.secondary),
+        "Chill" to "chill music",
+        "Hype" to "hype workout music",
+        "Focus" to "focus music",
+        "Late night" to "late night music",
+        "Nepali" to "nepali songs",
     )
     androidx.compose.foundation.layout.Row(
         Modifier.padding(top = 4.dp, bottom = 8.dp)
@@ -244,14 +244,14 @@ private fun MoodChips(onMood: (String) -> Unit) {
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        moods.forEach { (label, query, color) ->
+        moods.forEach { (label, query) ->
             Text(
                 label,
                 style = MaterialTheme.typography.labelLarge,
-                color = androidx.compose.ui.graphics.Color(0xFF14110A),
+                color = scheme.onSurface,
                 modifier = Modifier
                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
-                    .background(color)
+                    .background(scheme.surfaceContainerHigh)
                     .pressClickable({ onMood(query) })
                     .padding(horizontal = 18.dp, vertical = 10.dp),
             )
