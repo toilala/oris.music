@@ -66,11 +66,11 @@ fun MiniPlayer(
         animationSpec = tween(400),
         label = "mini progress",
     )
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(30.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp)
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.55f).compositeOver(base), base)))
             .pressClickable(onExpand, 0.985f),
@@ -81,7 +81,7 @@ fun MiniPlayer(
                 .padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(artwork, Modifier.size(46.dp), RoundedCornerShape(12.dp), metadata.title?.toString())
+            Artwork(artwork, Modifier.size(46.dp), androidx.compose.foundation.shape.CircleShape, metadata.title?.toString())
             Spacer(modifier = Modifier.width(12.dp))
             AnimatedContent(
                 targetState = metadata.title?.toString().orEmpty() to metadata.artist?.toString().orEmpty(),

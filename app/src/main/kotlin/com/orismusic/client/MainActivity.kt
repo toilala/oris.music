@@ -161,7 +161,15 @@ class MainActivity : ComponentActivity() {
                                             onExpand = { navigation = navigation.openPlayer() },
                                         )
                                     }
-                                    NavigationBar {
+                                    androidx.compose.material3.Surface(
+                                        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 6.dp),
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    ) {
+                                    NavigationBar(
+                                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                        tonalElevation = 0.dp,
+                                    ) {
                                         MainTab.entries.forEach { tab ->
                                             NavigationBarItem(
                                                 selected = selectedTab == tab.ordinal,
@@ -178,8 +186,16 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                 },
                                                 label = { Text(tab.label) },
+                                                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                                    indicatorColor = MaterialTheme.colorScheme.primary,
+                                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                ),
                                             )
                                         }
+                                    }
                                     }
                                 }
                             },
