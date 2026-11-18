@@ -43,7 +43,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
     var options by remember { mutableStateOf(preferences.read()) }
     var showProviderSettings by rememberSaveable { mutableStateOf(false) }
     val uri = LocalUriHandler.current
-    if (showProviderSettings && !embedded) {
+    if (showProviderSettings) {
         LyricsProviderSettings(onBack = { options = preferences.read(); showProviderSettings = false })
         return
     }
@@ -80,10 +80,8 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                     TextButton(onClick = { expanded = true }) { Text(label, style = if (embedded) MaterialTheme.typography.labelLarge else LocalTextStyle.current, color = if (embedded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         DropdownMenuItem(text = { Text("Automatic") }, onClick = { source = "automatic"; expanded = false })
-                        if (!embedded) {
-                            DropdownMenuItem(text = { Text("Provider settings") }, onClick = { expanded = false; showProviderSettings = true })
-                            HorizontalDivider()
-                        }
+                        DropdownMenuItem(text = { Text("Provider settings") }, onClick = { expanded = false; showProviderSettings = true })
+                        HorizontalDivider()
                         options.ordered().forEach { provider ->
                             val enabled = provider.available && provider.id !in options.disabled
                             DropdownMenuItem(text = { Text(provider.name + if (enabled) "" else " (disabled)") },

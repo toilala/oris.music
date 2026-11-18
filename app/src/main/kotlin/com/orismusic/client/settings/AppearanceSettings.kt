@@ -28,6 +28,8 @@ object AppearanceSettings {
     /** Show the sleep timer button on the player. Off by default. */
     var sleepTimerButton by mutableStateOf(false)
     var intensity by mutableFloatStateOf(0.75f)
+    /** Hide the Android status bar; a swipe from the top edge shows it briefly. */
+    var hideStatusBar by mutableStateOf(false)
 
     fun init(context: Context) {
         if (store != null) return
@@ -39,6 +41,7 @@ object AppearanceSettings {
         backgroundMode = BackgroundMode.entries.firstOrNull { it.name == prefs.getString("mode", "") } ?: BackgroundMode.Gradient
         sleepTimerButton = prefs.getBoolean("sleep_button", false)
         intensity = prefs.getFloat("intensity", 0.75f)
+        hideStatusBar = prefs.getBoolean("hide_status", false)
     }
 
     fun save() {
@@ -49,6 +52,7 @@ object AppearanceSettings {
             ?.putString("mode", backgroundMode.name)
             ?.putBoolean("sleep_button", sleepTimerButton)
             ?.putFloat("intensity", intensity)
+            ?.putBoolean("hide_status", hideStatusBar)
             ?.apply()
     }
 }

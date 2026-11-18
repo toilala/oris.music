@@ -150,7 +150,7 @@ fun DetailScreen(
         modifier = modifier
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(
                 listOf(tint.copy(alpha = 0.65f), androidx.compose.ui.graphics.Color.Black), endY = 1400f))
-            .statusBarsPadding(),
+            ,
     ) {
         IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -267,4 +267,20 @@ fun DetailScreen(
 @Composable
 private fun DetailRow(title: String, subtitle: String, thumbnail: String?, onClick: () -> Unit) {
     com.orismusic.client.ui.components.SongRow(title = title, subtitle = subtitle, thumbnail = thumbnail, onClick = onClick)
+}
+
+
+/**
+ * Opens an album or playlist page, except a one-track release (a single), which just plays.
+ * Decided before any page shows, so there is no flash of an empty album.
+ */
+suspend fun openOrPlay(target: DetailTarget, connection: PlayerConnection?, onOpen: (DetailTarget) -> Unit) {
+    if (target.kind == "album" && connection != null) {
+        val songs = YouTube.album(target.id).getOrNull()?.songs.orEmpty()
+        if (songs.size == 1) {
+            connection.playQueue(ListQueue(title = target.title, items = songs.map { it.toMediaItem() }, startIndex = 0))
+            return
+        }
+    }
+    onOpen(target)
 }

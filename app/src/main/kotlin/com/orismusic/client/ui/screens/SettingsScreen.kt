@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.horizontalScroll
-import com.orismusic.client.playback.EqualizerController
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.settings.PlaybackPreferences
 import androidx.datastore.preferences.core.edit
@@ -124,6 +123,11 @@ fun SettingsScreen(
                 ) { look.dynamicColor = it; look.save() }
             }
             SettingSwitch(
+                title = "Hide status bar",
+                detail = "Full screen. Swipe down from the top edge to peek at the clock and notifications.",
+                checked = look.hideStatusBar,
+            ) { look.hideStatusBar = it; look.save() }
+            SettingSwitch(
                 title = "Pure black",
                 detail = "Black backgrounds for OLED screens.",
                 checked = look.amoled,
@@ -152,37 +156,20 @@ fun SettingsScreen(
                 )
             }
             Spacer(Modifier.height(4.dp))
-            SectionTitle("Equalizer")
-            val eq by EqualizerController.state.collectAsState()
-            if (!eq.available) {
-                Text("The equalizer shows up once a song has played.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                SettingSwitch(title = "Equalizer", detail = if (eq.enabled) "On" else "Off",
-                    checked = eq.enabled) { EqualizerController.setEnabled(it) }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EqualizerController.presets.forEach { (name, shape) ->
-                        AssistChip(onClick = { EqualizerController.applyPreset(shape) }, label = { Text(name) })
-                    }
-                }
-                eq.levels.forEachIndexed { i, level ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val hz = eq.centerHz.getOrNull(i) ?: 0
-                        Text(if (hz >= 1000) "${hz / 1000} kHz" else "$hz Hz", modifier = Modifier.width(64.dp),
-                            style = MaterialTheme.typography.bodySmall)
-                        Slider(
-                            value = level.toFloat(),
-                            onValueChange = { EqualizerController.setLevel(i, it.toInt()) },
-                            valueRange = eq.minLevel.toFloat()..eq.maxLevel.toFloat(),
-                            enabled = eq.enabled,
-                        )
-                    }
+            SectionTitle("Lyrics")
+            Surface(
+                onClick = { lyricsSettings = true },
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Lyrics providers", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Choose sources and their priority order.", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Spacer(Modifier.height(4.dp))
-            SectionTitle("Lyrics")
-            TextButton(onClick = { lyricsSettings = true }) { Text("Lyrics providers") }
-            Text("Choose sources and their priority order.", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(4.dp))
             SectionTitle("Your data")
             val libraryStore = remember(context) { com.orismusic.client.library.LibraryStore.get(context) }

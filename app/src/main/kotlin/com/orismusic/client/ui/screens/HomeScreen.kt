@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -128,7 +127,7 @@ fun HomeScreen(
         modifier = modifier,
         topBar = {
             Row(
-                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, top = 10.dp, bottom = 6.dp),
+                Modifier.fillMaxWidth().padding(start = 20.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OrisLogo(Modifier.size(30.dp))
@@ -214,19 +213,24 @@ fun HomeScreen(
 /** Small Oris mark: an orbit ring with a bright dot. */
 @Composable
 fun OrisLogo(modifier: Modifier = Modifier) {
-    val ring = MaterialTheme.colorScheme.onSurface
-    val dot = MaterialTheme.colorScheme.tertiary
+    val ink = MaterialTheme.colorScheme.onSurface
+    val warm = MaterialTheme.colorScheme.tertiary
     val hole = MaterialTheme.colorScheme.background
     androidx.compose.foundation.Canvas(modifier) {
-        val d = size.minDimension
-        val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
-        // the "o": a thick ring, which is also the record's edge
-        drawCircle(ring, radius = d * 0.5f - d * 0.0583f, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(d * 0.1167f))
-        // groove
-        drawCircle(ring.copy(alpha = 0.45f), radius = d * 0.30f, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(d * 0.03f))
-        // label and spindle hole
-        drawCircle(dot, radius = d * 0.14f, center = c)
-        drawCircle(hole, radius = d * 0.04f, center = c)
+        // Same drawing as the launcher icon: a record on a turntable with its tone arm.
+        val k = size.minDimension / 64f
+        fun p(x: Float, y: Float) = androidx.compose.ui.geometry.Offset((x - 21f) * k, (y - 22f) * k)
+        val disc = p(50f, 58f)
+        drawCircle(ink, radius = 24f * k, center = disc, style = androidx.compose.ui.graphics.drawscope.Stroke(3.2f * k))
+        drawCircle(ink.copy(alpha = 0.45f), radius = 17f * k, center = disc, style = androidx.compose.ui.graphics.drawscope.Stroke(1.2f * k))
+        drawCircle(warm, radius = 7f * k, center = disc)
+        drawCircle(hole, radius = 1.8f * k, center = disc)
+        val arm = androidx.compose.ui.graphics.Path().apply {
+            moveTo(p(80f, 30f).x, p(80f, 30f).y); lineTo(p(68f, 38f).x, p(68f, 38f).y); lineTo(p(60f, 52f).x, p(60f, 52f).y)
+        }
+        drawPath(arm, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(3f * k,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        drawCircle(ink, radius = 4f * k, center = p(80f, 30f))
     }
 }
 

@@ -131,11 +131,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
+        com.orismusic.client.settings.AppearanceSettings.init(this)
 
         setContent {
             OrisTheme {
                 val connection = connectionState.value
+                val hideBar = com.orismusic.client.settings.AppearanceSettings.hideStatusBar
+                androidx.compose.runtime.SideEffect {
+                    val bars = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    if (hideBar) bars.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    else bars.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                }
+                val openScope = androidx.compose.runtime.rememberCoroutineScope()
                 var navigation by rememberSaveable { mutableStateOf(NavigationState()) }
                 var settingsOpen by rememberSaveable { mutableStateOf(false) }
                 var detail by rememberSaveable { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
@@ -205,7 +217,7 @@ class MainActivity : ComponentActivity() {
                                     target = openDetail,
                                     connection = connection,
                                     onBack = { detail = detailBack; detailBack = null },
-                                    onOpen = { next -> detailBack = openDetail; detail = next },
+                                    onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = openDetail; detail = it } } },
                                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                                 )
                             } else
@@ -221,7 +233,7 @@ class MainActivity : ComponentActivity() {
                             tabState.SaveableStateProvider(tabIndex) {
                             when (MainTab.entries[tabIndex]) {
                                 MainTab.Home -> HomeScreen(
-                                    onOpen = { detail = it; detailBack = null },
+                                    onOpen = { t -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(t, connection) { detail = it; detailBack = null } } },
                                     onSettings = { settingsOpen = true },
                                     onSearch = { navigation = navigation.select(MainTab.Search.ordinal) },
                                     modifier = Modifier
@@ -239,7 +251,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 MainTab.Search -> SearchScreen(
                                     connection = connection,
-                                    onOpen = { detail = it; detailBack = null },
+                                    onOpen = { t -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(t, connection) { detail = it; detailBack = null } } },
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(innerPadding),
