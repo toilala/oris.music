@@ -270,13 +270,9 @@ private fun JumpBackIn(connection: PlayerConnection?) {
     val songs = history.take(12)
     Column(Modifier.padding(top = 4.dp, bottom = 8.dp)) {
         SectionHeader(title = "Jump back in")
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            itemsIndexed(items = songs, key = { _, it -> "back-${it.id}" }) { songIndex, song ->
+        com.orismusic.client.ui.components.OrbitRow(items = songs, key = { "back-${it.id}" }) { song, songIndex, orbit ->
                 Column(
-                    modifier = Modifier
+                    modifier = orbit
                         .width(110.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
@@ -298,7 +294,6 @@ private fun JumpBackIn(connection: PlayerConnection?) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                 }
-            }
         }
     }
 }
@@ -326,14 +321,15 @@ private fun HomeFeed(
         ) { sectionIndex, section ->
             Column(Modifier.entrance(sectionIndex)) {
                 SectionHeader(title = section.title)
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    val songs = MusicCandidates.select(section.items.filterIsInstance<SongItem>())
-                    items(items = section.items.filter { it !is SongItem || it in songs }, key = { "${section.title}-${it.id}" }) { item ->
+                val songs = MusicCandidates.select(section.items.filterIsInstance<SongItem>())
+                com.orismusic.client.ui.components.OrbitRow(
+                    items = section.items.filter { it !is SongItem || it in songs },
+                    key = { "${section.title}-${it.id}" },
+                ) { item, _, orbit ->
+                    run {
                         when (item) {
                             is SongItem -> SongCard(
+                                modifier = orbit,
                                 song = item,
                                 onClick = {
                                     Timber.tag("OrisTap").w(
@@ -349,6 +345,7 @@ private fun HomeFeed(
                                 },
                             )
                             else -> GenericCard(
+                                modifier = orbit,
                                 title = item.title,
                                 thumbnail = item.thumbnail,
                                 onClick = item.toDetailTarget()?.let { target -> { onOpen(target) } },
@@ -364,10 +361,11 @@ private fun HomeFeed(
 @Composable
 private fun SongCard(
     song: SongItem,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(150.dp)
             .pressClickable(onClick),
     ) {
@@ -391,12 +389,13 @@ private fun SongCard(
 
 @Composable
 private fun GenericCard(
+    modifier: Modifier = Modifier,
     title: String,
     thumbnail: String?,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = Modifier.width(150.dp)
+        modifier = modifier.width(150.dp)
             .then(if (onClick != null) Modifier.pressClickable(onClick) else Modifier),
     ) {
         Artwork(thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), title)
@@ -419,17 +418,13 @@ private fun NewReleases(onOpen: (DetailTarget) -> Unit) {
     if (albums.isEmpty()) return
     Column {
         SectionHeader(title = "New releases")
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(items = albums, key = { "new-${it.browseId}" }) { album ->
-                GenericCard(
-                    title = album.title,
-                    thumbnail = album.thumbnail,
-                    onClick = { album.toDetailTarget()?.let(onOpen) },
-                )
-            }
+        com.orismusic.client.ui.components.OrbitRow(items = albums, key = { "new-${it.browseId}" }) { album, _, orbit ->
+            GenericCard(
+                modifier = orbit,
+                title = album.title,
+                thumbnail = album.thumbnail,
+                onClick = { album.toDetailTarget()?.let(onOpen) },
+            )
         }
     }
 }

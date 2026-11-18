@@ -26,6 +26,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.QueueMusic
@@ -151,8 +161,21 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
+                        var navCollapsed by remember { mutableStateOf(false) }
+                        val navScroll = remember {
+                            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                                override fun onPreScroll(
+                                    available: androidx.compose.ui.geometry.Offset,
+                                    source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+                                ): androidx.compose.ui.geometry.Offset {
+                                    if (available.y < -3f) navCollapsed = true
+                                    else if (available.y > 3f) navCollapsed = false
+                                    return androidx.compose.ui.geometry.Offset.Zero
+                                }
+                            }
+                        }
                         Scaffold(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().nestedScroll(navScroll),
                             bottomBar = {
                                 Column {
                                     connection?.let {
@@ -161,42 +184,14 @@ class MainActivity : ComponentActivity() {
                                             onExpand = { navigation = navigation.openPlayer() },
                                         )
                                     }
-                                    androidx.compose.material3.Surface(
-                                        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 6.dp),
-                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    ) {
-                                    NavigationBar(
-                                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                        tonalElevation = 0.dp,
-                                    ) {
-                                        MainTab.entries.filter { it != MainTab.Queue }.forEach { tab ->
-                                            NavigationBarItem(
-                                                selected = selectedTab == tab.ordinal,
-                                                onClick = { detail = null; detailBack = null; navigation = navigation.select(tab.ordinal) },
-                                                icon = {
-                                                    Icon(
-                                                        imageVector = when (tab) {
-                                                            MainTab.Home -> Icons.Filled.Home
-                                                            MainTab.Search -> Icons.Filled.Search
-                                                            MainTab.Library -> Icons.Filled.LibraryMusic
-                                                            MainTab.Queue -> Icons.Filled.QueueMusic
-                                                        },
-                                                        contentDescription = tab.label,
-                                                    )
-                                                },
-                                                label = { Text(tab.label) },
-                                                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                ),
-                                            )
-                                        }
-                                    }
-                                    }
+                                    FloatingNav(
+                                        selected = selectedTab,
+                                        collapsed = navCollapsed,
+                                        onSelect = { tab ->
+                                            detail = null; detailBack = null; navCollapsed = false
+                                            navigation = navigation.select(tab.ordinal)
+                                        },
+                                    )
                                 }
                             },
                         ) { innerPadding ->
@@ -321,5 +316,99 @@ private fun ComingSoonTab(title: String, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(24.dp),
         )
+    }
+}
+
+
+/**
+ * The floating bar. At rest it is one pill with labels. When the page scrolls
+ * down it splits: the current tab pops out as a circle and the other tabs
+ * gather in a small pill beside it.
+ */
+@androidx.compose.runtime.Composable
+private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -> Unit) {
+    val tabs = MainTab.entries.filter { it != MainTab.Queue }
+    fun icon(tab: MainTab) = when (tab) {
+        MainTab.Home -> Icons.Rounded.Home
+        MainTab.Search -> Icons.Rounded.Search
+        MainTab.Library -> Icons.Rounded.LibraryMusic
+        MainTab.Queue -> Icons.Rounded.QueueMusic
+    }
+    androidx.compose.animation.AnimatedContent(
+        targetState = collapsed,
+        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+        transitionSpec = {
+            (fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60)) +
+                androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.7f, 380f), initialScale = 0.8f)) togetherWith
+                (fadeOut(androidx.compose.animation.core.tween(120)) +
+                    androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.85f))
+        },
+        label = "nav shape",
+    ) { isCollapsed ->
+        if (!isCollapsed) {
+            androidx.compose.material3.Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                androidx.compose.foundation.layout.Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                ) {
+                    tabs.forEach { tab ->
+                        NavItem(tab, icon(tab), selected == tab.ordinal, showLabel = true, onSelect, Modifier.weight(1f))
+                    }
+                }
+            }
+        } else {
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                val current = tabs.firstOrNull { it.ordinal == selected } ?: tabs.first()
+                androidx.compose.material3.Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.size(56.dp).clickable { onSelect(current) },
+                ) {
+                    androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        Icon(icon(current), contentDescription = current.label, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                }
+                androidx.compose.material3.Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
+                    ) {
+                        tabs.filter { it.ordinal != selected }.forEach { tab ->
+                            NavItem(tab, icon(tab), false, showLabel = false, onSelect, Modifier)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun NavItem(
+    tab: MainTab, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean,
+    showLabel: Boolean, onSelect: (MainTab) -> Unit, modifier: Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable { onSelect(tab) }
+            .padding(horizontal = if (showLabel) 12.dp else 16.dp, vertical = if (showLabel) 8.dp else 12.dp),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+    ) {
+        val tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+        Icon(icon, contentDescription = tab.label, tint = tint)
+        if (showLabel) Text(tab.label, style = MaterialTheme.typography.labelMedium,
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
