@@ -401,7 +401,8 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
             }
         } else {
             androidx.compose.foundation.layout.Row(
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp, androidx.compose.ui.Alignment.CenterHorizontally),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
                 val current = tabs.firstOrNull { it.ordinal == selected } ?: tabs.first()

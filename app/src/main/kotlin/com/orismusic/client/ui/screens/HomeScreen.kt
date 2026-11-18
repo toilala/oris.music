@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -126,23 +127,18 @@ fun HomeScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OrisLogo(Modifier.size(26.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "OrisMusic",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, top = 10.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OrisLogo(Modifier.size(30.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Oris",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
     ) { outerPadding ->
         val innerPadding = PaddingValues(0.dp)
@@ -220,12 +216,17 @@ fun HomeScreen(
 fun OrisLogo(modifier: Modifier = Modifier) {
     val ring = MaterialTheme.colorScheme.onSurface
     val dot = MaterialTheme.colorScheme.tertiary
+    val hole = MaterialTheme.colorScheme.background
     androidx.compose.foundation.Canvas(modifier) {
-        val stroke = size.minDimension * 0.12f
-        drawCircle(ring, radius = size.minDimension / 2 - stroke / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
-        drawCircle(dot, radius = size.minDimension * 0.17f,
-            center = androidx.compose.ui.geometry.Offset(size.width * 0.68f, size.height * 0.34f))
-        drawCircle(ring, radius = size.minDimension * 0.07f)
+        val d = size.minDimension
+        val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+        // the "o": a thick ring, which is also the record's edge
+        drawCircle(ring, radius = d * 0.5f - d * 0.0583f, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(d * 0.1167f))
+        // groove
+        drawCircle(ring.copy(alpha = 0.45f), radius = d * 0.30f, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(d * 0.03f))
+        // label and spindle hole
+        drawCircle(dot, radius = d * 0.14f, center = c)
+        drawCircle(hole, radius = d * 0.04f, center = c)
     }
 }
 
