@@ -60,6 +60,13 @@ object LyricsRepository {
 
     private val failedUntil = ConcurrentHashMap<String, Long>()
 
+    /** Already-fetched lyrics for this exact request, so the screen can show them with no wait. */
+    fun cached(id: String, title: String, artist: String, album: String, durationSeconds: Int,
+        source: String, options: LyricsOptions): LyricsDocument? {
+        val choices = options.enabled().filter { source == "automatic" || it.id == source }
+        return cache["$id|$title|$artist|$album|$durationSeconds|$source|${choices.map { it.id }}"]
+    }
+
     suspend fun load(id: String, title: String, artist: String, album: String, durationSeconds: Int,
         source: String, options: LyricsOptions = restoreLyricsOptions(emptyList(), null)): LyricsDocument? {
         android.util.Log.d("OrisLyrics", "Lookup artistPresent=${artist.isNotBlank()} duration=$durationSeconds source=$source")

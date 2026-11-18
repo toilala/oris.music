@@ -50,12 +50,14 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
     val sourceName = LyricsSources.find(source)?.name ?: "Automatic"
     var retry by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
-    var document by remember { mutableStateOf<LyricsDocument?>(null) }
+    var document by remember(id, title, artist, album, durationSeconds, source, options) {
+        mutableStateOf(LyricsRepository.cached(id, title, artist, album, durationSeconds, source, options))
+    }
     var expanded by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     BackHandler { onClose() }
     LaunchedEffect(id, title, artist, album, durationSeconds, source, retry, options) {
-        document = null
+        if (document != null) return@LaunchedEffect
         if (id.isBlank() || title.isBlank()) return@LaunchedEffect
         loading = true
         try {
@@ -73,15 +75,9 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
         label = "lyrics glow")
     val look = com.orismusic.client.settings.AppearanceSettings
     val wash = if (look.adaptiveBackground && look.backgroundMode != com.orismusic.client.settings.BackgroundMode.Solid) look.intensity else 0f
-    Surface(Modifier.fillMaxSize(), color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()
-            .then(if (embedded) Modifier else Modifier
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
-                .statusBarsPadding().navigationBarsPadding())) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                if (embedded) Spacer(Modifier.width(1.dp)) else TextButton(onClick = onClose) { Text("Back to player") }
+        val sourceMenu: @Composable (String) -> Unit = { label ->
                 Box {
-                    TextButton(onClick = { expanded = true }) { Text(sourceName) }
+                    TextButton(onClick = { expanded = true }) { Text(label, style = if (embedded) MaterialTheme.typography.labelLarge else LocalTextStyle.current, color = if (embedded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         DropdownMenuItem(text = { Text("Automatic") }, onClick = { source = "automatic"; expanded = false })
                         if (!embedded) {
@@ -95,6 +91,15 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                         }
                     }
                 }
+        }
+    Surface(Modifier.fillMaxSize(), color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize()
+            .then(if (embedded) Modifier else Modifier
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
+                .statusBarsPadding().navigationBarsPadding())) {
+            if (!embedded) Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = onClose) { Text("Back to player") }
+                sourceMenu(sourceName)
             }
             if (!embedded) {
             Text("Lyrics", Modifier.padding(horizontal=24.dp), style=MaterialTheme.typography.labelLarge,
@@ -120,7 +125,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                             Text(credit.label, style=MaterialTheme.typography.labelSmall)
                         }
                     }
-                    LazyColumn(state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (embedded) 140.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
+                    LazyColumn(modifier = if (embedded) Modifier.weight(1f) else Modifier, state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (embedded) 60.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
                         itemsIndexed(lyrics.lines) { index, line ->
                             val selected = index == active
                             val distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active)
@@ -146,6 +151,9 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                         }
                     }
                 }
+            }
+            if (embedded) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                sourceMenu("Source: " + (document?.source ?: sourceName))
             }
         }
     }

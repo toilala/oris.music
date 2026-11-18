@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -116,6 +117,8 @@ fun HomeScreen(
         confirmButton = { TextButton(onClick = { showDiagnostic = false }) { Text("Close") } },
     )
     var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var refreshing by remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1400); refreshing = false } }
     val feed by produceState<HomeFeedState>(HomeFeedState.Loading, refreshTick) {
         value = loadHomeFeed()
     }
@@ -125,32 +128,13 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "OrisMusic",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { refreshTick++ }) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Refresh home feed",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    IconButton(onClick = onSearch) {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = "Search",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OrisLogo(Modifier.size(26.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "OrisMusic",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
@@ -165,7 +149,11 @@ fun HomeScreen(
         Column(Modifier.fillMaxSize().padding(outerPadding)) {
         MoodChips(onMood = { SearchRequest.pending = it; onSearch() })
         JumpBackIn(playerConnection)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { refreshing = true; refreshTick++ },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
         when (val state = feed) {
             HomeFeedState.Loading -> Column(
                 modifier = Modifier
@@ -224,6 +212,20 @@ fun HomeScreen(
         }
         }
         }
+    }
+}
+
+/** Small Oris mark: an orbit ring with a bright dot. */
+@Composable
+fun OrisLogo(modifier: Modifier = Modifier) {
+    val ring = MaterialTheme.colorScheme.onSurface
+    val dot = MaterialTheme.colorScheme.tertiary
+    androidx.compose.foundation.Canvas(modifier) {
+        val stroke = size.minDimension * 0.12f
+        drawCircle(ring, radius = size.minDimension / 2 - stroke / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+        drawCircle(dot, radius = size.minDimension * 0.17f,
+            center = androidx.compose.ui.geometry.Offset(size.width * 0.68f, size.height * 0.34f))
+        drawCircle(ring, radius = size.minDimension * 0.07f)
     }
 }
 

@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity() {
                                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
                                         tonalElevation = 0.dp,
                                     ) {
-                                        MainTab.entries.forEach { tab ->
+                                        MainTab.entries.filter { it != MainTab.Queue }.forEach { tab ->
                                             NavigationBarItem(
                                                 selected = selectedTab == tab.ordinal,
                                                 onClick = { detail = null; detailBack = null; navigation = navigation.select(tab.ordinal) },
@@ -247,6 +247,8 @@ class MainActivity : ComponentActivity() {
                                 )
                                 MainTab.Library -> com.orismusic.client.ui.screens.LibraryScreen(
                                     connection = connection,
+                                    onQueue = { navigation = navigation.select(MainTab.Queue.ordinal) },
+                                    onSettings = { settingsOpen = true },
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(innerPadding),

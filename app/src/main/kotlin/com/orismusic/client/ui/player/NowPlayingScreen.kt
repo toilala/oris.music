@@ -1,7 +1,7 @@
 package com.orismusic.client.ui.player
 
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.ui.draw.drawWithContent
@@ -34,20 +34,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -101,6 +101,22 @@ fun NowPlayingScreen(
     val adaptive = look.adaptiveBackground
     val art = connection.currentMetadata.collectAsState().value?.artworkUri?.toString()
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
+    // Fetch lyrics as soon as a song starts so the Lyrics view opens already filled.
+    val lyricContext = androidx.compose.ui.platform.LocalContext.current
+    val lyricMeta = connection.currentMetadata.collectAsState().value
+    val lyricDuration = connection.duration.collectAsState().value
+    val lyricId = connection.player.currentMediaItem?.mediaId.orEmpty()
+    androidx.compose.runtime.LaunchedEffect(lyricId, lyricMeta?.title, lyricDuration > 0) {
+        val title = lyricMeta?.title?.toString().orEmpty()
+        if (lyricId.isBlank() || title.isBlank() || lyricDuration <= 0) return@LaunchedEffect
+        runCatching {
+            com.orismusic.client.lyrics.LyricsRepository.load(
+                lyricId, title, lyricMeta?.artist?.toString().orEmpty(), lyricMeta?.albumTitle?.toString().orEmpty(),
+                (lyricDuration.coerceAtLeast(0) / 1000).toInt(), "automatic",
+                com.orismusic.client.settings.LyricsPreferences(lyricContext).read(),
+            )
+        }
+    }
     val tint by androidx.compose.animation.animateColorAsState(
         targetValue = com.orismusic.client.ui.components.rememberArtworkColor(art) ?: MaterialTheme.colorScheme.surfaceContainerHigh,
         animationSpec = androidx.compose.animation.core.tween(700),
@@ -200,7 +216,7 @@ private fun NowPlayingContent(
         ) {
             IconButton(onClick = onCollapse) {
                 Icon(
-                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    imageVector = Icons.Rounded.KeyboardArrowDown,
                     contentDescription = "Close player",
                 )
             }
@@ -249,7 +265,7 @@ private fun NowPlayingContent(
             }
             IconButton(onClick = { nowSong?.let { library.toggleLike(it) } }, enabled = nowSong != null) {
                 Icon(
-                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     contentDescription = if (isLiked) "Remove from liked songs" else "Like song",
                     tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -296,7 +312,7 @@ private fun NowPlayingContent(
         ) {
             IconButton(onClick = { connection.toggleShuffle() }) {
                 Icon(
-                    imageVector = Icons.Filled.Shuffle,
+                    imageVector = Icons.Rounded.Shuffle,
                     contentDescription = "Shuffle",
                     tint = if (shuffle.value) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -307,7 +323,7 @@ private fun NowPlayingContent(
                 enabled = canSkipPrevious.value,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.SkipPrevious,
+                    imageVector = Icons.Rounded.SkipPrevious,
                     contentDescription = "Previous",
                     modifier = Modifier.size(36.dp),
                 )
@@ -324,7 +340,7 @@ private fun NowPlayingContent(
             ) {
                 Crossfade(isPlaying.value, label = "play icon") { playing ->
                     Icon(
-                        imageVector = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (playing) "Pause" else "Play",
                         modifier = Modifier.size(40.dp),
                     )
@@ -335,7 +351,7 @@ private fun NowPlayingContent(
                 enabled = canSkipNext.value,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.SkipNext,
+                    imageVector = Icons.Rounded.SkipNext,
                     contentDescription = "Next",
                     modifier = Modifier.size(36.dp),
                 )
@@ -343,8 +359,8 @@ private fun NowPlayingContent(
             IconButton(onClick = { connection.toggleRepeatMode() }) {
                 Icon(
                     imageVector = if (repeat.value == Player.REPEAT_MODE_ONE) {
-                        Icons.Filled.RepeatOne
-                    } else Icons.Filled.Repeat,
+                        Icons.Rounded.RepeatOne
+                    } else Icons.Rounded.Repeat,
                     contentDescription = "Repeat",
                     tint = if (repeat.value != Player.REPEAT_MODE_OFF) {
                         MaterialTheme.colorScheme.primary
@@ -358,34 +374,12 @@ private fun NowPlayingContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val appCtx = LocalContext.current
-            remember { OfflineAudio.load(appCtx) }
-            val savedSongs = OfflineAudio.downloaded.collectAsState().value
-            val busy = OfflineAudio.inProgress.collectAsState().value
-            val isSaved = nowSong != null && savedSongs.any { it.id == nowSong.id }
-            val isBusy = nowSong != null && nowSong.id in busy
-            IconButton(
-                onClick = {
-                    nowSong?.let { if (isSaved) OfflineAudio.remove(appCtx, it.id) else OfflineAudio.download(appCtx, it) }
-                },
-                enabled = nowSong != null && !isBusy,
-            ) {
-                if (isBusy) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        imageVector = if (isSaved) Icons.Filled.DownloadDone else Icons.Filled.Download,
-                        contentDescription = if (isSaved) "Remove offline copy" else "Save for offline",
-                        tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
             var playlistMenu by remember { mutableStateOf(false) }
             val playlistStore = PlaylistStore.get(LocalContext.current)
             val userPlaylists = playlistStore.playlists.collectAsState().value
             Box {
                 IconButton(onClick = { playlistMenu = true }, enabled = nowSong != null) {
-                    Icon(Icons.Filled.PlaylistAdd, contentDescription = "Add to playlist",
+                    Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Add to playlist",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 DropdownMenu(expanded = playlistMenu, onDismissRequest = { playlistMenu = false }) {
@@ -407,7 +401,7 @@ private fun NowPlayingContent(
             Box {
                 IconButton(onClick = { timerMenu = true }) {
                     Icon(
-                        imageVector = Icons.Filled.Timer,
+                        imageVector = Icons.Rounded.Timer,
                         contentDescription = "Sleep timer",
                         tint = if (timerEnd != null) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -434,7 +428,7 @@ private fun NowPlayingContent(
             }
             }
             IconButton(onClick = onQueue) {
-                Icon(Icons.Filled.QueueMusic, contentDescription = "Open queue", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Rounded.QueueMusic, contentDescription = "Open queue", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = { setLyricsOpen(!lyricsOpen) }) {
                 Text("Lyrics", color = if (lyricsOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)

@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -67,6 +69,8 @@ import com.orismusic.client.playback.queues.ListQueue
 fun LibraryScreen(
     connection: PlayerConnection?,
     modifier: Modifier = Modifier,
+    onQueue: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
     val store = LibraryStore.get(LocalContext.current)
     val liked by store.liked.collectAsState()
@@ -123,11 +127,19 @@ fun LibraryScreen(
         )
     }
     Column(modifier = modifier) {
-        Text(
-            text = "Library",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.padding(start = 20.dp, top = 20.dp, end = 16.dp),
-        )
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Library",
+                style = MaterialTheme.typography.headlineLarge,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onQueue) {
+                Icon(Icons.Rounded.QueueMusic, contentDescription = "Queue")
+            }
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+            }
+        }
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

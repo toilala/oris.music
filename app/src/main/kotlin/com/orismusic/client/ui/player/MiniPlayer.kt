@@ -1,5 +1,10 @@
 package com.orismusic.client.ui.player
 
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -55,7 +60,13 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value ?: return
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val offX = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    val offY = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    var dismissed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val isPlaying = connection.isPlaying.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(isPlaying.value) { if (isPlaying.value) dismissed = false }
+    if (dismissed) return
     val position = connection.currentPosition.collectAsState().value
     val duration = connection.duration.collectAsState().value
     val artwork = metadata.artworkUri?.toString()
@@ -71,8 +82,35 @@ fun MiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 4.dp)
+            .graphicsLayer {
+                translationX = offX.value; translationY = offY.value
+                alpha = 1f - minOf(0.85f, kotlin.math.abs(offX.value) / 700f + offY.value.coerceAtLeast(0f) / 350f)
+            }
+            .pointerInput(connection) {
+                detectDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            val x = offX.value; val y = offY.value
+                            when {
+                                x > 150f -> { offX.animateTo(900f, tween(140)); connection.seekToPrevious(); offX.snapTo(-900f); offX.animateTo(0f, androidx.compose.animation.core.spring(0.7f, 300f)) }
+                                x < -150f -> { offX.animateTo(-900f, tween(140)); connection.seekToNext(); offX.snapTo(900f); offX.animateTo(0f, androidx.compose.animation.core.spring(0.7f, 300f)) }
+                                y > 100f -> { offY.animateTo(500f, tween(160)); connection.pause(); dismissed = true; offY.snapTo(0f) }
+                                else -> { launch { offX.animateTo(0f, androidx.compose.animation.core.spring(0.6f, 400f)) }; offY.animateTo(0f, androidx.compose.animation.core.spring(0.6f, 400f)) }
+                            }
+                        }
+                    },
+                    onDragCancel = { scope.launch { offX.snapTo(0f); offY.snapTo(0f) } },
+                    onDrag = { change, drag ->
+                        change.consume()
+                        scope.launch {
+                            if (kotlin.math.abs(drag.x) >= kotlin.math.abs(drag.y) && offY.value < 8f) offX.snapTo(offX.value + drag.x)
+                            else offY.snapTo((offY.value + drag.y).coerceAtLeast(0f))
+                        }
+                    },
+                )
+            }
             .clip(shape)
-            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.3f).compositeOver(base), base)))
+            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.5f).compositeOver(base), base)))
             .pressClickable(onExpand, 0.985f),
     ) {
         Row(
@@ -117,7 +155,7 @@ fun MiniPlayer(
             Modifier.align(Alignment.BottomStart).padding(horizontal = 14.dp).fillMaxWidth().height(3.dp)
                 .clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.12f)),
         ) {
-            Box(Modifier.fillMaxWidth(progress).height(3.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary))
+            Box(Modifier.fillMaxWidth(progress).height(3.dp).clip(RoundedCornerShape(2.dp)).background(androidx.compose.ui.graphics.lerp(tint, Color.White, 0.65f)))
         }
     }
 }

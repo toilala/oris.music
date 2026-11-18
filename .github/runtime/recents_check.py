@@ -38,6 +38,7 @@ def assert_stopped():
 def settings():
     adb('shell', 'am', 'start', '-n', MAIN)
     wait_label('OrisMusic')
+    tap('Library')
     tap('Settings')
     wait_label('Playback')
 
