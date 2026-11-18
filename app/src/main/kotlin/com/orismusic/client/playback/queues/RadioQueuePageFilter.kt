@@ -8,6 +8,7 @@ internal class RadioQueuePageFilter {
     private val ids = hashSetOf<String>()
     private val recordings = hashSetOf<String>()
     fun reset() { ids.clear(); recordings.clear() }
+    fun claimId(id: String) { ids += id }
     /** Mark a song as queued so later pages skip it and its other versions. */
     fun claim(song: SongItem) { ids += song.id; recordings += MusicCandidates.trackKey(song) }
     fun filter(songs: List<SongItem>): List<SongItem> = MusicCandidates.select(songs).filter {

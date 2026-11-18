@@ -12,9 +12,10 @@ class MusicRadioQueue(
     private val name: String,
     private val songs: List<SongItem>,
     private val selectedId: String,
+    seedId: String? = null,
 ) : Queue {
     override val preloadItem: MediaMetadata? = null
-    private val filter = RadioQueuePageFilter()
+    private val filter = RadioQueuePageFilter().also { f -> seedId?.let { f.claimId(it) } }
     private var radio = WatchEndpoint(videoId = selectedId, playlistId = "RDAMVM$selectedId")
     private var cursor: String? = null
     private var started = false

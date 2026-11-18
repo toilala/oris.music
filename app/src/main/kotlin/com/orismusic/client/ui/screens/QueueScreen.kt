@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -148,22 +151,41 @@ fun QueueScreen(
                     modifier = Modifier.padding(24.dp),
                 )
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(
-                        items = (0 until count).map { index ->
-                            try { player.getMediaItemAt(index) } catch (e: Exception) { null }
-                        },
-                        key = { index, item -> item?.mediaId?.plus("#$index") ?: index.toString() },
-                    ) { index, item ->
-                        if (item == null) return@itemsIndexed
-                        val isCurrent = index == currentIndex
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                androidx.compose.runtime.LaunchedEffect(currentIndex) {
+                    val header = if (currentIndex > 0) 1 + currentIndex else 0
+                    listState.scrollToItem((header - 1).coerceAtLeast(0))
+                }
+                @androidx.compose.runtime.Composable
+                fun Header(text: String) = Text(
+                    text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
+                )
+                @androidx.compose.runtime.Composable
+                fun QueueRow(index: Int, dim: Boolean) {
+                    val item = try { player.getMediaItemAt(index) } catch (e: Exception) { null } ?: return
+                    Box(Modifier.alpha(if (dim) 0.55f else 1f)) {
                         com.orismusic.client.ui.components.SongRow(
                             title = item.mediaMetadata.title?.toString().orEmpty(),
                             subtitle = item.mediaMetadata.artist?.toString().orEmpty(),
                             thumbnail = item.mediaMetadata.artworkUri?.toString(),
                             onClick = { connection.seekToIndex(index) },
-                            highlight = isCurrent,
+                            highlight = index == currentIndex,
                         )
+                    }
+                }
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    if (currentIndex > 0) {
+                        item(key = "h-prev") { Header("Previously played") }
+                        items(count = currentIndex, key = { "p$it" }) { QueueRow(it, dim = true) }
+                    }
+                    if (currentIndex in 0 until count) {
+                        item(key = "h-now") { Header("Now playing") }
+                        item(key = "now") { QueueRow(currentIndex, dim = false) }
+                    }
+                    if (currentIndex + 1 < count) {
+                        item(key = "h-next") { Header("Next in queue") }
+                        items(count = count - currentIndex - 1, key = { "n$it" }) { QueueRow(currentIndex + 1 + it, dim = false) }
                     }
                 }
             }

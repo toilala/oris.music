@@ -903,8 +903,16 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         }
     }
 
+    /** Keep the current song playing and replace what comes after it with this song's radio. */
     fun startRadioSeamlessly(jumpToFirst: Boolean = false) {
-        Timber.d("startRadioSeamlessly called")
+        val current = player.currentMediaItem ?: return
+        queueGeneration++
+        runwayJob?.cancel()
+        queueTitle = "Radio"
+        currentQueue = com.orismusic.client.playback.queues.MusicRadioQueue("Radio", emptyList(), current.mediaId, seedId = current.mediaId)
+        val after = player.currentMediaItemIndex + 1
+        if (after < player.mediaItemCount) player.removeMediaItems(after, player.mediaItemCount)
+        fillUpcomingMusic()
     }
 
     fun playNext(items: List<MediaItem>) {
