@@ -93,6 +93,7 @@ private suspend fun loadHomeFeed(): HomeFeedState =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    onOpen: (DetailTarget) -> Unit = {},
     modifier: Modifier = Modifier,
     playerConnection: PlayerConnection? = null,
     onSearch: () -> Unit = {},
@@ -198,6 +199,7 @@ fun HomeScreen(
                 page = state.page,
                 playerConnection = playerConnection,
                 contentPadding = innerPadding,
+                onOpen = onOpen,
             )
         }
         }
@@ -260,6 +262,7 @@ private fun HomeFeed(
     page: HomePage,
     playerConnection: PlayerConnection?,
     contentPadding: PaddingValues,
+    onOpen: (DetailTarget) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     LazyColumn(
@@ -270,6 +273,7 @@ private fun HomeFeed(
         ),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        item(key = "new-releases") { NewReleases(onOpen) }
         items(
             items = page.sections.filter { it.items.isNotEmpty() },
             key = { it.title },
@@ -305,6 +309,7 @@ private fun HomeFeed(
                             else -> GenericCard(
                                 title = item.title,
                                 thumbnail = item.thumbnail,
+                                onClick = item.toDetailTarget()?.let { target -> { onOpen(target) } },
                             )
                         }
                     }
@@ -355,8 +360,12 @@ private fun SongCard(
 private fun GenericCard(
     title: String,
     thumbnail: String?,
+    onClick: (() -> Unit)? = null,
 ) {
-    Column(modifier = Modifier.width(140.dp)) {
+    Column(
+        modifier = Modifier.width(140.dp).clip(RoundedCornerShape(12.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+    ) {
         AsyncImage(
             model = thumbnail,
             contentDescription = title,
@@ -373,5 +382,33 @@ private fun GenericCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
+    }
+}
+
+/** Fresh albums from the YouTube Music explore page. Hidden when it cannot load. */
+@Composable
+private fun NewReleases(onOpen: (DetailTarget) -> Unit) {
+    val albums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList()) {
+        value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
+    }
+    if (albums.isEmpty()) return
+    Column {
+        Text(
+            text = "New releases",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items = albums, key = { "new-${it.browseId}" }) { album ->
+                GenericCard(
+                    title = album.title,
+                    thumbnail = album.thumbnail,
+                    onClick = { album.toDetailTarget()?.let(onOpen) },
+                )
+            }
+        }
     }
 }

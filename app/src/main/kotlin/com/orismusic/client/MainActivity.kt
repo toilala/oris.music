@@ -196,6 +196,7 @@ class MainActivity : ComponentActivity() {
                             tabState.SaveableStateProvider(selectedTab) {
                             when (MainTab.entries[selectedTab]) {
                                 MainTab.Home -> HomeScreen(
+                                    onOpen = { detail = it; detailBack = null },
                                     onSettings = { settingsOpen = true },
                                     onSearch = { navigation = navigation.select(MainTab.Search.ordinal) },
                                     modifier = Modifier
