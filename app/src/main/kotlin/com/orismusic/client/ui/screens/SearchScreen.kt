@@ -88,6 +88,11 @@ private sealed interface SearchState {
  * rows are display-only for now. Genuine Oris code.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+/** A search another screen wants the Search tab to run. */
+object SearchRequest {
+    var pending by mutableStateOf<String?>(null)
+}
+
 @Composable
 fun SearchScreen(
     connection: PlayerConnection?,
@@ -128,6 +133,12 @@ fun SearchScreen(
         preferences.edit().putString("recent", JSONArray(recent).toString()).apply()
         keyboard?.hide()
         focus.clearFocus()
+    }
+
+    // Mood chips on Home hand their search over through here.
+    val handoff = SearchRequest.pending
+    androidx.compose.runtime.LaunchedEffect(handoff) {
+        if (handoff != null) { SearchRequest.pending = null; submit(handoff) }
     }
 
     val results by produceState<SearchState>(SearchState.Idle, submittedQuery, attempts) {

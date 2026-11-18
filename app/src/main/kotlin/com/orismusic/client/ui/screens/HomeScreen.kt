@@ -7,6 +7,7 @@
  */
 package com.orismusic.client.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -162,6 +163,7 @@ fun HomeScreen(
     ) { outerPadding ->
         val innerPadding = PaddingValues(0.dp)
         Column(Modifier.fillMaxSize().padding(outerPadding)) {
+        MoodChips(onMood = { SearchRequest.pending = it; onSearch() })
         JumpBackIn(playerConnection)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         when (val state = feed) {
@@ -225,6 +227,38 @@ fun HomeScreen(
     }
 }
 
+/** Quick mood searches, each in its own accent colour. */
+@Composable
+private fun MoodChips(onMood: (String) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val moods = listOf(
+        Triple("Chill", "chill music", scheme.tertiary),
+        Triple("Hype", "hype workout music", scheme.secondary),
+        Triple("Focus", "focus music", scheme.primary),
+        Triple("Late night", "late night music", androidx.compose.ui.graphics.Color(0xFF5AC8FF)),
+        Triple("Nepali", "nepali songs", scheme.secondary),
+    )
+    androidx.compose.foundation.layout.Row(
+        Modifier.padding(top = 4.dp, bottom = 8.dp)
+            .horizontalScroll(androidx.compose.foundation.rememberScrollState())
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        moods.forEach { (label, query, color) ->
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                color = androidx.compose.ui.graphics.Color(0xFF14110A),
+                modifier = Modifier
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .background(color)
+                    .pressClickable({ onMood(query) })
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
 /** Recently played songs kept on the phone, so Home is useful even when the feed is not. */
 @Composable
 private fun JumpBackIn(connection: PlayerConnection?) {
@@ -238,7 +272,7 @@ private fun JumpBackIn(connection: PlayerConnection?) {
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(items = songs, key = { "back-${it.id}" }) { song ->
+            itemsIndexed(items = songs, key = { _, it -> "back-${it.id}" }) { songIndex, song ->
                 Column(
                     modifier = Modifier
                         .width(110.dp)
@@ -253,7 +287,9 @@ private fun JumpBackIn(connection: PlayerConnection?) {
                             )
                         },
                 ) {
-                    Artwork(song.thumbnail, Modifier.size(110.dp), RoundedCornerShape(14.dp), song.title)
+                    Artwork(song.thumbnail, Modifier.size(110.dp),
+                        when (songIndex % 3) { 0 -> androidx.compose.foundation.shape.CircleShape; 1 -> RoundedCornerShape(34.dp); else -> RoundedCornerShape(topStart = 44.dp, topEnd = 12.dp, bottomEnd = 44.dp, bottomStart = 12.dp) },
+                        song.title)
                     Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     Text(song.artist, style = MaterialTheme.typography.bodySmall,
