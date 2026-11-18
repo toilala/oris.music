@@ -43,7 +43,12 @@ def wait_label(label, seconds=25):
 
 def tap(label, bottom=True):
     wait_label(label)
-    nodes = [n for n in tree().iter('node') if label in (n.get('text'), n.get('content-desc'))]
+    nodes = []
+    for _ in range(6):
+        nodes = [n for n in tree().iter('node') if label in (n.get('text'), n.get('content-desc'))]
+        if nodes:
+            break
+        time.sleep(1)
     node = nodes[-1] if bottom else nodes[0]
     points = list(map(int, re.findall(r'\d+', node.get('bounds'))))
     adb('shell', 'input', 'tap', str((points[0]+points[2])//2), str((points[1]+points[3])//2))
