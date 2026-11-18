@@ -23,6 +23,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.SectionHeader
+import com.orismusic.client.ui.components.SkeletonCard
+import com.orismusic.client.ui.components.entrance
+import com.orismusic.client.ui.components.pressClickable
+import com.orismusic.client.ui.components.shimmer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -158,13 +165,24 @@ fun HomeScreen(
         JumpBackIn(playerConnection)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         when (val state = feed) {
-            HomeFeedState.Loading -> Box(
+            HomeFeedState.Loading -> Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentAlignment = Alignment.Center,
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                CircularProgressIndicator()
+                repeat(2) {
+                    Column {
+                        Box(
+                            Modifier.padding(horizontal = 20.dp, vertical = 10.dp).width(150.dp).height(18.dp)
+                                .clip(RoundedCornerShape(8.dp)).shimmer(),
+                        )
+                        Row(
+                            Modifier.padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) { repeat(3) { SkeletonCard() } }
+                    }
+                }
             }
             is HomeFeedState.Failed -> Column(
                 modifier = Modifier
@@ -215,11 +233,7 @@ private fun JumpBackIn(connection: PlayerConnection?) {
     if (history.isEmpty()) return
     val songs = history.take(12)
     Column(Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-        Text(
-            text = "Jump back in",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        SectionHeader(title = "Jump back in")
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -239,13 +253,7 @@ private fun JumpBackIn(connection: PlayerConnection?) {
                             )
                         },
                 ) {
-                    AsyncImage(
-                        model = song.thumbnail,
-                        contentDescription = song.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(110.dp).clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                    )
+                    Artwork(song.thumbnail, Modifier.size(110.dp), RoundedCornerShape(14.dp), song.title)
                     Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     Text(song.artist, style = MaterialTheme.typography.bodySmall,
@@ -274,16 +282,12 @@ private fun HomeFeed(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item(key = "new-releases") { NewReleases(onOpen) }
-        items(
+        itemsIndexed(
             items = page.sections.filter { it.items.isNotEmpty() },
-            key = { it.title },
-        ) { section ->
-            Column {
-                Text(
-                    text = section.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+            key = { _, it -> it.title },
+        ) { sectionIndex, section ->
+            Column(Modifier.entrance(sectionIndex)) {
+                SectionHeader(title = section.title)
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -326,19 +330,10 @@ private fun SongCard(
 ) {
     Column(
         modifier = Modifier
-            .width(140.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .width(150.dp)
+            .pressClickable(onClick),
     ) {
-        AsyncImage(
-            model = song.thumbnail,
-            contentDescription = song.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(140.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
+        Artwork(song.thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), song.title)
         Text(
             text = song.title,
             style = MaterialTheme.typography.bodyMedium,
@@ -363,18 +358,10 @@ private fun GenericCard(
     onClick: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = Modifier.width(140.dp).clip(RoundedCornerShape(12.dp))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        modifier = Modifier.width(150.dp)
+            .then(if (onClick != null) Modifier.pressClickable(onClick) else Modifier),
     ) {
-        AsyncImage(
-            model = thumbnail,
-            contentDescription = title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(140.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
+        Artwork(thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), title)
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
@@ -393,11 +380,7 @@ private fun NewReleases(onOpen: (DetailTarget) -> Unit) {
     }
     if (albums.isEmpty()) return
     Column {
-        Text(
-            text = "New releases",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        SectionHeader(title = "New releases")
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

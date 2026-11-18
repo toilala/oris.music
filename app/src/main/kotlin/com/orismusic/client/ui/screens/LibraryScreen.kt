@@ -45,6 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import com.orismusic.client.ui.components.SongRow
+import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.pressClickable
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,8 +125,8 @@ fun LibraryScreen(
     Column(modifier = modifier) {
         Text(
             text = "Library",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.padding(start = 20.dp, top = 20.dp, end = 16.dp),
         )
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -154,17 +158,13 @@ fun LibraryScreen(
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(playlists, key = { _, p -> p.id }) { _, p ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { openPlaylist = p.id }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .pressClickable({ openPlaylist = p.id }, 0.98f)
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            AsyncImage(
-                                model = p.songs.firstOrNull()?.thumbnail,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                            )
+                            Artwork(p.songs.firstOrNull()?.thumbnail, Modifier.size(58.dp), RoundedCornerShape(14.dp))
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(p.name, style = MaterialTheme.typography.titleMedium, maxLines = 1,
@@ -300,33 +300,7 @@ private fun SavedSongRow(
     onAddToPlaylist: (String) -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AsyncImage(
-            model = song.thumbnail,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                song.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+    SongRow(title = song.title, subtitle = song.artist, thumbnail = song.thumbnail, onClick = onClick) {
         Box {
             IconButton(onClick = { menu = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "Add to playlist",
@@ -345,11 +319,17 @@ private fun SavedSongRow(
                 }
             }
         }
+        val heart by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (liked) 1.15f else 1f,
+            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.35f, stiffness = 400f),
+            label = "heart",
+        )
         IconButton(onClick = onToggleLike) {
             Icon(
                 Icons.Filled.Favorite,
                 contentDescription = if (liked) "Remove from liked songs" else "Like song",
                 tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.graphicsLayer { scaleX = heart; scaleY = heart },
             )
         }
     }

@@ -90,7 +90,7 @@ fun SettingsScreen(
                     }
                 }
             }
-            HorizontalDivider()
+            Spacer(Modifier.height(4.dp))
             Text("Equalizer", style = MaterialTheme.typography.titleMedium)
             val eq by EqualizerController.state.collectAsState()
             if (!eq.available) {
@@ -118,11 +118,11 @@ fun SettingsScreen(
                     }
                 }
             }
-            HorizontalDivider()
+            Spacer(Modifier.height(4.dp))
             Text("Lyrics", style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = { lyricsSettings = true }) { Text("Lyrics providers") }
             Text("Choose sources and their priority order.", style = MaterialTheme.typography.bodySmall)
-            HorizontalDivider()
+            Spacer(Modifier.height(4.dp))
             Text("Your data", style = MaterialTheme.typography.titleMedium)
             val libraryStore = remember(context) { com.orismusic.client.library.LibraryStore.get(context) }
             val historyCount by libraryStore.history.collectAsState()
@@ -136,7 +136,7 @@ fun SettingsScreen(
                 else "${historyCount.size} recently played songs are kept on this phone only.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            HorizontalDivider()
+            Spacer(Modifier.height(4.dp))
             Text("About", style = MaterialTheme.typography.titleMedium)
             val versionName = remember(context) {
                 runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "dev"
@@ -144,7 +144,7 @@ fun SettingsScreen(
             Text("Oris Music $versionName", style = MaterialTheme.typography.bodyMedium)
             Text("Free software under GPL-3.0. Built on Mochy Music and InnerTubeX; credits are in the README.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            HorizontalDivider()
+            Spacer(Modifier.height(4.dp))
             Text("Using Home or switching apps does not stop music. The recents setting only controls removal from recents.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -153,10 +153,15 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingSwitch(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Text(detail, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -165,5 +170,6 @@ private fun SettingSwitch(title: String, detail: String, checked: Boolean, onCha
             checked = checked,
             onCheckedChange = onChange,
         )
+    }
     }
 }

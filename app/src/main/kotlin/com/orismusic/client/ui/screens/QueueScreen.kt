@@ -157,45 +157,13 @@ fun QueueScreen(
                     ) { index, item ->
                         if (item == null) return@itemsIndexed
                         val isCurrent = index == currentIndex
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { connection.seekToIndex(index) }
-                                .background(
-                                    if (isCurrent) MaterialTheme.colorScheme.surfaceVariant
-                                    else MaterialTheme.colorScheme.background,
-                                )
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            AsyncImage(
-                                model = item.mediaMetadata.artworkUri?.toString(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = item.mediaMetadata.title?.toString().orEmpty(),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = if (isCurrent) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = item.mediaMetadata.artist?.toString().orEmpty(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                        com.orismusic.client.ui.components.SongRow(
+                            title = item.mediaMetadata.title?.toString().orEmpty(),
+                            subtitle = item.mediaMetadata.artist?.toString().orEmpty(),
+                            thumbnail = item.mediaMetadata.artworkUri?.toString(),
+                            onClick = { connection.seekToIndex(index) },
+                            highlight = isCurrent,
+                        )
                     }
                 }
             }

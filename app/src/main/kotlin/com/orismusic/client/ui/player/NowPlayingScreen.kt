@@ -12,6 +12,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,10 +110,21 @@ fun NowPlayingScreen(
     val nowSong = remember(metadata, currentIndex) { connection.currentSavedSong() }
     val isLiked = nowSong != null && likedSongs.any { it.id == nowSong.id }
 
+    val artworkUrl = metadata?.artworkUri?.toString()
+    val tint by androidx.compose.animation.animateColorAsState(
+        targetValue = com.orismusic.client.ui.components.rememberArtworkColor(artworkUrl) ?: Color(0xFF202020),
+        animationSpec = androidx.compose.animation.core.tween(700),
+        label = "player tint",
+    )
+    val artScale by animateFloatAsState(
+        targetValue = if (isPlaying.value) 1f else 0.86f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 180f),
+        label = "art scale",
+    )
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.75f), tint.copy(alpha = 0.25f), Color.Black)))
             .statusBarsPadding().navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 8.dp),
@@ -135,6 +149,48 @@ fun NowPlayingScreen(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
+
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Crossfade(targetState = artworkUrl, label = "player artwork") { artwork ->
+            com.orismusic.client.ui.components.Artwork(
+                url = artwork,
+                contentDescription = metadata?.title?.toString(),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .graphicsLayer { scaleX = artScale; scaleY = artScale }
+                    .shadow(24.dp, RoundedCornerShape(28.dp)),
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = metadata?.title?.toString().orEmpty(),
+            style = MaterialTheme.typography.headlineSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = metadata?.artist?.toString().orEmpty(),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             val appCtx = LocalContext.current
             remember { OfflineAudio.load(appCtx) }
             val savedSongs = OfflineAudio.downloaded.collectAsState().value
@@ -220,39 +276,6 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Crossfade(targetState = metadata?.artworkUri?.toString(), label = "player artwork") { artwork ->
-        AsyncImage(
-            model = artwork,
-            contentDescription = metadata?.title?.toString(),
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .widthIn(max = 380.dp)
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
-
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = metadata?.title?.toString().orEmpty(),
-            style = MaterialTheme.typography.headlineSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = metadata?.artist?.toString().orEmpty(),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         val durationMs = duration.value.coerceAtLeast(0L)
         val shownPosition = dragPosition?.toLong() ?: position.value
         Slider(
@@ -314,14 +337,16 @@ fun NowPlayingScreen(
             FilledIconButton(
                 interactionSource = playPress,
                 onClick = { if (isPlaying.value) connection.pause() else connection.play() },
-                modifier = Modifier.size(64.dp).graphicsLayer { scaleX = playScale; scaleY = playScale },
+                modifier = Modifier.size(76.dp).graphicsLayer { scaleX = playScale; scaleY = playScale },
                 colors = IconButtonDefaults.filledIconButtonColors(),
             ) {
-                Icon(
-                    imageVector = if (isPlaying.value) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying.value) "Pause" else "Play",
-                    modifier = Modifier.size(36.dp),
-                )
+                Crossfade(isPlaying.value, label = "play icon") { playing ->
+                    Icon(
+                        imageVector = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (playing) "Pause" else "Play",
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
             }
             IconButton(
                 onClick = { connection.seekToNext() },
