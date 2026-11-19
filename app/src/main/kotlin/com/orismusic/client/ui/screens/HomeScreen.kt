@@ -124,6 +124,7 @@ fun HomeScreen(
     playerConnection: PlayerConnection? = null,
     onSearch: () -> Unit = {},
     onSettings: () -> Unit = {},
+    bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
     val diagnostic = PlaybackDiagnostic.message.collectAsState().value
@@ -177,7 +178,7 @@ fun HomeScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 24.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp + bottomInset),
                     verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
                     item(key = "header") {
@@ -228,6 +229,7 @@ fun HomeScreen(
                     }
                 }
             }
+            PinnedMark(listState, Modifier.align(Alignment.TopStart))
         }
     }
 }
@@ -340,11 +342,6 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
                 }
             }
         }
-        // The mark sits on the hero itself, outside the pager, so it never swaps, fades or flashes.
-        OrisLogo(
-            Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 20.dp, top = 12.dp).size(26.dp),
-            tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f),
-        )
         Row(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 52.dp)) {
             repeat(songs.size) { i ->
                 val active = pager.currentPage == i
@@ -394,7 +391,7 @@ private fun HomeHeader(scroll: () -> Int) {
             Modifier.graphicsLayer { alpha = reveal.value; translationY = (1f - reveal.value) * -30f },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OrisLogo(Modifier.size(30.dp).graphicsLayer { rotationZ = angle })
+            Spacer(Modifier.size(30.dp))
             Spacer(Modifier.width(10.dp))
             Text("Oris", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
         }
@@ -626,3 +623,37 @@ private fun GenericCard(
     }
 }
 
+
+/**
+ * The Oris mark stays at the top while Home scrolls. At the top of the page it is just the mark.
+ * Scrolling turns it into a small glass chip and the name slides out next to it.
+ */
+@Composable
+private fun PinnedMark(listState: androidx.compose.foundation.lazy.LazyListState, modifier: Modifier) {
+    val target by remember {
+        androidx.compose.runtime.derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f else (listState.firstVisibleItemScrollOffset / 260f).coerceIn(0f, 1f)
+        }
+    }
+    val p by androidx.compose.animation.core.animateFloatAsState(target, androidx.compose.animation.core.tween(220), label = "mark")
+    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "mark spin")
+    val angle by spin.animateFloat(
+        0f, 360f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "mark angle",
+    )
+    Row(
+        modifier.statusBarsPadding().padding(start = 14.dp, top = 8.dp)
+            .clip(RoundedCornerShape(50))
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f * p))
+            .border(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f * p), RoundedCornerShape(50))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OrisLogo(Modifier.size(26.dp).graphicsLayer { rotationZ = angle }, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
+        androidx.compose.animation.AnimatedVisibility(visible = p > 0.6f) {
+            Text("Oris", style = MaterialTheme.typography.titleSmall, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f),
+                modifier = Modifier.padding(start = 8.dp, end = 6.dp))
+        }
+    }
+}

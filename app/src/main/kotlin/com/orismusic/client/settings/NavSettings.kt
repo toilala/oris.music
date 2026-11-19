@@ -19,7 +19,8 @@ enum class NavLift(val label: String, val bottom: Int) { Snug("Snug", 2), Normal
 object NavSettings {
     private var store: android.content.SharedPreferences? = null
 
-    var labels by mutableStateOf(true)
+    /** Tab names are gone for good: the bar is icon-only. Kept as a field so the bar code stays simple. */
+    var labels by mutableStateOf(false)
     var style by mutableStateOf(NavStyle.Glass)
     var effect by mutableStateOf(NavEffect.Stretch)
     var accent by mutableStateOf(NavAccent.Warm)
@@ -38,7 +39,7 @@ object NavSettings {
         store = prefs
         // v1.3.1 kept the label switch with the look settings; carry that choice over once.
         val old = context.applicationContext.getSharedPreferences("appearance", Context.MODE_PRIVATE)
-        labels = prefs.getBoolean("labels", old.getBoolean("nav_labels", true))
+        labels = false
         style = prefs.enum("style", NavStyle.Glass)
         effect = prefs.enum("effect", NavEffect.Stretch)
         accent = prefs.enum("accent", NavAccent.Warm)
@@ -64,7 +65,7 @@ object NavSettings {
     }
 
     fun reset() {
-        labels = true; style = NavStyle.Glass; effect = NavEffect.Stretch; accent = NavAccent.Warm
+        labels = false; style = NavStyle.Glass; effect = NavEffect.Stretch; accent = NavAccent.Warm
         size = NavSize.Medium; width = NavWidth.Compact; lift = NavLift.Normal
         hideOnScroll = false; haptics = false
         save()

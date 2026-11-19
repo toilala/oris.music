@@ -276,9 +276,8 @@ class MainActivity : ComponentActivity() {
                                     onOpen = { t -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(t, connection) { detail = it; detailBack = null } } },
                                     onSettings = { settingsOpen = true },
                                     onSearch = { navigation = navigation.select(MainTab.Search.ordinal) },
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(innerPadding),
+                                    modifier = Modifier.fillMaxSize(),
+                                    bottomInset = innerPadding.calculateBottomPadding(),
                                     playerConnection = connection,
                                 )
                                 MainTab.Queue -> QueueScreen(

@@ -340,7 +340,10 @@ class PlayerConnection(
             if (castHandler?.isCasting?.value == true) {
                 castHandler.play()
             } else {
-                if (player.playbackState == Player.STATE_IDLE) {
+                if (player.playbackState == Player.STATE_ENDED) {
+                    player.seekToDefaultPosition()
+                }
+                if (player.playbackState == Player.STATE_IDLE || player.playerError != null) {
                     player.prepare()
                 }
                 player.playWhenReady = true

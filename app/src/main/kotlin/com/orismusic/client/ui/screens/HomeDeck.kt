@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -62,7 +63,6 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () -> Int) {
-    val bg = MaterialTheme.colorScheme.background
     val pager = rememberPagerState(pageCount = { songs.size })
     val scope = rememberCoroutineScope()
     LaunchedEffect(songs.size) {
@@ -75,7 +75,17 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
     }
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(Modifier.fillMaxWidth().height(500.dp + topInset)) {
-        Crossfade(targetState = pager.currentPage, animationSpec = tween(700), label = "deck-bg", modifier = Modifier.fillMaxSize()) { page ->
+        Crossfade(
+            targetState = pager.currentPage, animationSpec = tween(700), label = "deck-bg",
+            modifier = Modifier.fillMaxSize()
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    // Fade the backdrop out instead of blending toward a colour, so no edge shows on any background.
+                    drawRect(Brush.verticalGradient(0f to Color.Black, 0.45f to Color.Black, 1f to Color.Transparent),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                },
+        ) { page ->
             Artwork(
                 songs[page.coerceIn(0, songs.lastIndex)].thumbnail,
                 Modifier.fillMaxSize().graphicsLayer { translationY = scroll() * 0.2f; scaleX = 1.3f; scaleY = 1.3f }
@@ -85,12 +95,8 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
         }
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.3f to Color.Transparent, 0.62f to bg.copy(alpha = 0.5f), 1f to bg),
+                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.3f to Color.Transparent),
             ),
-        )
-        OrisLogo(
-            Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 20.dp, top = 12.dp).size(26.dp),
-            tint = Color.White.copy(alpha = 0.9f),
         )
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             HorizontalPager(
@@ -112,9 +118,7 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
                         shadowElevation = 18.dp.toPx() * (1f - a.coerceAtMost(1f))
                         shape = RoundedCornerShape(26.dp)
                         clip = true
-                    }.pressClickable({
-                        scope.launch { connection?.playQueue(MusicRadioQueue("Picked for you", songs, s.id)) }
-                    }, 0.97f),
+                    }.pressClickable({ startFrom(connection, scope, songs, s) }, 0.97f),
                 ) {
                     Artwork(s.thumbnail, Modifier.fillMaxSize(), RoundedCornerShape(26.dp), s.title, 800)
                 }
@@ -131,9 +135,7 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
             }
             Row(
                 Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary)
-                    .pressClickable({
-                        scope.launch { connection?.playQueue(MusicRadioQueue("Picked for you", songs, cur.id)) }
-                    }, 0.94f).padding(start = 18.dp, end = 24.dp, top = 11.dp, bottom = 11.dp),
+                    .pressClickable({ startFrom(connection, scope, songs, cur) }, 0.94f).padding(start = 18.dp, end = 24.dp, top = 11.dp, bottom = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiary)
@@ -153,4 +155,11 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
             }
         }
     }
+}
+
+/** Tapping the song that is already loaded resumes it. Starting the same song again only made it load twice. */
+private fun startFrom(connection: PlayerConnection?, scope: kotlinx.coroutines.CoroutineScope, songs: List<SongItem>, song: SongItem) {
+    val c = connection ?: return
+    val loaded = runCatching { c.player.currentMediaItem?.mediaId }.getOrNull()
+    if (loaded == song.id) c.play() else scope.launch { c.playQueue(MusicRadioQueue("Picked for you", songs, song.id)) }
 }

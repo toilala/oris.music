@@ -62,9 +62,6 @@ fun NavigationSettings(onBack: () -> Unit) {
             }
             Text("Tap the bar above to try it. Changes apply to the whole app straight away.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            ToggleRow("Show tab names", "Names under the icons. Off gives a round, icon-only bar.", NavSettings.labels) {
-                NavSettings.labels = it; NavSettings.save()
-            }
             ChoiceRow("Selection effect", NavEffect.entries, NavSettings.effect, { it.label }) { NavSettings.effect = it; NavSettings.save() }
             ChoiceRow("Bar style", NavStyle.entries, NavSettings.style, { it.label }) { NavSettings.style = it; NavSettings.save() }
             ChoiceRow("Accent", NavAccent.entries, NavSettings.accent, { it.label }) { NavSettings.accent = it; NavSettings.save() }

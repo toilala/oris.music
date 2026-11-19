@@ -19,7 +19,7 @@ tap('Settings', bottom=False)
 wait_label('Skip silence')
 screen('shot_settings')
 tap('Navigation', bottom=False)
-wait_label('Show tab names')
+wait_label('Selection effect')
 screen('shot_navigation')
 
 # Seed a few songs so the filled-in screens can be photographed.
