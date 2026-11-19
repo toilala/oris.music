@@ -2,6 +2,7 @@ package com.orismusic.client.ui.screens
 
 import com.orismusic.client.settings.HomeSection
 import com.orismusic.client.settings.JumpStyle
+import com.orismusic.client.settings.ShelfStyle
 import com.orismusic.client.settings.HomeSettings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
@@ -151,7 +154,22 @@ fun LazyListScope.listeningShelves(
     if (older.isNotEmpty()) item(key = "recent") {
         Column {
             SectionHeader(title = "Recently played")
-            OrbitRow(items = older, key = { "rp-${it.id}" }) { s, _, orbit ->
+            if (HomeSettings.shelfStyle == ShelfStyle.Scatter) LazyRow(
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy((-22).dp),
+            ) {
+                itemsIndexed(older, key = { _, it -> "rs-${it.id}" }) { i, s ->
+                    val size = HomeSettings.coverSize.dp(150)
+                    Column(Modifier.width(size).graphicsLayer {
+                        rotationZ = if (i % 2 == 0) -3.5f else 3f
+                        translationY = if (i % 2 == 0) 0f else 12.dp.toPx()
+                    }.pressClickable({ playHistory(connection, "Recently played", older, s) }, 0.95f)) {
+                        Artwork(s.thumbnail, Modifier.size(size), HomeSettings.corners.shape(24), s.title)
+                        Text(s.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 4.dp))
+                    }
+                }
+            } else OrbitRow(items = older, key = { "rp-${it.id}" }) { s, _, orbit ->
                 Column(orbit.width(HomeSettings.coverSize.dp(150)).pressClickable({ playHistory(connection, "Recently played", older, s) })) {
                     Artwork(s.thumbnail, Modifier.size(HomeSettings.coverSize.dp(150)), HomeSettings.corners.shape(24), s.title)
                     Text(s.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,

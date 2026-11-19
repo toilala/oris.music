@@ -17,6 +17,7 @@ enum class HomeCoverSize(val label: String, val k: Float) {
     fun dp(base: Int) = (base * k).dp
 }
 enum class HeroStyle(val label: String) { Deck("Deck"), Banner("Banner") }
+enum class ShelfStyle(val label: String) { Row("Row"), Scatter("Scatter") }
 enum class JumpStyle(val label: String) { Tiles("Tiles"), Strip("Strip") }
 
 /** Home sections that can be hidden or moved. The YouTube shelves always come last. */
@@ -40,6 +41,7 @@ object HomeSettings {
     var hero by mutableStateOf(true)
     var youtube by mutableStateOf(true)
     var heroStyle by mutableStateOf(HeroStyle.Deck)
+    var shelfStyle by mutableStateOf(ShelfStyle.Scatter)
     var density by mutableStateOf(HomeDensity.Cozy)
     var corners by mutableStateOf(HomeCorners.Soft)
     var coverSize by mutableStateOf(HomeCoverSize.Medium)
@@ -58,6 +60,7 @@ object HomeSettings {
         hero = p.getBoolean("hero", true)
         youtube = p.getBoolean("youtube", true)
         heroStyle = p.enum("hero_style", HeroStyle.Deck)
+        shelfStyle = p.enum("shelf_style", ShelfStyle.Scatter)
         density = p.enum("density", HomeDensity.Cozy)
         corners = p.enum("corners", HomeCorners.Soft)
         coverSize = p.enum("cover_size", HomeCoverSize.Medium)
@@ -89,6 +92,7 @@ object HomeSettings {
             ?.putBoolean("hero", hero)
             ?.putBoolean("youtube", youtube)
             ?.putString("hero_style", heroStyle.name)
+            ?.putString("shelf_style", shelfStyle.name)
             ?.putString("density", density.name)
             ?.putString("corners", corners.name)
             ?.putString("cover_size", coverSize.name)
@@ -100,7 +104,7 @@ object HomeSettings {
     }
 
     fun reset() {
-        hero = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
+        shelfStyle = ShelfStyle.Scatter; hero = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
         coverSize = HomeCoverSize.Medium; jumpStyle = JumpStyle.Tiles; becauseCount = 3
         order.clear(); order.addAll(HomeSection.entries); hidden.clear()
         save()

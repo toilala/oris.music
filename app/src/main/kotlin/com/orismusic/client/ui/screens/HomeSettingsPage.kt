@@ -30,6 +30,7 @@ import com.orismusic.client.settings.HeroStyle
 import com.orismusic.client.settings.HomeSection
 import com.orismusic.client.settings.HomeSettings
 import com.orismusic.client.settings.JumpStyle
+import com.orismusic.client.settings.ShelfStyle
 
 /** Everything about Home in one place. Changes apply as soon as you go back to Home. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,6 +58,7 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             ChoiceRow("Spacing", HomeDensity.entries, HomeSettings.density, { it.label }) { HomeSettings.density = it; HomeSettings.save() }
             ChoiceRow("Cover size", HomeCoverSize.entries, HomeSettings.coverSize, { it.label }) { HomeSettings.coverSize = it; HomeSettings.save() }
             ChoiceRow("Cover corners", HomeCorners.entries, HomeSettings.corners, { it.label }) { HomeSettings.corners = it; HomeSettings.save() }
+            ChoiceRow("Recently played style", ShelfStyle.entries, HomeSettings.shelfStyle, { it.label }) { HomeSettings.shelfStyle = it; HomeSettings.save() }
             ChoiceRow("Jump back in layout", JumpStyle.entries, HomeSettings.jumpStyle, { it.label }) { HomeSettings.jumpStyle = it; HomeSettings.save() }
             ChoiceRow("Artist shelves", listOf(1, 2, 3, 4, 5), HomeSettings.becauseCount, { "$it" }) { HomeSettings.becauseCount = it; HomeSettings.save() }
             TextButton(onClick = { HomeSettings.reset() }) { Text("Reset Home") }
