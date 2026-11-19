@@ -135,14 +135,19 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                                 }, label = "lyric ink")
                             val emphasis by animateFloatAsState(if (selected) 1f else 0.9f,
                                 animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
-                            val soften by animateFloatAsState(if (!lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(4) * 1.2f),
+                            val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(4) * 1.2f),
                                 label = "lyric blur")
-                            Text(line.text.ifBlank { "\u266a" }, style=(if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                            Text(line.text.ifBlank { "\u266a" }, style=(when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
+                                    com.orismusic.client.settings.LyricSize.Compact -> MaterialTheme.typography.titleMedium
+                                    com.orismusic.client.settings.LyricSize.Large -> if (embedded) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
+                                    else -> if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
+                                }).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                textAlign = if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
                                 color=ink,
                                 modifier=Modifier.fillMaxWidth()
                                     .then(if (soften > 0.1f) Modifier.blur(soften.dp) else Modifier)
                                     .graphicsLayer {
-                                    transformOrigin = TransformOrigin(0f, 0.5f)
+                                    transformOrigin = TransformOrigin(if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) 0.5f else 0f, 0.5f)
                                     scaleX = emphasis; scaleY = emphasis
                                 }.then(if (line.timeMs != null)
                                     Modifier.clickable { connection.player.seekTo(line.timeMs) } else Modifier))

@@ -16,6 +16,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.orismusic.client.settings.LyricSize
 import com.orismusic.client.settings.PlayKey
 import com.orismusic.client.settings.PlaySize
 import com.orismusic.client.settings.PlayerSettings
@@ -40,6 +41,13 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
             ChoiceRow("Seek bar", SeekStyle.entries, PlayerSettings.seek, { it.label }) { PlayerSettings.seek = it; PlayerSettings.save() }
             ToggleRow("Time left", "Show the time left instead of the full length on the right.", PlayerSettings.remaining) {
                 PlayerSettings.remaining = it; PlayerSettings.save()
+            }
+            ChoiceRow("Lyrics size", LyricSize.entries, PlayerSettings.lyricSize, { it.label }) { PlayerSettings.lyricSize = it; PlayerSettings.save() }
+            ToggleRow("Centre lyrics", "Centre the lines instead of aligning them left.", PlayerSettings.lyricsCentered) {
+                PlayerSettings.lyricsCentered = it; PlayerSettings.save()
+            }
+            ToggleRow("Blur far lines", "Lines away from the current one fade into a soft blur.", PlayerSettings.lyricsBlur) {
+                PlayerSettings.lyricsBlur = it; PlayerSettings.save()
             }
             ToggleRow("Play key morph", "The key turns into a rounded square while music plays.", PlayerSettings.morph) {
                 PlayerSettings.morph = it; PlayerSettings.save()

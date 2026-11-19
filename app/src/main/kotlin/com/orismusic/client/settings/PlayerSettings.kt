@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 enum class PlayKey(val label: String) { Glass("Glass"), Solid("Solid"), Plain("Plain") }
 enum class PlaySize(val label: String, val play: Int, val skip: Int) { Compact("Compact", 76, 56), Regular("Regular", 88, 64), Large("Large", 100, 72) }
 enum class SeekStyle(val label: String) { Wave("Wave"), Line("Line"), Bars("Bars") }
+enum class LyricSize(val label: String) { Compact("Compact"), Regular("Regular"), Large("Large") }
 enum class SkipIcons(val label: String) { Skip("Skip"), Seek("Seek") }
 
 /**
@@ -22,6 +23,9 @@ object PlayerSettings {
     var icons by mutableStateOf(SkipIcons.Skip)
     var seek by mutableStateOf(SeekStyle.Wave)
     var remaining by mutableStateOf(false)
+    var lyricSize by mutableStateOf(LyricSize.Regular)
+    var lyricsCentered by mutableStateOf(false)
+    var lyricsBlur by mutableStateOf(true)
     var morph by mutableStateOf(true)
     var titleMotion by mutableStateOf(true)
     var haptics by mutableStateOf(true)
@@ -39,6 +43,9 @@ object PlayerSettings {
         icons = p.enum("icons", SkipIcons.Skip)
         seek = p.enum("seek", SeekStyle.Wave)
         remaining = p.getBoolean("remaining", false)
+        lyricSize = p.enum("lyric_size", LyricSize.Regular)
+        lyricsCentered = p.getBoolean("lyrics_centered", false)
+        lyricsBlur = p.getBoolean("lyrics_blur", true)
         morph = p.getBoolean("morph", true)
         titleMotion = p.getBoolean("title_motion", true)
         haptics = p.getBoolean("haptics", true)
@@ -49,6 +56,7 @@ object PlayerSettings {
         store?.edit()
             ?.putString("keys", keys.name)?.putString("size", size.name)?.putString("icons", icons.name)
             ?.putString("seek", seek.name)?.putBoolean("remaining", remaining)
+            ?.putString("lyric_size", lyricSize.name)?.putBoolean("lyrics_centered", lyricsCentered)?.putBoolean("lyrics_blur", lyricsBlur)
             ?.putBoolean("morph", morph)?.putBoolean("title_motion", titleMotion)
             ?.putBoolean("haptics", haptics)?.putBoolean("up_next", upNext)
             ?.apply()
@@ -56,7 +64,7 @@ object PlayerSettings {
 
     fun reset() {
         keys = PlayKey.Glass; size = PlaySize.Regular; icons = SkipIcons.Skip
-        seek = SeekStyle.Wave; remaining = false; morph = true; titleMotion = true; haptics = true; upNext = true
+        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true
         save()
     }
 }
