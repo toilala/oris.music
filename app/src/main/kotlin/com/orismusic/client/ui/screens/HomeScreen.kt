@@ -96,6 +96,10 @@ private sealed interface HomeFeedState {
     data class Failed(val message: String) : HomeFeedState
 }
 
+/** Kept for the process so coming back to Home shows the shelves at once instead of reloading. */
+private var cachedFeed: HomeFeedState.Ready? = null
+private var cachedAlbums: List<com.music.innertube.models.AlbumItem> = emptyList()
+
 private suspend fun loadHomeFeed(): HomeFeedState =
     YouTube.home().fold(
         onSuccess = { page ->
@@ -103,7 +107,7 @@ private suspend fun loadHomeFeed(): HomeFeedState =
             // shelves at all. Show whatever came back - playlists included -
             // and only call it empty when nothing parseable arrived.
             if (page.sections.any { section -> section.items.isNotEmpty() }) {
-                HomeFeedState.Ready(page)
+                HomeFeedState.Ready(page).also { cachedFeed = it }
             } else {
                 HomeFeedState.Failed("The feed came back empty")
             }
@@ -131,12 +135,16 @@ fun HomeScreen(
     var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var refreshing by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1400); refreshing = false } }
-    val feed by produceState<HomeFeedState>(HomeFeedState.Loading, refreshTick) {
-        value = loadHomeFeed()
+    val feed by produceState<HomeFeedState>(cachedFeed ?: HomeFeedState.Loading, refreshTick) {
+        val fresh = loadHomeFeed()
+        // A failed refresh keeps what is already on screen.
+        value = if (fresh is HomeFeedState.Failed && cachedFeed != null) cachedFeed!! else fresh
     }
 
-    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(emptyList(), refreshTick) {
-        value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
+    val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(cachedAlbums, refreshTick) {
+        val fresh = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
+        if (fresh.isNotEmpty()) cachedAlbums = fresh
+        value = fresh.ifEmpty { cachedAlbums }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = LibraryStore.get(context)
@@ -158,7 +166,7 @@ fun HomeScreen(
 
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
-            if (heroSongs.isEmpty()) Aurora(Modifier.align(Alignment.TopCenter), scroll)
+            if (heroSongs.isEmpty() && feed !is HomeFeedState.Loading) Aurora(Modifier.align(Alignment.TopCenter), scroll)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { refreshing = true; refreshTick++ },
@@ -172,6 +180,7 @@ fun HomeScreen(
                 ) {
                     item(key = "header") {
                         if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, scroll)
+                        else if (feed is HomeFeedState.Loading) Box(Modifier.fillMaxWidth().height(380.dp))
                         else Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)

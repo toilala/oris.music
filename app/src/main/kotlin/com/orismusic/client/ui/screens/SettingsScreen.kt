@@ -121,8 +121,15 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            SectionTitle("Appearance")
             val look = com.orismusic.client.settings.AppearanceSettings
+            SectionTitle("Navigation")
+            SettingSwitch(
+                title = "Show tab names",
+                detail = if (look.navLabels) "On: Home, Search and Library are named under their icons." else "Off: icons only, in a round bar.",
+                checked = look.navLabels,
+            ) { look.navLabels = it; look.save() }
+            Spacer(Modifier.height(4.dp))
+            SectionTitle("Appearance")
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 SettingSwitch(
                     title = "Wallpaper colours",

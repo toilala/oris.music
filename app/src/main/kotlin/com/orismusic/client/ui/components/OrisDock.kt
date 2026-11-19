@@ -54,10 +54,11 @@ fun OrisDock(
     icon: (Int) -> ImageVector,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    showLabels: Boolean = true,
 ) {
-    val tabW = 74.dp
-    val tabH = 54.dp
-    val shape = RoundedCornerShape(30.dp)
+    val tabW = if (showLabels) 78.dp else 54.dp
+    val tabH = if (showLabels) 58.dp else 54.dp
+    val shape = RoundedCornerShape(50)
     val warm = MaterialTheme.colorScheme.tertiary
     val none = selected < 0
     val selected = selected.coerceAtLeast(0)
@@ -75,7 +76,7 @@ fun OrisDock(
                 BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f)))),
                 shape,
             )
-            .padding(6.dp),
+            .padding(5.dp),
     ) {
         Box(
             Modifier
@@ -89,16 +90,15 @@ fun OrisDock(
                         radius = size.width * 0.9f, center = center,
                     )
                 }
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(50))
                 .background(Brush.linearGradient(listOf(warm, warm.copy(alpha = 0.78f)), Offset.Zero, Offset(300f, 100f)))
-                .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(24.dp)),
+                .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(50)),
         )
         Row {
             repeat(count) { i ->
                 val active = i == selected && !none
                 val pop by animateFloatAsState(if (active) 1.14f else 1f, spring(0.38f, 520f), label = "pop")
-                val lift by animateDpAsState(if (active) (-2).dp else 0.dp, spring(0.5f, 500f), label = "lift")
-                val tint by animateColorAsState(
+                                val tint by animateColorAsState(
                     if (active) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                     label = "tint",
                 )
@@ -110,9 +110,9 @@ fun OrisDock(
                 ) {
                     Icon(
                         icon(i), contentDescription = label(i), tint = tint,
-                        modifier = Modifier.size(24.dp).graphicsLayer { scaleX = pop; scaleY = pop; translationY = lift.toPx() },
+                        modifier = Modifier.size(24.dp).graphicsLayer { scaleX = pop; scaleY = pop },
                     )
-                    Text(label(i), color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                    if (showLabels) Text(label(i), color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
                 }
             }
         }

@@ -438,6 +438,7 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
             label = { tabs[it].label },
             icon = { icon(tabs[it]) },
             onSelect = { onSelect(tabs[it]) },
+            showLabels = com.orismusic.client.settings.AppearanceSettings.navLabels,
         )
     }
 }

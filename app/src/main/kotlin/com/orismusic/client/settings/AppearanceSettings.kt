@@ -30,6 +30,8 @@ object AppearanceSettings {
     var intensity by mutableFloatStateOf(0.75f)
     /** Hide the Android status bar; a swipe from the top edge shows it briefly. */
     var hideStatusBar by mutableStateOf(false)
+    /** Show the tab names under the bottom bar icons. */
+    var navLabels by mutableStateOf(true)
 
     fun init(context: Context) {
         if (store != null) return
@@ -42,6 +44,7 @@ object AppearanceSettings {
         sleepTimerButton = prefs.getBoolean("sleep_button", false)
         intensity = prefs.getFloat("intensity", 0.75f)
         hideStatusBar = prefs.getBoolean("hide_status", false)
+        navLabels = prefs.getBoolean("nav_labels", true)
     }
 
     fun save() {
@@ -53,6 +56,7 @@ object AppearanceSettings {
             ?.putBoolean("sleep_button", sleepTimerButton)
             ?.putFloat("intensity", intensity)
             ?.putBoolean("hide_status", hideStatusBar)
+            ?.putBoolean("nav_labels", navLabels)
             ?.apply()
     }
 }
