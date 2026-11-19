@@ -9,6 +9,15 @@ package com.orismusic.client.ui.screens
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.rounded.Spa
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.NightsStay
+import androidx.compose.material.icons.rounded.Landscape
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -156,7 +165,7 @@ fun HomeScreen(
                 ) {
                     item(key = "header") {
                         if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, onSettings, scroll)
-                        else HomeHeader(scroll)
+                        else Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
                     }
                     if (hasHistory) item(key = "jump") { JumpBackIn(playerConnection) }
                     item(key = "moods") { MoodChips(onMood = { SearchRequest.pending = it; onSearch() }) }
@@ -264,7 +273,8 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, onSet
             }
         }
     }
-    Box(Modifier.fillMaxWidth().height(520.dp)) {
+    val topInset = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    Box(Modifier.fillMaxWidth().height(520.dp + topInset)) {
         androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             val song = songs[page]
             Box(Modifier.fillMaxSize().clip(androidx.compose.ui.graphics.RectangleShape)) {
@@ -314,16 +324,18 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, onSet
             }
         }
         Row(
-            Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 10.dp),
+            Modifier.fillMaxWidth().statusBarsPadding().padding(start = 22.dp, end = 16.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OrisLogo(Modifier.size(28.dp))
+            OrisLogo(Modifier.size(28.dp), tint = androidx.compose.ui.graphics.Color.White)
             Spacer(Modifier.width(10.dp))
             Text("Oris", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
             Spacer(Modifier.weight(1f))
             Box(
                 Modifier.size(42.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f)).pressClickable(onSettings),
+                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f))
+                    .border(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.22f), androidx.compose.foundation.shape.CircleShape)
+                    .pressClickable(onSettings),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(androidx.compose.material.icons.Icons.Filled.Settings, contentDescription = "Account",
@@ -407,17 +419,18 @@ private fun HomeHeader(scroll: () -> Int) {
 private fun MoodChips(onMood: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val moods = listOf(
-        Triple("Chill", "chill music", androidx.compose.ui.graphics.Color(0xFF6FB6C9)),
-        Triple("Hype", "hype workout music", androidx.compose.ui.graphics.Color(0xFFE0745A)),
-        Triple("Focus", "focus music", androidx.compose.ui.graphics.Color(0xFF9B8FE0)),
-        Triple("Late night", "late night music", androidx.compose.ui.graphics.Color(0xFF7C8FBF)),
-        Triple("Nepali", "nepali songs", androidx.compose.ui.graphics.Color(0xFFD9A441)),
+        Triple("Chill", "chill music", androidx.compose.ui.graphics.Color(0xFF6FB6C9)) to androidx.compose.material.icons.Icons.Rounded.Spa,
+        Triple("Hype", "hype workout music", androidx.compose.ui.graphics.Color(0xFFE0745A)) to androidx.compose.material.icons.Icons.Rounded.Bolt,
+        Triple("Focus", "focus music", androidx.compose.ui.graphics.Color(0xFF9B8FE0)) to androidx.compose.material.icons.Icons.Rounded.Headphones,
+        Triple("Late night", "late night music", androidx.compose.ui.graphics.Color(0xFF7C8FBF)) to androidx.compose.material.icons.Icons.Rounded.NightsStay,
+        Triple("Nepali", "nepali songs", androidx.compose.ui.graphics.Color(0xFFD9A441)) to androidx.compose.material.icons.Icons.Rounded.Landscape,
     )
     Row(
         Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        moods.forEachIndexed { index, (label, query, accent) ->
+        moods.forEachIndexed { index, (mood, moodIcon) ->
+            val (label, query, accent) = mood
             val pop = remember { androidx.compose.animation.core.Animatable(0f) }
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(300L + index * 70L)
@@ -429,14 +442,15 @@ private fun MoodChips(onMood: (String) -> Unit) {
                     .clip(RoundedCornerShape(50))
                     .background(
                         androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            listOf(accent.copy(alpha = 0.32f), scheme.surfaceContainerHigh),
+                            listOf(accent.copy(alpha = 0.30f), androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f)),
                         ),
                     )
+                    .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(50))
                     .pressClickable({ onMood(query) })
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(accent))
+                Icon(moodIcon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
             }
@@ -446,8 +460,8 @@ private fun MoodChips(onMood: (String) -> Unit) {
 
 /** Small Oris mark: an orbit ring with a bright dot. */
 @Composable
-fun OrisLogo(modifier: Modifier = Modifier) {
-    val ink = MaterialTheme.colorScheme.onSurface
+fun OrisLogo(modifier: Modifier = Modifier, tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface) {
+    val ink = tint
     val warm = MaterialTheme.colorScheme.tertiary
     val hole = MaterialTheme.colorScheme.background
     androidx.compose.foundation.Canvas(modifier) {

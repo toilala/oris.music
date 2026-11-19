@@ -517,20 +517,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                     )
                 )
             }
-            val pending = PendingIntent.getActivity(
-                this,
-                0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE
-            )
-            val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(getString(R.string.music_player))
-                .setContentText("")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pending)
-                .setOngoing(true)
-                .build()
-            startForeground(NOTIFICATION_ID, notification)
+            // No placeholder notification here: the media notification appears once something plays.
         } catch (e: Exception) {
             Timber.tag("OrisMediaService").e(e, "Failed to create foreground notification")
             reportException(e)

@@ -131,17 +131,21 @@ fun NowPlayingScreen(
         animationSpec = androidx.compose.animation.core.tween(450), label = "hero blur")
     val heroAlpha by animateFloatAsState(if (lyricsOpen) 0.35f else 1f,
         animationSpec = androidx.compose.animation.core.tween(450), label = "hero alpha")
-    Box(modifier.fillMaxSize().background(floor)) {
-        if (adaptive && mode == com.orismusic.client.settings.BackgroundMode.Blur) {
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+    Box(modifier.fillMaxSize().background(base)) {
+        // Glass: the same cover, blurred and enlarged, fills the whole screen behind everything.
+        Crossfade(targetState = art, label = "glass art", modifier = Modifier.fillMaxSize()) { url ->
             com.orismusic.client.ui.components.Artwork(
-                art,
-                Modifier.fillMaxSize().blur(60.dp).graphicsLayer { alpha = 0.2f + 0.5f * k },
+                url,
+                Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(70.dp),
                 androidx.compose.ui.graphics.RectangleShape,
-                px = 200,
+                null,
+                px = 300,
             )
         }
-        // Full-bleed artwork that fades into the background below it.
-        Crossfade(targetState = art, label = "hero art", modifier = Modifier.fillMaxWidth().aspectRatio(1f).align(Alignment.TopCenter)) { url ->
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.15f), 1f to Color.Black.copy(alpha = 0.6f))))
+        // Full-bleed cover over the top of the screen, melting into the glass below it.
+        Crossfade(targetState = art, label = "hero art", modifier = Modifier.fillMaxWidth().height(screenH * 0.62f).align(Alignment.TopCenter)) { url ->
             com.orismusic.client.ui.components.Artwork(
                 url,
                 Modifier.fillMaxSize()
@@ -150,7 +154,7 @@ fun NowPlayingScreen(
                     .drawWithContent {
                         drawContent()
                         drawRect(
-                            Brush.verticalGradient(0.8f to Color.Black, 1f to Color.Transparent),
+                            Brush.verticalGradient(0.68f to Color.Black, 1f to Color.Transparent),
                             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                         )
                     },
@@ -159,7 +163,6 @@ fun NowPlayingScreen(
                 px = 1200,
             )
         }
-        // Soft shade at the top so the status bar and close button stay readable.
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
         NowPlayingContent(connection, onCollapse, onQueue, lyricsOpen, setLyricsOpen = { lyricsOpen = it })
     }

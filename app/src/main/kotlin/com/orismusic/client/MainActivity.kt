@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -230,6 +231,7 @@ class MainActivity : ComponentActivity() {
                         }
                         Scaffold(
                             modifier = Modifier.fillMaxSize().nestedScroll(navScroll),
+                            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                             bottomBar = {
                                 Column {
                                     connection?.let {
@@ -256,7 +258,7 @@ class MainActivity : ComponentActivity() {
                                     connection = connection,
                                     onBack = { detail = detailBack; detailBack = null },
                                     onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = openDetail; detail = it } } },
-                                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(innerPadding),
                                 )
                             } else
                             androidx.compose.animation.AnimatedContent(
@@ -284,6 +286,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenPlayer = { navigation = navigation.openPlayer() },
                                     modifier = Modifier
                                         .fillMaxSize()
+                                        .statusBarsPadding()
                                         .padding(innerPadding),
                                     connection = connection,
                                 )
@@ -292,6 +295,7 @@ class MainActivity : ComponentActivity() {
                                     onOpen = { t -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(t, connection) { detail = it; detailBack = null } } },
                                     modifier = Modifier
                                         .fillMaxSize()
+                                        .statusBarsPadding()
                                         .padding(innerPadding),
                                 )
                                 MainTab.Library -> com.orismusic.client.ui.screens.LibraryScreen(
@@ -300,6 +304,7 @@ class MainActivity : ComponentActivity() {
                                     onSettings = { settingsOpen = true },
                                     modifier = Modifier
                                         .fillMaxSize()
+                                        .statusBarsPadding()
                                         .padding(innerPadding),
                                 )
                             }
@@ -438,9 +443,10 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
         if (!isCollapsed) {
             androidx.compose.material3.Surface(
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(34.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f)),
-                shadowElevation = 10.dp,
+                color = androidx.compose.ui.graphics.Color(0xFF1B1816).copy(alpha = 0.80f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.28f), androidx.compose.ui.graphics.Color.White.copy(alpha = 0.06f)))),
+                shadowElevation = 14.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 androidx.compose.foundation.layout.Row(

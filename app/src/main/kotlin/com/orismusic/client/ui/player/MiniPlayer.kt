@@ -15,6 +15,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -112,6 +113,7 @@ fun MiniPlayer(
             }
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.5f).compositeOver(base), base)))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.26f), Color.White.copy(alpha = 0.05f))), shape)
             .pressClickable(onExpand, 0.985f),
     ) {
         Row(

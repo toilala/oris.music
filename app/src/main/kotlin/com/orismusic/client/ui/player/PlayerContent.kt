@@ -33,6 +33,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -107,7 +110,8 @@ internal fun NowPlayingContent(
     val screenW = LocalConfiguration.current.screenWidthDp.dp
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // The cover is as wide as the screen, so the title block starts over its lower fade.
-    val zoneHeight = (screenW - statusTop - 104.dp).coerceAtLeast(120.dp)
+    val screenH = LocalConfiguration.current.screenHeightDp.dp
+    val zoneHeight = (screenH * 0.47f - statusTop).coerceAtLeast(120.dp)
     val nextIndex = connection.player.nextMediaItemIndex
     val nextTitle = if (nextIndex != C.INDEX_UNSET) connection.player.getMediaItemAt(nextIndex).mediaMetadata.title?.toString() else null
 
@@ -129,11 +133,6 @@ internal fun NowPlayingContent(
                     }
                 },
         ) {
-            Box(
-                Modifier.align(Alignment.TopCenter).padding(top = 10.dp).width(40.dp).height(5.dp)
-                    .clip(CircleShape).background(Color.White.copy(alpha = 0.55f)).clickable { onCollapse() }
-                    .semantics { contentDescription = "Now playing" },
-            )
             androidx.compose.animation.Crossfade(
                 targetState = lyricsOpen, animationSpec = tween(300),
                 modifier = Modifier.padding(top = 28.dp), label = "lyrics",
@@ -146,13 +145,14 @@ internal fun NowPlayingContent(
             Column(Modifier.weight(1f)) {
                 Text(
                     metadata?.title?.toString().orEmpty(),
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     metadata?.artist?.toString().orEmpty(),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.White.copy(alpha = 0.68f),
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -160,13 +160,24 @@ internal fun NowPlayingContent(
             val likePressed by likePress.collectIsPressedAsState()
             val likeScale by animateFloatAsState(if (isLiked) 1f else if (likePressed) 0.8f else 1f,
                 spring(dampingRatio = 0.35f, stiffness = 400f), label = "like pop")
-            IconButton(onClick = { nowSong?.let { library.toggleLike(it) } }, enabled = nowSong != null, interactionSource = likePress) {
+            Box(
+                Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f))
+                    .clickable(interactionSource = likePress, indication = null, enabled = nowSong != null) { nowSong?.let { library.toggleLike(it) } },
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     contentDescription = if (isLiked) "Remove from liked songs" else "Like song",
-                    tint = if (isLiked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (isLiked) accent else Color.White,
                     modifier = Modifier.graphicsLayer { scaleX = likeScale; scaleY = likeScale },
                 )
+            }
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)).clickable { onCollapse() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse player", tint = Color.White)
             }
         }
 
@@ -185,32 +196,31 @@ internal fun NowPlayingContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { connection.seekToPrevious() }, enabled = canSkipPrevious, modifier = Modifier.size(64.dp)) {
-                Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(40.dp))
+            IconButton(onClick = { connection.seekToPrevious() }, enabled = canSkipPrevious, modifier = Modifier.size(88.dp)) {
+                Icon(Icons.Rounded.FastRewind, contentDescription = "Previous", modifier = Modifier.size(62.dp),
+                    tint = Color.White.copy(alpha = if (canSkipPrevious) 1f else 0.35f))
             }
             val playPress = remember { MutableInteractionSource() }
             val pressed by playPress.collectIsPressedAsState()
-            val playScale by animateFloatAsState(if (pressed) 0.9f else 1f,
-                spring(dampingRatio = 0.65f, stiffness = 500f), label = "play press")
-            // The button softens from a circle to a rounded square while paused.
-            val corner by animateFloatAsState(if (isPlaying) 40f else 28f, tween(350), label = "play corner")
-            FilledIconButton(
-                interactionSource = playPress,
-                onClick = { if (isPlaying) connection.pause() else connection.play() },
-                shape = RoundedCornerShape(corner.dp),
-                modifier = Modifier.size(84.dp).graphicsLayer { scaleX = playScale; scaleY = playScale },
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.background),
+            val playScale by animateFloatAsState(if (pressed) 0.88f else 1f,
+                spring(dampingRatio = 0.55f, stiffness = 500f), label = "play press")
+            Box(
+                Modifier.size(88.dp).graphicsLayer { scaleX = playScale; scaleY = playScale }.clip(CircleShape)
+                    .clickable(interactionSource = playPress, indication = null) { if (isPlaying) connection.pause() else connection.play() },
+                contentAlignment = Alignment.Center,
             ) {
                 Crossfade(isPlaying, label = "play icon") { playing ->
                     Icon(
                         if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (playing) "Pause" else "Play",
-                        modifier = Modifier.size(44.dp),
+                        tint = Color.White,
+                        modifier = Modifier.size(72.dp),
                     )
                 }
             }
-            IconButton(onClick = { connection.seekToNext() }, enabled = canSkipNext, modifier = Modifier.size(64.dp)) {
-                Icon(Icons.Rounded.SkipNext, contentDescription = "Next", modifier = Modifier.size(40.dp))
+            IconButton(onClick = { connection.seekToNext() }, enabled = canSkipNext, modifier = Modifier.size(88.dp)) {
+                Icon(Icons.Rounded.FastForward, contentDescription = "Next", modifier = Modifier.size(62.dp),
+                    tint = Color.White.copy(alpha = if (canSkipNext) 1f else 0.35f))
             }
         }
 
@@ -220,7 +230,8 @@ internal fun NowPlayingContent(
         var swipe by remember { mutableStateOf(0f) }
         Surface(
             shape = RoundedCornerShape(30.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f),
+            color = Color.White.copy(alpha = 0.11f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
             modifier = Modifier.fillMaxWidth().height(64.dp).padding(bottom = 0.dp)
                 .pointerInput(Unit) {
                     detectVerticalDragGestures(
@@ -236,7 +247,7 @@ internal fun NowPlayingContent(
                     onClick = { setLyricsOpen(!lyricsOpen) },
                     modifier = Modifier.size(48.dp).clip(CircleShape).background(accent.copy(alpha = lyricsBg)),
                 ) {
-                    Icon(Icons.Rounded.Lyrics, contentDescription = "Lyrics", tint = if (lyricsOpen) accent else MaterialTheme.colorScheme.onSurface)
+                    Icon(Icons.Rounded.Lyrics, contentDescription = "Lyrics", tint = if (lyricsOpen) accent else Color.White)
                 }
                 Column(
                     Modifier.weight(1f).clickable { trayOpen = true }.padding(horizontal = 8.dp),
@@ -246,13 +257,13 @@ internal fun NowPlayingContent(
                     Text(
                         if (nextTitle != null) "Up next  " + nextTitle else "Swipe up for more",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color.White.copy(alpha = 0.7f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 5.dp),
                     )
                 }
                 IconButton(onClick = { trayOpen = true }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.MoreHoriz, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurface)
+                    Icon(Icons.Rounded.MoreHoriz, contentDescription = "More", tint = Color.White)
                 }
             }
         }

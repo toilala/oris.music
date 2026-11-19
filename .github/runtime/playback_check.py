@@ -72,7 +72,7 @@ if __name__ == '__main__':
     wait_label('Nothing queued yet. Pick a song on Home.')
     screen('queue')
     tap('Open player')
-    wait_label('Now playing')
+    wait_label('Collapse player')
     wait_label('Play')
     screen('player_idle')
     back()

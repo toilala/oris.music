@@ -79,7 +79,7 @@ fun WaveSeekBar(
         infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart),
         label = "wave phase value",
     )
-    val track = accent.copy(alpha = 0.22f)
+    val track = Color.White.copy(alpha = 0.28f)
     val shownSec by remember(durationMs) {
         derivedStateOf { (((if (dragging) dragFrac else progress) * durationMs) / 1000f).toLong() }
     }
@@ -115,9 +115,9 @@ fun WaveSeekBar(
             val w = size.width
             val cy = size.height / 2f
             val x = (if (dragging) dragFrac else progress) * w
-            val strokeW = 4.dp.toPx()
+            val strokeW = 5.dp.toPx()
             drawLine(track, Offset(x, cy), Offset(w, cy), strokeW, StrokeCap.Round)
-            val a = 3.5.dp.toPx() * amp
+            val a = 2.2.dp.toPx() * amp
             val wavelength = 26.dp.toPx()
             val step = 3.dp.toPx()
             val path = Path()
@@ -137,9 +137,9 @@ fun WaveSeekBar(
             )
         }
         Row(Modifier.fillMaxWidth()) {
-            Text(formatTime(shownSec * 1000L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatTime(shownSec * 1000L), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-            Text(formatTime(durationMs.coerceAtLeast(0L)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatTime(durationMs.coerceAtLeast(0L)), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
         }
     }
 }
