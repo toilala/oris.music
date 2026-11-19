@@ -1,5 +1,8 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.settings.HomeSection
+import com.orismusic.client.settings.JumpStyle
+import com.orismusic.client.settings.HomeSettings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -107,11 +110,21 @@ fun LazyListScope.listeningShelves(
     onOpen: (DetailTarget) -> Unit,
     scope: CoroutineScope,
 ) {
+    val blocks = HashMap<HomeSection, LazyListScope.() -> Unit>()
+    val uniqueShelves = shelves.distinctBy { it.artist.id }
+    blocks[HomeSection.Jump] = {
     if (history.isNotEmpty()) item(key = "jump") {
         Column(Modifier.entrance(0)) {
             SectionHeader(title = "Jump back in")
             val tiles = history.take(4)
-            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (HomeSettings.jumpStyle == JumpStyle.Strip) LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(tiles, key = { "jb-${it.id}" }) { s ->
+                    Column(Modifier.width(HomeSettings.coverSize.dp(104)).pressClickable({ playHistory(connection, "Jump back in", tiles, s) }, 0.96f)) {
+                        Artwork(s.thumbnail, Modifier.size(HomeSettings.coverSize.dp(104)), HomeSettings.corners.shape(16), s.title)
+                        Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            } else Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 tiles.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEach { s ->
@@ -132,13 +145,15 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
+    }
+    blocks[HomeSection.Recent] = {
     val older = history.drop(4).take(12)
     if (older.isNotEmpty()) item(key = "recent") {
         Column {
             SectionHeader(title = "Recently played")
             OrbitRow(items = older, key = { "rp-${it.id}" }) { s, _, orbit ->
-                Column(orbit.width(150.dp).pressClickable({ playHistory(connection, "Recently played", older, s) })) {
-                    Artwork(s.thumbnail, Modifier.size(150.dp), RoundedCornerShape(24.dp), s.title)
+                Column(orbit.width(HomeSettings.coverSize.dp(150)).pressClickable({ playHistory(connection, "Recently played", older, s) })) {
+                    Artwork(s.thumbnail, Modifier.size(HomeSettings.coverSize.dp(150)), HomeSettings.corners.shape(24), s.title)
                     Text(s.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     Text(s.artist, style = MaterialTheme.typography.bodySmall,
@@ -147,6 +162,8 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
+    }
+    blocks[HomeSection.Most] = {
     val top = taste.mostPlayed
     // A ranking only means something once at least one song has been played more than once.
     if (top.isNotEmpty() && top.first().second > 1) item(key = "most") {
@@ -180,8 +197,9 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
-    val uniqueShelves = shelves.distinctBy { it.artist.id }
-    uniqueShelves.take(3).filter { it.songs.isNotEmpty() }.forEach { shelf ->
+    }
+    blocks[HomeSection.Because] = {
+    uniqueShelves.take(HomeSettings.becauseCount).filter { it.songs.isNotEmpty() }.forEach { shelf ->
         item(key = "because-${shelf.artist.id}") {
             Column {
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -194,11 +212,11 @@ fun LazyListScope.listeningShelves(
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(shelf.songs.distinctBy { it.id }.take(12), key = { "bc-${shelf.artist.id}-${it.id}" }) { s ->
-                        Column(Modifier.width(140.dp).pressClickable({
+                        Column(Modifier.width(HomeSettings.coverSize.dp(140)).pressClickable({
                             val c = connection
                             if (c != null) scope.launch { c.playQueue(MusicRadioQueue(shelf.artist.title, shelf.songs, s.id)) }
                         })) {
-                            Artwork(s.thumbnail, Modifier.size(140.dp), RoundedCornerShape(16.dp), s.title)
+                            Artwork(s.thumbnail, Modifier.size(HomeSettings.coverSize.dp(140)), HomeSettings.corners.shape(16), s.title)
                             Text(s.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                             Text(s.artists.joinToString { it.name }, style = MaterialTheme.typography.bodySmall,
@@ -209,6 +227,8 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
+    }
+    blocks[HomeSection.History] = {
     val rows = history.drop(16).take(5)
     if (rows.isNotEmpty()) item(key = "history") {
         Column {
@@ -229,13 +249,15 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
+    }
+    blocks[HomeSection.FromArtists] = {
     val releases = uniqueShelves.flatMap { it.albums }.distinctBy { it.browseId }.take(12)
     if (releases.isNotEmpty()) item(key = "from-artists") {
         Column {
             SectionHeader(title = "New from your artists", subtitle = "Albums and singles from artists you play")
             OrbitRow(items = releases, key = { "na-${it.browseId}" }) { a, _, orbit ->
-                Column(orbit.width(150.dp).pressClickable({ a.toDetailTarget()?.let(onOpen) })) {
-                    Artwork(a.thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), a.title)
+                Column(orbit.width(HomeSettings.coverSize.dp(150)).pressClickable({ a.toDetailTarget()?.let(onOpen) })) {
+                    Artwork(a.thumbnail, Modifier.size(HomeSettings.coverSize.dp(150)), HomeSettings.corners.shape(16), a.title)
                     Text(a.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     Text(a.artists?.joinToString { it.name }.orEmpty(), style = MaterialTheme.typography.bodySmall,
@@ -244,6 +266,8 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
+    }
+    blocks[HomeSection.Artists] = {
     if (uniqueShelves.isNotEmpty()) item(key = "artist-list") {
         Column {
             SectionHeader(title = "Your artists")
@@ -261,4 +285,6 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
+    }
+    HomeSettings.order.toList().forEach { sec -> if (HomeSettings.visible(sec)) blocks[sec]?.invoke(this) }
 }

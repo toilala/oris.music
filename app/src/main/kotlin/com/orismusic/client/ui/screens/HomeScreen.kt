@@ -7,6 +7,7 @@
  */
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.settings.HomeSettings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.rounded.Spa
@@ -158,15 +159,16 @@ fun HomeScreen(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
-    val heroSongs = remember(feed) {
-        (feed as? HomeFeedState.Ready)?.page?.sections
+    val heroOn = HomeSettings.hero
+    val heroSongs = remember(feed, heroOn) {
+        if (!heroOn) emptyList() else (feed as? HomeFeedState.Ready)?.page?.sections
             ?.flatMap { MusicCandidates.select(it.items.filterIsInstance<SongItem>()) }
             .orEmpty().distinctBy { it.id }.take(5)
     }
 
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
-            if (heroSongs.isEmpty() && feed !is HomeFeedState.Loading) Aurora(Modifier.align(Alignment.TopCenter), scroll)
+            if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { refreshing = true; refreshTick++ },
@@ -176,11 +178,11 @@ fun HomeScreen(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
                     item(key = "header") {
                         if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, scroll)
-                        else if (feed is HomeFeedState.Loading) Box(Modifier.fillMaxWidth().height(380.dp))
+                        else if (heroOn && feed is HomeFeedState.Loading) Box(Modifier.fillMaxWidth().height(380.dp))
                         else Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)
@@ -222,7 +224,7 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        is HomeFeedState.Ready -> feedItems(state.page, newAlbums, playerConnection, onOpen, scope)
+                        is HomeFeedState.Ready -> if (HomeSettings.youtube) feedItems(state.page, newAlbums, playerConnection, onOpen, scope)
                     }
                 }
             }

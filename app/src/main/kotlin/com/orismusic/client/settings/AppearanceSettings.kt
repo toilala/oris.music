@@ -45,6 +45,7 @@ object AppearanceSettings {
         intensity = prefs.getFloat("intensity", 0.75f)
         hideStatusBar = prefs.getBoolean("hide_status", false)
         NavSettings.init(context)
+        HomeSettings.init(context)
     }
 
     fun save() {
