@@ -128,7 +128,9 @@ fun QueueScreen(
         val queueTitle = connection.queueTitle.collectAsState().value
         val currentIndex = connection.currentWindowIndex.collectAsState().value
         val player = connection.player
-        val count = try { player.mediaItemCount } catch (e: Exception) { 0 }
+        var version by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        val count = try { version.let { player.mediaItemCount } } catch (e: Exception) { 0 }
+        val view = androidx.compose.ui.platform.LocalView.current
 
         Column(
             modifier = Modifier
@@ -164,14 +166,38 @@ fun QueueScreen(
                 @androidx.compose.runtime.Composable
                 fun QueueRow(index: Int, dim: Boolean) {
                     val item = try { player.getMediaItemAt(index) } catch (e: Exception) { null } ?: return
-                    Box(Modifier.alpha(if (dim) 0.55f else 1f)) {
-                        com.orismusic.client.ui.components.SongRow(
-                            title = item.mediaMetadata.title?.toString().orEmpty(),
-                            subtitle = item.mediaMetadata.artist?.toString().orEmpty(),
-                            thumbnail = item.mediaMetadata.artworkUri?.toString(),
-                            onClick = { connection.seekToIndex(index) },
-                            highlight = index == currentIndex,
+                    val isNow = index == currentIndex
+                    androidx.compose.runtime.key(version, index) {
+                        val dismiss = androidx.compose.material3.rememberSwipeToDismissBoxState(
+                            confirmValueChange = { v ->
+                                if (v == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart && !isNow) {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                    try { player.removeMediaItem(index) } catch (e: Exception) { }
+                                    version++
+                                    true
+                                } else false
+                            },
                         )
+                        androidx.compose.material3.SwipeToDismissBox(
+                            state = dismiss,
+                            enableDismissFromStartToEnd = false,
+                            enableDismissFromEndToStart = !isNow,
+                            backgroundContent = {
+                                Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.CenterEnd) {
+                                    Text("Remove", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            },
+                        ) {
+                            Box(Modifier.background(MaterialTheme.colorScheme.background).alpha(if (dim) 0.55f else 1f)) {
+                                com.orismusic.client.ui.components.SongRow(
+                                    title = item.mediaMetadata.title?.toString().orEmpty(),
+                                    subtitle = item.mediaMetadata.artist?.toString().orEmpty(),
+                                    thumbnail = item.mediaMetadata.artworkUri?.toString(),
+                                    onClick = { connection.seekToIndex(index) },
+                                    highlight = isNow,
+                                )
+                            }
+                        }
                     }
                 }
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
