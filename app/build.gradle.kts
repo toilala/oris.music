@@ -17,8 +17,8 @@ android {
         applicationId = "toilala.oris"
         minSdk = 26
         targetSdk = 37
-        versionCode = 8
-        versionName = "1.4.0-beta1"
+        versionCode = 9
+        versionName = "1.4.0-beta2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
