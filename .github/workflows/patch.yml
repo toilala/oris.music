@@ -1,0 +1,62 @@
+name: Apply verified patch
+on:
+  workflow_dispatch:
+    inputs:
+      commit_message:
+        description: Commit message for the patch
+        required: true
+      payload:
+        description: base64 of gzipped JSON {"files":[{"path":"...","b64":"..."}]}
+        required: true
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Prepare debug signing
+        run: |
+          chmod +x gradlew
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
+          fi
+      - name: Apply payload files
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+        run: |
+          python3 - <<'PY'
+          import os, json, base64, gzip, pathlib
+          data = json.loads(gzip.decompress(base64.b64decode(os.environ['PAYLOAD'])))
+          for f in data['files']:
+              p = pathlib.Path(f['path'])
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_bytes(base64.b64decode(f['b64']))
+              print('wrote', p, p.stat().st_size, 'bytes')
+          PY
+      - name: Build FOSS debug APK (verification gate)
+        run: ./gradlew :app:assembleFossDebug --console=plain --warning-mode summary
+      - name: Commit and push the verified patch
+        run: |
+          git config user.name toilala
+          git config user.email 129511137+toilala@users.noreply.github.com
+          git add -A
+          git commit -m "${{ inputs.commit_message }}"
+          git push
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oris-rebuilt-patch-foss-debug
+          path: app/build/outputs/apk/foss/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14
