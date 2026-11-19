@@ -46,6 +46,7 @@ object AppearanceSettings {
         hideStatusBar = prefs.getBoolean("hide_status", false)
         NavSettings.init(context)
         HomeSettings.init(context)
+        PlayerSettings.init(context)
     }
 
     fun save() {

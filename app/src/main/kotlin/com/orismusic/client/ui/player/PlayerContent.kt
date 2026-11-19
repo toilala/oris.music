@@ -73,6 +73,7 @@ import androidx.media3.common.C
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.playback.PlayerConnection
+import com.orismusic.client.settings.PlayerSettings
 
 /**
  * The player below the cover: title over the cover's fade, a seek bar that flows, three big
@@ -142,27 +143,15 @@ internal fun NowPlayingContent(
         }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    metadata?.title?.toString().orEmpty(),
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    metadata?.artist?.toString().orEmpty(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.68f),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
+            NowPlayingTitle(metadata?.title?.toString().orEmpty(), metadata?.artist?.toString().orEmpty(), Modifier.weight(1f))
+            val likeView = androidx.compose.ui.platform.LocalView.current
             val likePress = remember { MutableInteractionSource() }
             val likePressed by likePress.collectIsPressedAsState()
             val likeScale by animateFloatAsState(if (isLiked) 1f else if (likePressed) 0.8f else 1f,
                 spring(dampingRatio = 0.35f, stiffness = 400f), label = "like pop")
             Box(
                 Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f))
-                    .clickable(interactionSource = likePress, indication = null, enabled = nowSong != null) { nowSong?.let { library.toggleLike(it) } },
+                    .clickable(interactionSource = likePress, indication = null, enabled = nowSong != null) { if (PlayerSettings.haptics) likeView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); nowSong?.let { library.toggleLike(it) } },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -191,38 +180,12 @@ internal fun NowPlayingContent(
         )
         Spacer(Modifier.height(6.dp))
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = { connection.seekToPrevious() }, enabled = canSkipPrevious, modifier = Modifier.size(88.dp)) {
-                Icon(Icons.Rounded.FastRewind, contentDescription = "Previous", modifier = Modifier.size(62.dp),
-                    tint = Color.White.copy(alpha = if (canSkipPrevious) 1f else 0.35f))
-            }
-            val playPress = remember { MutableInteractionSource() }
-            val pressed by playPress.collectIsPressedAsState()
-            val playScale by animateFloatAsState(if (pressed) 0.88f else 1f,
-                spring(dampingRatio = 0.55f, stiffness = 500f), label = "play press")
-            Box(
-                Modifier.size(88.dp).graphicsLayer { scaleX = playScale; scaleY = playScale }.clip(CircleShape)
-                    .clickable(interactionSource = playPress, indication = null) { if (isPlaying) connection.pause() else connection.play() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Crossfade(isPlaying, label = "play icon") { playing ->
-                    Icon(
-                        if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (playing) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(72.dp),
-                    )
-                }
-            }
-            IconButton(onClick = { connection.seekToNext() }, enabled = canSkipNext, modifier = Modifier.size(88.dp)) {
-                Icon(Icons.Rounded.FastForward, contentDescription = "Next", modifier = Modifier.size(62.dp),
-                    tint = Color.White.copy(alpha = if (canSkipNext) 1f else 0.35f))
-            }
-        }
+        NowPlayingTransport(
+            isPlaying = isPlaying, canPrevious = canSkipPrevious, canNext = canSkipNext, accent = accent,
+            onPrevious = { connection.seekToPrevious() },
+            onToggle = { if (isPlaying) connection.pause() else connection.play() },
+            onNext = { connection.seekToNext() },
+        )
 
         Spacer(Modifier.weight(1f))
 
@@ -255,7 +218,7 @@ internal fun NowPlayingContent(
                 ) {
                     Box(Modifier.width(28.dp).height(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)))
                     Text(
-                        if (nextTitle != null) "Up next  " + nextTitle else "Swipe up for more",
+                        if (nextTitle != null && PlayerSettings.upNext) "Up next  " + nextTitle else "Swipe up for more",
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.7f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,

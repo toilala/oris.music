@@ -1,0 +1,55 @@
+package com.orismusic.client.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.orismusic.client.settings.PlayKey
+import com.orismusic.client.settings.PlaySize
+import com.orismusic.client.settings.PlayerSettings
+import com.orismusic.client.settings.SkipIcons
+
+/** Everything about the full-screen player's look and feel. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlayerSettingsPage(onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Player") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) },
+    ) { padding ->
+        Column(
+            Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ChoiceRow("Play key style", PlayKey.entries, PlayerSettings.keys, { it.label }) { PlayerSettings.keys = it; PlayerSettings.save() }
+            ChoiceRow("Key size", PlaySize.entries, PlayerSettings.size, { it.label }) { PlayerSettings.size = it; PlayerSettings.save() }
+            ChoiceRow("Previous and next icons", SkipIcons.entries, PlayerSettings.icons, { it.label }) { PlayerSettings.icons = it; PlayerSettings.save() }
+            ToggleRow("Play key morph", "The key turns into a rounded square while music plays.", PlayerSettings.morph) {
+                PlayerSettings.morph = it; PlayerSettings.save()
+            }
+            ToggleRow("Title motion", "The title slides when the song changes.", PlayerSettings.titleMotion) {
+                PlayerSettings.titleMotion = it; PlayerSettings.save()
+            }
+            ToggleRow("Vibration", "A short tick on the keys and like button.", PlayerSettings.haptics) {
+                PlayerSettings.haptics = it; PlayerSettings.save()
+            }
+            ToggleRow("Up next in the bottom bar", "Show the next song's name, or just 'Swipe up for more'.", PlayerSettings.upNext) {
+                PlayerSettings.upNext = it; PlayerSettings.save()
+            }
+            TextButton(onClick = { PlayerSettings.reset() }) { Text("Reset player") }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}

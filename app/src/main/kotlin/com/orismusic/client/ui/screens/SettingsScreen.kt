@@ -54,6 +54,11 @@ fun SettingsScreen(
         NavigationSettings(onBack = { navigationPage = false })
         return
     }
+    var playerPage by remember { mutableStateOf(false) }
+    if (playerPage) {
+        PlayerSettingsPage(onBack = { playerPage = false })
+        return
+    }
     var homePage by remember { mutableStateOf(false) }
     if (homePage) {
         HomeSettingsPage(onBack = { homePage = false })
@@ -77,6 +82,7 @@ fun SettingsScreen(
         ) {
             SettingsLink("Navigation", "Bottom bar: names, effect, style, size, hiding and more") { navigationPage = true }
             SettingsLink("Home", "Sections, order, hero, shelf look and density") { homePage = true }
+            SettingsLink("Player", "Play key style, size, motion, vibration") { playerPage = true }
             SectionTitle("Playback")
             SettingSwitch(
                 title = "Keep playing after app is removed from recents",
