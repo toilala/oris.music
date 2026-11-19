@@ -34,6 +34,7 @@ import com.orismusic.client.ui.components.pressClickable
 import com.orismusic.client.ui.components.shimmer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -133,10 +134,15 @@ fun HomeScreen(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
+    val heroSongs = remember(feed) {
+        (feed as? HomeFeedState.Ready)?.page?.sections
+            ?.flatMap { MusicCandidates.select(it.items.filterIsInstance<SongItem>()) }
+            .orEmpty().distinctBy { it.id }.take(5)
+    }
 
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
-            Aurora(Modifier.align(Alignment.TopCenter), scroll)
+            if (heroSongs.isEmpty()) Aurora(Modifier.align(Alignment.TopCenter), scroll)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { refreshing = true; refreshTick++ },
@@ -148,9 +154,12 @@ fun HomeScreen(
                     contentPadding = PaddingValues(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
-                    item(key = "header") { HomeHeader(scroll) }
-                    item(key = "moods") { MoodChips(onMood = { SearchRequest.pending = it; onSearch() }) }
+                    item(key = "header") {
+                        if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, onSettings, scroll)
+                        else HomeHeader(scroll)
+                    }
                     if (hasHistory) item(key = "jump") { JumpBackIn(playerConnection) }
+                    item(key = "moods") { MoodChips(onMood = { SearchRequest.pending = it; onSearch() }) }
                     when (val state = feed) {
                         HomeFeedState.Loading -> item(key = "loading") {
                             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -237,6 +246,102 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int) {
                 listOf(cool.copy(alpha = 0.18f), androidx.compose.ui.graphics.Color.Transparent), center = c2, radius = w * 0.7f,
             ), radius = w * 0.7f, center = c2,
         )
+    }
+}
+
+/** Full-bleed featured song: cover drifts against the swipe, the Play pill starts a radio from it. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, onSettings: () -> Unit, scroll: () -> Int) {
+    val bg = MaterialTheme.colorScheme.background
+    val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { songs.size })
+    val scope = rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(songs.size) {
+        while (true) {
+            kotlinx.coroutines.delay(6500)
+            if (!pager.isScrollInProgress && songs.size > 1) {
+                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = androidx.compose.animation.core.tween(900))
+            }
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(520.dp)) {
+        androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+            val song = songs[page]
+            Box(Modifier.fillMaxSize().clip(androidx.compose.ui.graphics.RectangleShape)) {
+                Artwork(
+                    song.thumbnail,
+                    Modifier.fillMaxSize().graphicsLayer {
+                        val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
+                        scaleX = 1.2f; scaleY = 1.2f
+                        translationX = off * size.width * 0.22f
+                        translationY = scroll() * 0.25f
+                    },
+                    androidx.compose.ui.graphics.RectangleShape, song.title, 1200,
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f),
+                            0.22f to androidx.compose.ui.graphics.Color.Transparent,
+                            0.5f to androidx.compose.ui.graphics.Color.Transparent,
+                            1f to bg,
+                        ),
+                    ),
+                )
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 40.dp)) {
+                    Text("Picked for you", style = MaterialTheme.typography.labelLarge,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
+                    Text(song.title, style = MaterialTheme.typography.headlineMedium,
+                        color = androidx.compose.ui.graphics.Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp))
+                    Text(song.artists.joinToString { it.name }, style = MaterialTheme.typography.bodyLarge,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        Modifier.padding(top = 16.dp).clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.tertiary)
+                            .pressClickable({
+                                scope.launch { connection?.playQueue(MusicRadioQueue("Picked for you", songs, song.id)) }
+                            }, 0.94f)
+                            .padding(start = 18.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.PlayArrow, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiary)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Play", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiary)
+                    }
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OrisLogo(Modifier.size(28.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Oris", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
+            Spacer(Modifier.weight(1f))
+            Box(
+                Modifier.size(42.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f)).pressClickable(onSettings),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(androidx.compose.material.icons.Icons.Filled.Settings, contentDescription = "Account",
+                    tint = androidx.compose.ui.graphics.Color.White)
+            }
+        }
+        Row(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 52.dp)) {
+            repeat(songs.size) { i ->
+                val active = pager.currentPage == i
+                val w by androidx.compose.animation.core.animateDpAsState(
+                    if (active) 20.dp else 6.dp, androidx.compose.animation.core.spring(0.6f, 400f), label = "dot",
+                )
+                Box(
+                    Modifier.padding(horizontal = 2.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
+                        .background(androidx.compose.ui.graphics.Color.White.copy(alpha = if (active) 0.95f else 0.35f)),
+                )
+            }
+        }
     }
 }
 
@@ -371,24 +476,24 @@ private fun JumpBackIn(connection: PlayerConnection?) {
     if (history.isEmpty()) return
     val songs = history.take(12)
     Column(Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-        SectionHeader(title = "Jump back in")
+        SectionHeader(title = "Recently played")
         com.orismusic.client.ui.components.OrbitRow(items = songs, key = { "back-${it.id}" }) { song, songIndex, orbit ->
                 Column(
                     modifier = orbit
-                        .width(110.dp)
+                        .width(150.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             connection?.playQueue(
                                 ListQueue(
-                                    title = "Jump back in",
+                                    title = "Recently played",
                                     items = songs.map { it.toPlayableItem() },
                                     startIndex = songs.indexOf(song),
                                 ),
                             )
                         },
                 ) {
-                    Artwork(song.thumbnail, Modifier.size(110.dp),
-                        when (songIndex % 3) { 0 -> androidx.compose.foundation.shape.CircleShape; 1 -> RoundedCornerShape(34.dp); else -> RoundedCornerShape(topStart = 44.dp, topEnd = 12.dp, bottomEnd = 44.dp, bottomStart = 12.dp) },
+                    Artwork(song.thumbnail, Modifier.size(150.dp),
+                        RoundedCornerShape(24.dp),
                         song.title)
                     Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))

@@ -437,15 +437,17 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
     ) { isCollapsed ->
         if (!isCollapsed) {
             androidx.compose.material3.Surface(
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(34.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f)),
+                shadowElevation = 10.dp,
             ) {
                 androidx.compose.foundation.layout.Row(
-                    Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                    Modifier.padding(6.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
                 ) {
                     tabs.forEach { tab ->
-                        NavItem(tab, icon(tab), selected == tab.ordinal, showLabel = true, onSelect, Modifier.weight(1f))
+                        NavItem(tab, icon(tab), selected == tab.ordinal, showLabel = true, onSelect, Modifier)
                     }
                 }
             }
@@ -488,17 +490,28 @@ private fun NavItem(
     tab: MainTab, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean,
     showLabel: Boolean, onSelect: (MainTab) -> Unit, modifier: Modifier,
 ) {
-    Column(
+    val fill by androidx.compose.animation.animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.tertiary else androidx.compose.ui.graphics.Color.Transparent,
+        androidx.compose.animation.core.tween(260), label = "nav fill",
+    )
+    val tint = if (selected) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant
+    val expanded = selected && showLabel
+    androidx.compose.foundation.layout.Row(
         modifier = modifier
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
-            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+            .background(fill)
             .clickable { onSelect(tab) }
-            .padding(horizontal = if (showLabel) 12.dp else 16.dp, vertical = if (showLabel) 8.dp else 12.dp),
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        val tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-        Icon(icon, contentDescription = tab.label, tint = tint)
-        if (showLabel) Text(tab.label, style = MaterialTheme.typography.labelMedium,
-            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(icon, contentDescription = if (expanded) null else tab.label, tint = tint)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = expanded,
+            enter = androidx.compose.animation.expandHorizontally(androidx.compose.animation.core.spring(0.8f, 380f)) + fadeIn(),
+            exit = androidx.compose.animation.shrinkHorizontally(androidx.compose.animation.core.spring(0.8f, 380f)) + fadeOut(),
+        ) {
+            Text(tab.label, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1,
+                modifier = Modifier.padding(start = 8.dp))
+        }
     }
 }
