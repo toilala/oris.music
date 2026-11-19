@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.orismusic.client.settings.HomeCorners
 import com.orismusic.client.settings.HomeCoverSize
 import com.orismusic.client.settings.HomeDensity
+import com.orismusic.client.settings.HeroStyle
 import com.orismusic.client.settings.HomeSection
 import com.orismusic.client.settings.HomeSettings
 import com.orismusic.client.settings.JumpStyle
@@ -45,6 +46,7 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             ToggleRow("Top banner", "The big artwork banner at the top. Off gives a plain header.", HomeSettings.hero) {
                 HomeSettings.hero = it; HomeSettings.save()
             }
+            ChoiceRow("Banner style", HeroStyle.entries, HomeSettings.heroStyle, { it.label }) { HomeSettings.heroStyle = it; HomeSettings.save() }
             ToggleRow("YouTube Music shelves", "The shelves from YouTube Music below your own.", HomeSettings.youtube) {
                 HomeSettings.youtube = it; HomeSettings.save()
             }

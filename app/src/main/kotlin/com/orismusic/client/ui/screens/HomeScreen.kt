@@ -181,7 +181,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
                     item(key = "header") {
-                        if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, scroll)
+                        if (heroSongs.isNotEmpty()) { if (HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck) HomeDeck(heroSongs, playerConnection, scroll) else HomeHero(heroSongs, playerConnection, scroll) }
                         else if (heroOn && feed is HomeFeedState.Loading) Box(Modifier.fillMaxWidth().height(380.dp))
                         else Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
                     }
