@@ -21,6 +21,32 @@ screen('shot_settings')
 
 # Seed a few songs so the filled-in screens can be photographed.
 import json, subprocess
+artists = ['Glass Animals', 'glass animals', 'Christina Perri', 'christina perri', 'M83', 'Bipul Chettri']
+songs = [{'id': f'seed{i}', 'title': f'Seed song {i} with a rather long title to wrap', 'artist': artists[i % 6]} for i in range(24)]
+counts = json.dumps({f'seed{i}': (i % 5) + 1 for i in range(24)}).replace('&', '&amp;').replace('"', '&quot;')
+liked = songs[:5]
+blob = json.dumps(songs).replace('&', '&amp;').replace('"', '&quot;')
+likedblob = json.dumps(liked).replace('&', '&amp;').replace('"', '&quot;')
+xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
+       f'<string name="liked">{likedblob}</string><string name="history">{blob}</string><string name="counts">{counts}</string></map>')
+adb('shell', 'am', 'force-stop', PKG)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_label('Home', seconds=60)
+time.sleep(3)
+screen('shot_home')
+tap('Library')
+wait_label('Liked (0)')
+screen('shot_library')
+tap('Playlists (0)')
+wait_label('New playlist')
+screen('shot_playlists')
+tap('Library')
+tap('Settings', bottom=False)
+wait_label('Skip silence')
+screen('shot_settings')
+
+# Seed a few songs so the filled-in screens can be photographed.
+import json, subprocess
 songs = [{'id': f'seed{i}', 'title': t, 'artist': a} for i, (t, a) in enumerate([
     ('Midnight City', 'M83'), ('Kathmandu', 'Bipul Chettri'), ('Heat Waves', 'Glass Animals'),
     ('Redbone', 'Childish Gambino'), ('Sunset Lover', 'Petit Biscuit')])]
@@ -34,6 +60,16 @@ adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
 time.sleep(3)
 screen('shot_home_jump')
+time.sleep(12)
+for i in range(8):
+    adb('shell', 'input', 'swipe', '540', '1500', '540', '500', '350')
+    time.sleep(1.5)
+    crash = adb('logcat', '-d', '-b', 'crash').decode()
+    if 'FATAL EXCEPTION' in crash:
+        print(crash[-3000:], flush=True)
+        screen('failure')
+        raise AssertionError('app crashed while scrolling Home')
+screen('shot_home_scrolled')
 tap('Library')
 wait_label('Liked (5)')
 screen('shot_library_filled')
