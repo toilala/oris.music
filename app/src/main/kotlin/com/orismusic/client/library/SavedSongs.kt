@@ -59,6 +59,9 @@ class LibraryStore private constructor(context: Context) {
     private val likedFlow = MutableStateFlow(read("liked"))
     private val historyFlow = MutableStateFlow(read("history"))
 
+    private val countsFlow = MutableStateFlow(readCounts())
+    /** How many times each song was started on this phone. Songs played before counting began are not in here. */
+    val playCounts: StateFlow<Map<String, Int>> = countsFlow
     val liked: StateFlow<List<SavedSong>> = likedFlow
     val history: StateFlow<List<SavedSong>> = historyFlow
 
@@ -69,14 +72,23 @@ class LibraryStore private constructor(context: Context) {
 
     fun recordPlay(song: SavedSong) {
         if (historyFlow.value.firstOrNull()?.id == song.id) return
+        countsFlow.value = countsFlow.value + (song.id to ((countsFlow.value[song.id] ?: 0) + 1))
+        prefs.edit().putString("counts", JSONObject(countsFlow.value as Map<*, *>).toString()).apply()
         historyFlow.value = historyFlow.value.withPlay(song)
         write("history", historyFlow.value)
     }
 
     fun clearHistory() {
         historyFlow.value = emptyList()
+        countsFlow.value = emptyMap()
+        prefs.edit().remove("counts").apply()
         write("history", emptyList())
     }
+
+    private fun readCounts(): Map<String, Int> = runCatching {
+        val o = JSONObject(prefs.getString("counts", "{}"))
+        o.keys().asSequence().associateWith { o.getInt(it) }
+    }.getOrDefault(emptyMap())
 
     private fun read(key: String): List<SavedSong> = runCatching {
         val array = JSONArray(prefs.getString(key, "[]"))

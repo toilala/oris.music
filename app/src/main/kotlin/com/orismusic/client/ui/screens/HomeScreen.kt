@@ -139,7 +139,14 @@ fun HomeScreen(
         value = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
     }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val hasHistory = LibraryStore.get(context).history.collectAsState().value.isNotEmpty()
+    val store = LibraryStore.get(context)
+    val history = store.history.collectAsState().value
+    val liked = store.liked.collectAsState().value
+    val counts = store.playCounts.collectAsState().value
+    val taste = remember(history, liked, counts) { Taste.from(history, liked, counts) }
+    val shelves by produceState<List<ArtistShelf>>(emptyList(), taste.artists, refreshTick) {
+        value = if (taste.artists.isEmpty()) emptyList() else loadArtistShelves(taste.artists.take(6))
+    }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
@@ -164,11 +171,10 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
                     item(key = "header") {
-                        if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, onSettings, scroll)
+                        if (heroSongs.isNotEmpty()) HomeHero(heroSongs, playerConnection, scroll)
                         else Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
                     }
-                    if (hasHistory) item(key = "jump") { JumpBackIn(playerConnection) }
-                    item(key = "moods") { MoodChips(onMood = { SearchRequest.pending = it; onSearch() }) }
+                    listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)
                     when (val state = feed) {
                         HomeFeedState.Loading -> item(key = "loading") {
                             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -261,7 +267,7 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int) {
 /** Full-bleed featured song: cover drifts against the swipe, the Play pill starts a radio from it. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, onSettings: () -> Unit, scroll: () -> Int) {
+private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scroll: () -> Int) {
     val bg = MaterialTheme.colorScheme.background
     val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { songs.size })
     val scope = rememberCoroutineScope()
@@ -299,8 +305,12 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, onSet
                     ),
                 )
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 40.dp)) {
-                    Text("Picked for you", style = MaterialTheme.typography.labelLarge,
-                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OrisLogo(Modifier.size(15.dp), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
+                        Spacer(Modifier.width(7.dp))
+                        Text("Picked for you", style = MaterialTheme.typography.labelLarge,
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
+                    }
                     Text(song.title, style = MaterialTheme.typography.headlineMedium,
                         color = androidx.compose.ui.graphics.Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp))
@@ -321,25 +331,6 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, onSet
                         Text("Play", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiary)
                     }
                 }
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(start = 22.dp, end = 16.dp, top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OrisLogo(Modifier.size(28.dp), tint = androidx.compose.ui.graphics.Color.White)
-            Spacer(Modifier.width(10.dp))
-            Text("Oris", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
-            Spacer(Modifier.weight(1f))
-            Box(
-                Modifier.size(42.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f))
-                    .border(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.22f), androidx.compose.foundation.shape.CircleShape)
-                    .pressClickable(onSettings),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(androidx.compose.material.icons.Icons.Filled.Settings, contentDescription = "Account",
-                    tint = androidx.compose.ui.graphics.Color.White)
             }
         }
         Row(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 52.dp)) {
@@ -414,50 +405,6 @@ private fun HomeHeader(scroll: () -> Int) {
     }
 }
 
-/** Quick mood searches. Each chip springs in, tinted with its own colour. */
-@Composable
-private fun MoodChips(onMood: (String) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val moods = listOf(
-        Triple("Chill", "chill music", androidx.compose.ui.graphics.Color(0xFF6FB6C9)) to androidx.compose.material.icons.Icons.Rounded.Spa,
-        Triple("Hype", "hype workout music", androidx.compose.ui.graphics.Color(0xFFE0745A)) to androidx.compose.material.icons.Icons.Rounded.Bolt,
-        Triple("Focus", "focus music", androidx.compose.ui.graphics.Color(0xFF9B8FE0)) to androidx.compose.material.icons.Icons.Rounded.Headphones,
-        Triple("Late night", "late night music", androidx.compose.ui.graphics.Color(0xFF7C8FBF)) to androidx.compose.material.icons.Icons.Rounded.NightsStay,
-        Triple("Nepali", "nepali songs", androidx.compose.ui.graphics.Color(0xFFD9A441)) to androidx.compose.material.icons.Icons.Rounded.Landscape,
-    )
-    Row(
-        Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        moods.forEachIndexed { index, (mood, moodIcon) ->
-            val (label, query, accent) = mood
-            val pop = remember { androidx.compose.animation.core.Animatable(0f) }
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-                kotlinx.coroutines.delay(300L + index * 70L)
-                pop.animateTo(1f, androidx.compose.animation.core.spring(0.55f, 260f))
-            }
-            Row(
-                Modifier
-                    .graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = pop.value.coerceIn(0f, 1f) }
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            listOf(accent.copy(alpha = 0.30f), androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f)),
-                        ),
-                    )
-                    .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(50))
-                    .pressClickable({ onMood(query) })
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(moodIcon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurface)
-            }
-        }
-    }
-}
-
 /** Small Oris mark: an orbit ring with a bright dot. */
 @Composable
 fun OrisLogo(modifier: Modifier = Modifier, tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface) {
@@ -479,43 +426,6 @@ fun OrisLogo(modifier: Modifier = Modifier, tint: androidx.compose.ui.graphics.C
         drawPath(arm, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(2.6f * k,
             cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
         drawCircle(ink, radius = 3.5f * k, center = p(69f, 39f))
-    }
-}
-
-/** Recently played songs kept on the phone, so Home is useful even when the feed is not. */
-@Composable
-private fun JumpBackIn(connection: PlayerConnection?) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val history by LibraryStore.get(context).history.collectAsState()
-    if (history.isEmpty()) return
-    val songs = history.take(12)
-    Column(Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-        SectionHeader(title = "Recently played")
-        com.orismusic.client.ui.components.OrbitRow(items = songs, key = { "back-${it.id}" }) { song, songIndex, orbit ->
-                Column(
-                    modifier = orbit
-                        .width(150.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            connection?.playQueue(
-                                ListQueue(
-                                    title = "Recently played",
-                                    items = songs.map { it.toPlayableItem() },
-                                    startIndex = songs.indexOf(song),
-                                ),
-                            )
-                        },
-                ) {
-                    Artwork(song.thumbnail, Modifier.size(150.dp),
-                        RoundedCornerShape(24.dp),
-                        song.title)
-                    Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                    Text(song.artist, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                }
-        }
     }
 }
 

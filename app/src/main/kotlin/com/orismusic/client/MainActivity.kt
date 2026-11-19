@@ -428,67 +428,17 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
         MainTab.Library -> Icons.Rounded.LibraryMusic
         MainTab.Queue -> Icons.Rounded.QueueMusic
     }
-    androidx.compose.animation.AnimatedContent(
-        targetState = collapsed,
-        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
+    androidx.compose.foundation.layout.Box(
+        Modifier.fillMaxWidth().navigationBarsPadding().padding(top = 4.dp, bottom = 8.dp),
         contentAlignment = androidx.compose.ui.Alignment.Center,
-        transitionSpec = {
-            (fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60)) +
-                androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.7f, 380f), initialScale = 0.8f)) togetherWith
-                (fadeOut(androidx.compose.animation.core.tween(120)) +
-                    androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.85f))
-        },
-        label = "nav shape",
-    ) { isCollapsed ->
-        if (!isCollapsed) {
-            androidx.compose.material3.Surface(
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(34.dp),
-                color = androidx.compose.ui.graphics.Color(0xFF1B1816).copy(alpha = 0.80f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(
-                    listOf(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.28f), androidx.compose.ui.graphics.Color.White.copy(alpha = 0.06f)))),
-                shadowElevation = 14.dp,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                androidx.compose.foundation.layout.Row(
-                    Modifier.fillMaxWidth().padding(6.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
-                ) {
-                    tabs.forEach { tab ->
-                        NavItem(tab, icon(tab), selected == tab.ordinal, showLabel = true, onSelect, Modifier)
-                    }
-                }
-            }
-        } else {
-            androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp, androidx.compose.ui.Alignment.CenterHorizontally),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                val current = tabs.firstOrNull { it.ordinal == selected } ?: tabs.first()
-                androidx.compose.material3.Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.size(56.dp).clickable { onSelect(current) },
-                ) {
-                    androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        Icon(icon(current), contentDescription = current.label, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                }
-                androidx.compose.material3.Surface(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ) {
-                    androidx.compose.foundation.layout.Row(
-                        Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
-                    ) {
-                        tabs.filter { it.ordinal != selected }.forEach { tab ->
-                            NavItem(tab, icon(tab), false, showLabel = false, onSelect, Modifier)
-                        }
-                    }
-                }
-            }
-        }
+    ) {
+        com.orismusic.client.ui.components.OrisDock(
+            count = tabs.size,
+            selected = tabs.indexOfFirst { it.ordinal == selected },
+            label = { tabs[it].label },
+            icon = { icon(tabs[it]) },
+            onSelect = { onSelect(tabs[it]) },
+        )
     }
 }
 
