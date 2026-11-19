@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 
 enum class PlayKey(val label: String) { Glass("Glass"), Solid("Solid"), Plain("Plain") }
 enum class PlaySize(val label: String, val play: Int, val skip: Int) { Compact("Compact", 76, 56), Regular("Regular", 88, 64), Large("Large", 100, 72) }
+enum class SeekStyle(val label: String) { Wave("Wave"), Line("Line"), Bars("Bars") }
 enum class SkipIcons(val label: String) { Skip("Skip"), Seek("Seek") }
 
 /**
@@ -19,6 +20,8 @@ object PlayerSettings {
     var keys by mutableStateOf(PlayKey.Glass)
     var size by mutableStateOf(PlaySize.Regular)
     var icons by mutableStateOf(SkipIcons.Skip)
+    var seek by mutableStateOf(SeekStyle.Wave)
+    var remaining by mutableStateOf(false)
     var morph by mutableStateOf(true)
     var titleMotion by mutableStateOf(true)
     var haptics by mutableStateOf(true)
@@ -34,6 +37,8 @@ object PlayerSettings {
         keys = p.enum("keys", PlayKey.Glass)
         size = p.enum("size", PlaySize.Regular)
         icons = p.enum("icons", SkipIcons.Skip)
+        seek = p.enum("seek", SeekStyle.Wave)
+        remaining = p.getBoolean("remaining", false)
         morph = p.getBoolean("morph", true)
         titleMotion = p.getBoolean("title_motion", true)
         haptics = p.getBoolean("haptics", true)
@@ -43,6 +48,7 @@ object PlayerSettings {
     fun save() {
         store?.edit()
             ?.putString("keys", keys.name)?.putString("size", size.name)?.putString("icons", icons.name)
+            ?.putString("seek", seek.name)?.putBoolean("remaining", remaining)
             ?.putBoolean("morph", morph)?.putBoolean("title_motion", titleMotion)
             ?.putBoolean("haptics", haptics)?.putBoolean("up_next", upNext)
             ?.apply()
@@ -50,7 +56,7 @@ object PlayerSettings {
 
     fun reset() {
         keys = PlayKey.Glass; size = PlaySize.Regular; icons = SkipIcons.Skip
-        morph = true; titleMotion = true; haptics = true; upNext = true
+        seek = SeekStyle.Wave; remaining = false; morph = true; titleMotion = true; haptics = true; upNext = true
         save()
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.orismusic.client.settings.PlayKey
 import com.orismusic.client.settings.PlaySize
 import com.orismusic.client.settings.PlayerSettings
+import com.orismusic.client.settings.SeekStyle
 import com.orismusic.client.settings.SkipIcons
 
 /** Everything about the full-screen player's look and feel. */
@@ -36,6 +37,10 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
             ChoiceRow("Play key style", PlayKey.entries, PlayerSettings.keys, { it.label }) { PlayerSettings.keys = it; PlayerSettings.save() }
             ChoiceRow("Key size", PlaySize.entries, PlayerSettings.size, { it.label }) { PlayerSettings.size = it; PlayerSettings.save() }
             ChoiceRow("Previous and next icons", SkipIcons.entries, PlayerSettings.icons, { it.label }) { PlayerSettings.icons = it; PlayerSettings.save() }
+            ChoiceRow("Seek bar", SeekStyle.entries, PlayerSettings.seek, { it.label }) { PlayerSettings.seek = it; PlayerSettings.save() }
+            ToggleRow("Time left", "Show the time left instead of the full length on the right.", PlayerSettings.remaining) {
+                PlayerSettings.remaining = it; PlayerSettings.save()
+            }
             ToggleRow("Play key morph", "The key turns into a rounded square while music plays.", PlayerSettings.morph) {
                 PlayerSettings.morph = it; PlayerSettings.save()
             }

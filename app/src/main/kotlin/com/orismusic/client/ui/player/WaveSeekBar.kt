@@ -7,6 +7,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -71,7 +73,9 @@ fun WaveSeekBar(
         }
     }
 
-    val amp by animateFloatAsState(if (isPlaying && !dragging) 1f else 0f, tween(600), label = "wave amp")
+    val style = com.orismusic.client.settings.PlayerSettings.seek
+    val view = androidx.compose.ui.platform.LocalView.current
+    val amp by animateFloatAsState(if (isPlaying && !dragging && style == com.orismusic.client.settings.SeekStyle.Wave) 1f else 0f, tween(600), label = "wave amp")
     val thumb by animateFloatAsState(if (dragging) 34f else 22f, spring(dampingRatio = 0.6f, stiffness = 400f), label = "thumb")
     val phaseAnim = rememberInfiniteTransition(label = "wave phase")
     val phase by phaseAnim.animateFloat(
@@ -98,13 +102,14 @@ fun WaveSeekBar(
                 }
                 .pointerInput(durationMs) {
                     detectHorizontalDragGestures(
-                        onDragStart = { o -> dragging = true; dragFrac = (o.x / size.width).coerceIn(0f, 1f) },
+                        onDragStart = { o -> if (com.orismusic.client.settings.PlayerSettings.haptics) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); dragging = true; dragFrac = (o.x / size.width).coerceIn(0f, 1f) },
                         onHorizontalDrag = { change, _ ->
                             dragFrac = (change.position.x / size.width).coerceIn(0f, 1f)
                             change.consume()
                         },
                         onDragEnd = {
                             if (durationMs > 0) onSeek((dragFrac * durationMs).toLong())
+                            if (com.orismusic.client.settings.PlayerSettings.haptics) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                             progress = dragFrac
                             dragging = false
                         },
@@ -116,6 +121,19 @@ fun WaveSeekBar(
             val cy = size.height / 2f
             val x = (if (dragging) dragFrac else progress) * w
             val strokeW = 5.dp.toPx()
+            if (style == com.orismusic.client.settings.SeekStyle.Bars) {
+                val gap = 3.dp.toPx(); val bw = 3.dp.toPx()
+                val n = (w / (bw + gap)).toInt().coerceAtLeast(1)
+                for (i in 0 until n) {
+                    val bx = i * (bw + gap) + bw / 2f
+                    // shape only: a fixed pattern, it is not the song's real waveform
+                    val hh = (0.35f + 0.65f * kotlin.math.abs(sin(i * 0.37f) * sin(i * 0.11f + 1f))) * size.height * 0.8f
+                    drawLine(if (bx <= x) accent else track, Offset(bx, cy - hh / 2f), Offset(bx, cy + hh / 2f), bw, StrokeCap.Round)
+                }
+                val th = thumb.dp.toPx()
+                drawRoundRect(Color.White, topLeft = Offset(x - 1.5.dp.toPx(), cy - th / 2f), size = Size(3.dp.toPx(), th), cornerRadius = CornerRadius(1.5.dp.toPx()))
+                return@Canvas
+            }
             drawLine(track, Offset(x, cy), Offset(w, cy), strokeW, StrokeCap.Round)
             val a = 2.2.dp.toPx() * amp
             val wavelength = 26.dp.toPx()
@@ -136,10 +154,19 @@ fun WaveSeekBar(
                 cornerRadius = CornerRadius(2.5.dp.toPx()),
             )
         }
-        Row(Modifier.fillMaxWidth()) {
-            Text(formatTime(shownSec * 1000L), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val big by animateFloatAsState(if (dragging) 1.3f else 1f, spring(0.6f, 400f), label = "time pop")
+            Text(
+                formatTime(shownSec * 1000L), style = MaterialTheme.typography.labelSmall,
+                color = if (dragging) accent else Color.White.copy(alpha = 0.75f),
+                modifier = Modifier.graphicsLayer { scaleX = big; scaleY = big; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) },
+            )
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-            Text(formatTime(durationMs.coerceAtLeast(0L)), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
+            val total = durationMs.coerceAtLeast(0L)
+            Text(
+                if (com.orismusic.client.settings.PlayerSettings.remaining) "-" + formatTime((total - shownSec * 1000L).coerceAtLeast(0L)) else formatTime(total),
+                style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f),
+            )
         }
     }
 }
