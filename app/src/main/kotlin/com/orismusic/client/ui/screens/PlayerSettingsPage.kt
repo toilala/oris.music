@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.orismusic.client.settings.LyricSize
@@ -35,6 +38,7 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            PlayerPreview()
             ChoiceRow("Play key style", PlayKey.entries, PlayerSettings.keys, { it.label }) { PlayerSettings.keys = it; PlayerSettings.save() }
             ChoiceRow("Key size", PlaySize.entries, PlayerSettings.size, { it.label }) { PlayerSettings.size = it; PlayerSettings.save() }
             ChoiceRow("Previous and next icons", SkipIcons.entries, PlayerSettings.icons, { it.label }) { PlayerSettings.icons = it; PlayerSettings.save() }
@@ -63,6 +67,32 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
             }
             TextButton(onClick = { PlayerSettings.reset() }) { Text("Reset player") }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** A live sample of the player controls. Tap the keys to try them; every option below changes it at once. */
+@Composable
+private fun PlayerPreview() {
+    var playing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    var shuffle by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var repeat by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var pos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0.38f) }
+    val accent = androidx.compose.ui.graphics.Color(0xFFE8B7AE)
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        color = androidx.compose.ui.graphics.Color(0xFF1B1716),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            com.orismusic.client.ui.player.NowPlayingTitle("Last Christmas", "Wham!")
+            com.orismusic.client.ui.player.SeekPreview(pos, accent) { pos = it }
+            com.orismusic.client.ui.player.NowPlayingTransport(
+                isPlaying = playing, canPrevious = true, canNext = true, accent = accent,
+                shuffle = shuffle, repeatMode = repeat,
+                onPrevious = { pos = 0f }, onToggle = { playing = !playing }, onNext = { pos = 0f },
+                onShuffle = { shuffle = !shuffle }, onRepeat = { repeat = (repeat + 1) % 3 },
+            )
         }
     }
 }

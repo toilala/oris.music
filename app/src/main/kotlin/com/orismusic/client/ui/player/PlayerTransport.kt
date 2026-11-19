@@ -25,12 +25,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
@@ -75,19 +79,23 @@ internal fun NowPlayingTitle(title: String, artist: String, modifier: Modifier =
 }
 
 /**
- * Previous, play and next. Skip keys lean toward the way they go when pressed, the play key
- * squeezes and, while playing, settles into a rounded square (it is a circle when paused).
+ * Shuffle, previous, play, next, repeat. Skip keys are soft glass circles that lean the way they go
+ * when pressed. The play key is the accent colour, squeezes under the finger and, while playing,
+ * settles into a rounded square (it is a circle when paused). Shuffle and repeat glow when on.
  */
 @Composable
 internal fun NowPlayingTransport(
     isPlaying: Boolean, canPrevious: Boolean, canNext: Boolean, accent: Color,
+    shuffle: Boolean, repeatMode: Int,
     onPrevious: () -> Unit, onToggle: () -> Unit, onNext: () -> Unit,
+    onShuffle: () -> Unit, onRepeat: () -> Unit,
 ) {
     val view = LocalView.current
     fun tick() { if (PlayerSettings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
     val size = PlayerSettings.size
     val skipIcons = PlayerSettings.icons
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        ModeKey(Icons.Rounded.Shuffle, "Shuffle", shuffle, accent) { tick(); onShuffle() }
         SkipKey(if (skipIcons == SkipIcons.Skip) Icons.Rounded.SkipPrevious else Icons.Rounded.FastRewind, "Previous", canPrevious, -1, size.skip) {
             tick(); onPrevious()
         }
@@ -95,6 +103,24 @@ internal fun NowPlayingTransport(
         SkipKey(if (skipIcons == SkipIcons.Skip) Icons.Rounded.SkipNext else Icons.Rounded.FastForward, "Next", canNext, 1, size.skip) {
             tick(); onNext()
         }
+        ModeKey(if (repeatMode == 1) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", repeatMode != 0, accent) { tick(); onRepeat() }
+    }
+}
+
+@Composable
+private fun ModeKey(icon: ImageVector, label: String, on: Boolean, accent: Color, onClick: () -> Unit) {
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.82f else 1f, spring(0.45f, 500f), label = "mode scale")
+    val glow by animateFloatAsState(if (on) 1f else 0f, tween(220), label = "mode glow")
+    Box(
+        Modifier.size(44.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape).background(accent.copy(alpha = 0.22f * glow))
+            .clickable(interactionSource = press, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp),
+            tint = androidx.compose.ui.graphics.lerp(Color.White.copy(alpha = 0.6f), accent, glow))
     }
 }
 
@@ -106,11 +132,11 @@ private fun SkipKey(icon: ImageVector, label: String, enabled: Boolean, directio
     val lean by animateFloatAsState(if (pressed) 7f * direction else 0f, spring(0.45f, 450f), label = "skip lean")
     Box(
         Modifier.size(box.dp).graphicsLayer { scaleX = scale; scaleY = scale; translationX = lean.dp.toPx() }
-            .clip(RoundedCornerShape(50))
+            .clip(CircleShape).background(Color.White.copy(alpha = if (enabled) 0.13f else 0.05f))
             .clickable(interactionSource = press, indication = null, enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size((box * 0.62f).dp),
+        Icon(icon, contentDescription = label, modifier = Modifier.size((box * 0.5f).dp),
             tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f))
     }
 }

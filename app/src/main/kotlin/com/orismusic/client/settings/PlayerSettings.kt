@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 enum class PlayKey(val label: String) { Glass("Glass"), Solid("Solid"), Plain("Plain") }
-enum class PlaySize(val label: String, val play: Int, val skip: Int) { Compact("Compact", 76, 56), Regular("Regular", 88, 64), Large("Large", 100, 72) }
+enum class PlaySize(val label: String, val play: Int, val skip: Int) { Compact("Compact", 76, 52), Regular("Regular", 92, 60), Large("Large", 104, 68) }
 enum class SeekStyle(val label: String) { Wave("Wave"), Line("Line"), Bars("Bars") }
 enum class LyricSize(val label: String) { Compact("Compact"), Regular("Regular"), Large("Large") }
 enum class SkipIcons(val label: String) { Skip("Skip"), Seek("Seek") }
@@ -18,7 +18,7 @@ enum class SkipIcons(val label: String) { Skip("Skip"), Seek("Seek") }
 object PlayerSettings {
     private var store: android.content.SharedPreferences? = null
 
-    var keys by mutableStateOf(PlayKey.Glass)
+    var keys by mutableStateOf(PlayKey.Solid)
     var size by mutableStateOf(PlaySize.Regular)
     var icons by mutableStateOf(SkipIcons.Skip)
     var seek by mutableStateOf(SeekStyle.Wave)
@@ -38,7 +38,7 @@ object PlayerSettings {
         if (store != null) return
         val p = context.applicationContext.getSharedPreferences("player_look", Context.MODE_PRIVATE)
         store = p
-        keys = p.enum("keys", PlayKey.Glass)
+        keys = p.enum("keys", PlayKey.Solid)
         size = p.enum("size", PlaySize.Regular)
         icons = p.enum("icons", SkipIcons.Skip)
         seek = p.enum("seek", SeekStyle.Wave)
@@ -63,7 +63,7 @@ object PlayerSettings {
     }
 
     fun reset() {
-        keys = PlayKey.Glass; size = PlaySize.Regular; icons = SkipIcons.Skip
+        keys = PlayKey.Solid; size = PlaySize.Regular; icons = SkipIcons.Skip
         seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true
         save()
     }

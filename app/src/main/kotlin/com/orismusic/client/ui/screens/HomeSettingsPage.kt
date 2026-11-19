@@ -21,6 +21,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.orismusic.client.settings.HomeCorners
@@ -44,6 +48,7 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            HomePreview()
             ToggleRow("Top banner", "The big artwork banner at the top. Off gives a plain header.", HomeSettings.hero) {
                 HomeSettings.hero = it; HomeSettings.save()
             }
@@ -78,3 +83,42 @@ private fun SectionRow(sec: HomeSection) {
         }
     }
 }
+
+/** A small sample of a shelf. It follows the cover size, corners, spacing and shelf style chosen below. */
+@Composable
+private fun HomePreview() {
+    val k = HomeSettings.coverSize.k
+    val side = (64 * k).dp
+    val colors = listOf(0xFF8E5B52, 0xFF4F6B5E, 0xFF6C5A86, 0xFF8A7A52)
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        color = androidx.compose.ui.graphics.Color(0xFF151312), modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy((HomeSettings.density.gap / 2).dp)) {
+            if (HomeSettings.hero) {
+                val deck = HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck
+                androidx.compose.foundation.layout.Box(
+                    Modifier.fillMaxWidth().height(if (deck) 70.dp else 54.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(if (deck) 20.dp else 6.dp))
+                        .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF5B4A47), androidx.compose.ui.graphics.Color(0xFF2D2625)))),
+                    contentAlignment = Alignment.Center,
+                ) { Text(if (deck) "Deck" else "Banner", style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f)) }
+            }
+            Text("Recently played", style = MaterialTheme.typography.titleSmall)
+            val scatter = HomeSettings.shelfStyle == com.orismusic.client.settings.ShelfStyle.Scatter
+            Row(horizontalArrangement = Arrangement.spacedBy(if (scatter) (-8).dp else 10.dp)) {
+                colors.take(4).forEachIndexed { i, c ->
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.size(side)
+                            .androidx_graphics(if (scatter) (if (i % 2 == 0) -3.5f else 3f) else 0f, if (scatter && i % 2 == 1) 6f else 0f)
+                            .clip(HomeSettings.corners.shape(16))
+                            .background(androidx.compose.ui.graphics.Color(c)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun Modifier.androidx_graphics(rotation: Float, shiftDp: Float): Modifier =
+    this.graphicsLayer { rotationZ = rotation; translationY = shiftDp.dp.toPx() }

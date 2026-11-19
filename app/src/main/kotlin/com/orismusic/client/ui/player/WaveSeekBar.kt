@@ -170,3 +170,41 @@ fun WaveSeekBar(
         }
     }
 }
+
+
+/** Static sample of the seek bar styles for the settings preview. Tap or drag to move it. */
+@Composable
+fun SeekPreview(progress: Float, accent: Color, onChange: (Float) -> Unit) {
+    val style = com.orismusic.client.settings.PlayerSettings.seek
+    val phaseAnim = rememberInfiniteTransition(label = "preview phase")
+    val phase by phaseAnim.animateFloat(
+        0f, (2 * PI).toFloat(),
+        infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart), label = "preview phase value",
+    )
+    Canvas(
+        Modifier.fillMaxWidth().height(40.dp)
+            .pointerInput(Unit) { detectTapGestures { onChange((it.x / size.width).coerceIn(0f, 1f)) } }
+            .pointerInput(Unit) { detectHorizontalDragGestures { c, _ -> c.consume(); onChange((c.position.x / size.width).coerceIn(0f, 1f)) } },
+    ) {
+        val w = size.width; val cy = size.height / 2f; val x = progress * w
+        val track = Color.White.copy(alpha = 0.28f)
+        if (style == com.orismusic.client.settings.SeekStyle.Bars) {
+            val gap = 3.dp.toPx(); val bw = 3.dp.toPx()
+            val n = (w / (bw + gap)).toInt().coerceAtLeast(1)
+            for (i in 0 until n) {
+                val bx = i * (bw + gap) + bw / 2f
+                val hh = (0.35f + 0.65f * kotlin.math.abs(sin(i * 0.37f) * sin(i * 0.11f + 1f))) * size.height * 0.8f
+                drawLine(if (bx <= x) accent else track, Offset(bx, cy - hh / 2f), Offset(bx, cy + hh / 2f), bw, StrokeCap.Round)
+            }
+            return@Canvas
+        }
+        val sw = 5.dp.toPx()
+        drawLine(track, Offset(x, cy), Offset(w, cy), sw, StrokeCap.Round)
+        val a = if (style == com.orismusic.client.settings.SeekStyle.Wave) 2.2.dp.toPx() else 0f
+        val path = Path(); var px = 0f
+        path.moveTo(0f, cy + a * sin(-phase))
+        while (px < x) { px = (px + 3.dp.toPx()).coerceAtMost(x); path.lineTo(px, cy + a * sin(px / 26.dp.toPx() * 2f * PI.toFloat() - phase)) }
+        drawPath(path, accent, style = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawRoundRect(accent, topLeft = Offset(x - 2.5.dp.toPx(), cy - 11.dp.toPx()), size = Size(5.dp.toPx(), 22.dp.toPx()), cornerRadius = CornerRadius(2.5.dp.toPx()))
+    }
+}

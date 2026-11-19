@@ -180,14 +180,20 @@ internal fun NowPlayingContent(
         )
         Spacer(Modifier.height(6.dp))
 
+        Spacer(Modifier.weight(0.55f))
+        val shuffle by connection.shuffleModeEnabled.collectAsState()
+        val repeat by connection.repeatMode.collectAsState()
         NowPlayingTransport(
             isPlaying = isPlaying, canPrevious = canSkipPrevious, canNext = canSkipNext, accent = accent,
+            shuffle = shuffle, repeatMode = repeat,
             onPrevious = { connection.seekToPrevious() },
             onToggle = { if (isPlaying) connection.pause() else connection.play() },
             onNext = { connection.seekToNext() },
+            onShuffle = { connection.toggleShuffle() },
+            onRepeat = { connection.toggleRepeatMode() },
         )
+        Spacer(Modifier.weight(0.45f))
 
-        Spacer(Modifier.weight(1f))
 
         // One bar: lyrics icon on the left, a peek at what is next, and the tray behind a swipe up or a tap.
         var swipe by remember { mutableStateOf(0f) }
