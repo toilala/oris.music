@@ -314,12 +314,8 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
                     ),
                 )
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 40.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OrisLogo(Modifier.size(15.dp), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
-                        Spacer(Modifier.width(7.dp))
-                        Text("Picked for you", style = MaterialTheme.typography.labelLarge,
-                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
-                    }
+                    Text("Picked for you", style = MaterialTheme.typography.labelLarge,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
                     Text(song.title, style = MaterialTheme.typography.headlineMedium,
                         color = androidx.compose.ui.graphics.Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp))
@@ -342,6 +338,11 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
                 }
             }
         }
+        // The mark sits on the hero itself, outside the pager, so it never swaps, fades or flashes.
+        OrisLogo(
+            Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 20.dp, top = 12.dp).size(26.dp),
+            tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f),
+        )
         Row(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 52.dp)) {
             repeat(songs.size) { i ->
                 val active = pager.currentPage == i
@@ -449,7 +450,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
     itemsIndexed(
         // The feed often has its own "New releases" row; the hero above already covers it.
         items = page.sections.filter { it.items.isNotEmpty() && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
-        key = { _, it -> it.title },
+        key = { i, it -> "$i-${it.title}" },
     ) { sectionIndex, section ->
         Column(Modifier.entrance(sectionIndex)) {
             SectionHeader(title = section.title)

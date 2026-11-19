@@ -58,12 +58,17 @@ class Taste(val mostPlayed: List<Pair<SavedSong, Int>>, val artists: List<String
                 .sortedWith(compareByDescending<IndexedValue<SavedSong>> { counts[it.value.id] ?: 1 }.thenBy { it.index })
                 .map { it.value to (counts[it.value.id] ?: 1) }
             val weight = linkedMapOf<String, Int>()
+            val shown = HashMap<String, String>()
             known.forEach { s ->
                 val n = counts[s.id] ?: 1
                 s.artist.split(", ").map { it.trim() }.filter { it.isNotBlank() }
-                    .forEach { weight[it] = (weight[it] ?: 0) + n }
+                    .forEach { name ->
+                        val k = name.lowercase()
+                        shown.getOrPut(k) { name }
+                        weight[k] = (weight[k] ?: 0) + n
+                    }
             }
-            val artists = weight.entries.sortedByDescending { it.value }.map { it.key }.take(8)
+            val artists = weight.entries.sortedByDescending { it.value }.map { shown.getValue(it.key) }.take(8)
             return Taste(ranked.take(5), artists)
         }
     }
@@ -87,7 +92,7 @@ suspend fun loadArtistShelves(names: List<String>): List<ArtistShelf> = coroutin
             if (found != null) shelfCache[n] = shelf
             shelf
         }
-    }.awaitAll().filterNotNull()
+    }.awaitAll().filterNotNull().distinctBy { it.artist.id }
 }
 
 private fun playHistory(c: PlayerConnection?, title: String, songs: List<SavedSong>, song: SavedSong) {
@@ -175,7 +180,8 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
-    shelves.take(3).filter { it.songs.isNotEmpty() }.forEach { shelf ->
+    val uniqueShelves = shelves.distinctBy { it.artist.id }
+    uniqueShelves.take(3).filter { it.songs.isNotEmpty() }.forEach { shelf ->
         item(key = "because-${shelf.artist.id}") {
             Column {
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -187,7 +193,7 @@ fun LazyListScope.listeningShelves(
                     }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(shelf.songs.take(12), key = { "bc-${shelf.artist.id}-${it.id}" }) { s ->
+                    items(shelf.songs.distinctBy { it.id }.take(12), key = { "bc-${shelf.artist.id}-${it.id}" }) { s ->
                         Column(Modifier.width(140.dp).pressClickable({
                             val c = connection
                             if (c != null) scope.launch { c.playQueue(MusicRadioQueue(shelf.artist.title, shelf.songs, s.id)) }
@@ -223,7 +229,7 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
-    val releases = shelves.flatMap { it.albums }.distinctBy { it.browseId }.take(12)
+    val releases = uniqueShelves.flatMap { it.albums }.distinctBy { it.browseId }.take(12)
     if (releases.isNotEmpty()) item(key = "from-artists") {
         Column {
             SectionHeader(title = "New from your artists", subtitle = "Albums and singles from artists you play")
@@ -238,11 +244,11 @@ fun LazyListScope.listeningShelves(
             }
         }
     }
-    if (shelves.isNotEmpty()) item(key = "artist-list") {
+    if (uniqueShelves.isNotEmpty()) item(key = "artist-list") {
         Column {
             SectionHeader(title = "Your artists")
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(shelves, key = { "al-${it.artist.id}" }) { shelf ->
+                items(uniqueShelves, key = { "al-${it.artist.id}" }) { shelf ->
                     Column(
                         Modifier.width(96.dp).pressClickable({ onOpen(DetailTarget("artist", shelf.artist.id, shelf.artist.title, shelf.artist.thumbnail)) }),
                         horizontalAlignment = Alignment.CenterHorizontally,
