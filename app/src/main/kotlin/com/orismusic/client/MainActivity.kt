@@ -428,8 +428,14 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
         MainTab.Library -> Icons.Rounded.LibraryMusic
         MainTab.Queue -> Icons.Rounded.QueueMusic
     }
+    val hidden = collapsed && com.orismusic.client.settings.NavSettings.hideOnScroll
+    val slide by androidx.compose.animation.core.animateFloatAsState(
+        if (hidden) 1f else 0f, spring(0.8f, 300f), label = "dock hide",
+    )
     androidx.compose.foundation.layout.Box(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(top = 4.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().navigationBarsPadding()
+            .padding(top = 4.dp, bottom = com.orismusic.client.settings.NavSettings.lift.bottom.dp)
+            .graphicsLayer { translationY = slide * (size.height + 80.dp.toPx()); alpha = 1f - slide * 0.6f },
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         com.orismusic.client.ui.components.OrisDock(
@@ -438,7 +444,6 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
             label = { tabs[it].label },
             icon = { icon(tabs[it]) },
             onSelect = { onSelect(tabs[it]) },
-            showLabels = com.orismusic.client.settings.AppearanceSettings.navLabels,
         )
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,14 +39,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.orismusic.client.settings.NavAccent
+import com.orismusic.client.settings.NavEffect
+import com.orismusic.client.settings.NavSettings
+import com.orismusic.client.settings.NavStyle
 
 /**
- * Compact glass dock. One warm lens slides under the active tab. Its two edges
- * run on different springs, so it stretches toward the tab it is going to and
- * then snaps back, like a drop of light pulled across glass. The active icon
- * pops up and lights its label.
+ * Compact dock. The look comes from NavSettings: glass, solid or clear body, a stretching
+ * lens, a plain slide or a small dot for the active tab, three accents, sizes and spacing.
+ * The Stretch lens runs its two edges on different springs so it pulls toward the next tab.
  */
 @Composable
 fun OrisDock(
@@ -54,63 +61,83 @@ fun OrisDock(
     icon: (Int) -> ImageVector,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    showLabels: Boolean = true,
 ) {
-    val tabW = if (showLabels) 78.dp else 54.dp
-    val tabH = if (showLabels) 58.dp else 54.dp
+    val showLabels = NavSettings.labels
+    val effect = NavSettings.effect
+    val tabW = (if (showLabels) 78 else 54).dp + NavSettings.width.extra.dp
+    val tabH = (if (showLabels) 58 else 54).dp + NavSettings.size.extra.dp
     val shape = RoundedCornerShape(50)
-    val warm = MaterialTheme.colorScheme.tertiary
+    val scheme = MaterialTheme.colorScheme
+    val (accent, onAccent) = when (NavSettings.accent) {
+        NavAccent.Warm -> scheme.tertiary to scheme.onTertiary
+        NavAccent.Light -> Color(0xFFEDE6E0) to Color(0xFF1B1816)
+        NavAccent.Primary -> scheme.primary to scheme.onPrimary
+    }
+    val body = when (NavSettings.style) {
+        NavStyle.Glass -> Color(0xFF1B1816).copy(alpha = 0.82f)
+        NavStyle.Solid -> Color(0xFF1B1816)
+        NavStyle.Clear -> Color(0xFF1B1816).copy(alpha = 0.45f)
+    }
     val none = selected < 0
-    val selected = selected.coerceAtLeast(0)
-    var previous by remember { mutableIntStateOf(selected) }
-    val right = selected >= previous
-    LaunchedEffect(selected) { previous = selected }
-    val left by animateDpAsState(tabW * selected, spring(0.6f, if (right) 220f else 1000f), label = "lens left")
-    val end by animateDpAsState(tabW * (selected + 1), spring(0.6f, if (right) 1000f else 220f), label = "lens right")
+    val sel = selected.coerceAtLeast(0)
+    var previous by remember { mutableIntStateOf(sel) }
+    val right = sel >= previous
+    LaunchedEffect(sel) { previous = sel }
+    val stretch = effect == NavEffect.Stretch
+    val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
+    val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier
-            .shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .then(if (NavSettings.style == NavStyle.Clear) Modifier else Modifier.shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black))
             .clip(shape)
-            .background(Color(0xFF1B1816).copy(alpha = 0.82f))
+            .background(body)
             .border(
                 BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f)))),
                 shape,
             )
             .padding(5.dp),
     ) {
-        Box(
-            Modifier
-                .graphicsLayer { alpha = if (none) 0f else 1f }
-                .offset(x = left)
-                .width((end - left).coerceAtLeast(20.dp))
-                .height(tabH)
-                .drawBehind {
-                    drawCircle(
-                        Brush.radialGradient(listOf(warm.copy(alpha = 0.40f), Color.Transparent), center = center, radius = size.width * 0.9f),
-                        radius = size.width * 0.9f, center = center,
-                    )
-                }
-                .clip(RoundedCornerShape(50))
-                .background(Brush.linearGradient(listOf(warm, warm.copy(alpha = 0.78f)), Offset.Zero, Offset(300f, 100f)))
-                .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(50)),
-        )
+        if (effect != NavEffect.Dot) {
+            Box(
+                Modifier
+                    .graphicsLayer { alpha = if (none) 0f else 1f }
+                    .offset(x = left)
+                    .width((end - left).coerceAtLeast(20.dp))
+                    .height(tabH)
+                    .drawBehind {
+                        drawCircle(
+                            Brush.radialGradient(listOf(accent.copy(alpha = 0.40f), Color.Transparent), center = center, radius = size.width * 0.9f),
+                            radius = size.width * 0.9f, center = center,
+                        )
+                    }
+                    .clip(shape)
+                    .background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.78f)), Offset.Zero, Offset(300f, 100f)))
+                    .border(1.dp, Color.White.copy(alpha = 0.28f), shape),
+            )
+        } else if (!none) {
+            Box(
+                Modifier.offset(x = left + (tabW - 6.dp) / 2, y = tabH - 7.dp).size(6.dp).clip(CircleShape).background(accent),
+            )
+        }
         Row {
             repeat(count) { i ->
-                val active = i == selected && !none
+                val active = i == sel && !none
                 val pop by animateFloatAsState(if (active) 1.14f else 1f, spring(0.38f, 520f), label = "pop")
-                                val tint by animateColorAsState(
-                    if (active) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    label = "tint",
-                )
+                val activeTint = if (effect == NavEffect.Dot) accent else onAccent
+                val tint by animateColorAsState(if (active) activeTint else scheme.onSurfaceVariant, label = "tint")
                 Column(
                     Modifier.width(tabW).height(tabH)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            if (NavSettings.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSelect(i)
+                        },
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
                         icon(i), contentDescription = label(i), tint = tint,
-                        modifier = Modifier.size(24.dp).graphicsLayer { scaleX = pop; scaleY = pop },
+                        modifier = Modifier.size(NavSettings.size.icon.dp).graphicsLayer { scaleX = pop; scaleY = pop },
                     )
                     if (showLabels) Text(label(i), color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
                 }

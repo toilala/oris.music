@@ -44,7 +44,7 @@ object AppearanceSettings {
         sleepTimerButton = prefs.getBoolean("sleep_button", false)
         intensity = prefs.getFloat("intensity", 0.75f)
         hideStatusBar = prefs.getBoolean("hide_status", false)
-        navLabels = prefs.getBoolean("nav_labels", true)
+        NavSettings.init(context)
     }
 
     fun save() {

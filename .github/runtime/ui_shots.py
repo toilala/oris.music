@@ -18,6 +18,9 @@ tap('Library')
 tap('Settings', bottom=False)
 wait_label('Skip silence')
 screen('shot_settings')
+tap('Navigation', bottom=False)
+wait_label('Show tab names')
+screen('shot_navigation')
 
 # Seed a few songs so the filled-in screens can be photographed.
 import json, subprocess

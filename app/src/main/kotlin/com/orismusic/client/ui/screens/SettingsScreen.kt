@@ -49,6 +49,11 @@ fun SettingsScreen(
         LyricsProviderSettings(onBack = { lyricsSettings = false })
         return
     }
+    var navigationPage by remember { mutableStateOf(false) }
+    if (navigationPage) {
+        NavigationSettings(onBack = { navigationPage = false })
+        return
+    }
     val context = LocalContext.current
     val preferences = remember(context) { PlaybackPreferences(context) }
     var keepPlaying by remember { mutableStateOf(preferences.keepPlayingAfterTaskRemoval) }
@@ -65,6 +70,7 @@ fun SettingsScreen(
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SettingsLink("Navigation", "Bottom bar: names, effect, style, size, hiding and more") { navigationPage = true }
             SectionTitle("Playback")
             SettingSwitch(
                 title = "Keep playing after app is removed from recents",
@@ -122,12 +128,6 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(4.dp))
             val look = com.orismusic.client.settings.AppearanceSettings
-            SectionTitle("Navigation")
-            SettingSwitch(
-                title = "Show tab names",
-                detail = if (look.navLabels) "On: Home, Search and Library are named under their icons." else "Off: icons only, in a round bar.",
-                checked = look.navLabels,
-            ) { look.navLabels = it; look.save() }
             Spacer(Modifier.height(4.dp))
             SectionTitle("Appearance")
             if (android.os.Build.VERSION.SDK_INT >= 31) {
@@ -297,6 +297,21 @@ private fun SettingSwitch(title: String, detail: String, checked: Boolean, onCha
             onCheckedChange = onChange,
         )
     }
+    }
+}
+
+@Composable
+private fun SettingsLink(title: String, detail: String, onClick: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
