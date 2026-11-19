@@ -441,10 +441,11 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f)),
                 shadowElevation = 10.dp,
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 androidx.compose.foundation.layout.Row(
-                    Modifier.padding(6.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+                    Modifier.fillMaxWidth().padding(6.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
                 ) {
                     tabs.forEach { tab ->
                         NavItem(tab, icon(tab), selected == tab.ordinal, showLabel = true, onSelect, Modifier)
