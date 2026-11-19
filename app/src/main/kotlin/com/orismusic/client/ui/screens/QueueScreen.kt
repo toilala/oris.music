@@ -200,7 +200,7 @@ fun QueueScreen(
                         }
                     }
                 }
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     if (currentIndex > 0) {
                         item(key = "h-prev") { Header("Previously played") }
                         items(count = currentIndex, key = { "p$it" }) { QueueRow(it, dim = true) }

@@ -275,7 +275,7 @@ fun SearchScreen(
                     Text(state.message, color = MaterialTheme.colorScheme.error)
                     TextButton(onClick = { submit(submittedQuery) }) { Text("Try again") }
                 }
-                is SearchState.Ready -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                is SearchState.Ready -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     state.page.summaries.forEachIndexed { groupIndex, summary ->
                         if (summary.items.isEmpty()) return@forEachIndexed
                         item(key = "header-$groupIndex") {

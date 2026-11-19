@@ -252,13 +252,14 @@ class MainActivity : ComponentActivity() {
                             },
                         ) { innerPadding ->
                             val openDetail = detail
+                            androidx.compose.runtime.CompositionLocalProvider(com.orismusic.client.ui.LocalBottomInset provides innerPadding.calculateBottomPadding()) {
                             if (openDetail != null) {
                                 com.orismusic.client.ui.screens.DetailScreen(
                                     target = openDetail,
                                     connection = connection,
                                     onBack = { detail = detailBack; detailBack = null },
                                     onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = openDetail; detail = it } } },
-                                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(innerPadding),
+                                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = innerPadding.calculateTopPadding()),
                                 )
                             } else
                             androidx.compose.animation.AnimatedContent(
@@ -286,7 +287,7 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .statusBarsPadding()
-                                        .padding(innerPadding),
+                                        .padding(top = innerPadding.calculateTopPadding()),
                                     connection = connection,
                                 )
                                 MainTab.Search -> SearchScreen(
@@ -295,7 +296,7 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .statusBarsPadding()
-                                        .padding(innerPadding),
+                                        .padding(top = innerPadding.calculateTopPadding()),
                                 )
                                 MainTab.Library -> com.orismusic.client.ui.screens.LibraryScreen(
                                     connection = connection,
@@ -304,8 +305,9 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .statusBarsPadding()
-                                        .padding(innerPadding),
+                                        .padding(top = innerPadding.calculateTopPadding()),
                                 )
+                            }
                             }
                             }
                             }

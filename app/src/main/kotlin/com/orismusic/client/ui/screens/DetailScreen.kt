@@ -192,7 +192,7 @@ fun DetailScreen(
                         onBack()
                     }
                 }
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     item(key = "header") {
                         Column(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),

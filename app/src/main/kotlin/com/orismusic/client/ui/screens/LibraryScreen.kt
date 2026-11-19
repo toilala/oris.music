@@ -167,7 +167,7 @@ fun LibraryScreen(
                     )
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     itemsIndexed(playlists, key = { _, p -> p.id }) { _, p ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
@@ -219,7 +219,7 @@ fun LibraryScreen(
                         Text("Shuffle")
                     }
                 }
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable { play(songs, index) }
@@ -286,7 +286,7 @@ fun LibraryScreen(
                 Spacer(Modifier.weight(1f))
                 if (section == 1) TextButton(onClick = { store.clearHistory() }) { Text("Clear") }
             }
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                 itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
                     SavedSongRow(
                         song = song,
