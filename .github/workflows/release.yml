@@ -14,9 +14,16 @@ on:
         description: 'Release notes'
         required: false
         default: 'v1'
+  push:
+    branches: [main]
+    paths: ['app/build.gradle.kts']
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -24,6 +31,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+      - name: Resolve tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            V=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
+            echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -44,7 +60,7 @@ jobs:
         run: |
           APK=$(ls app/build/outputs/apk/foss/release/*.apk | head -1)
           "$ANDROID_HOME"/build-tools/$(ls "$ANDROID_HOME"/build-tools | sort -V | tail -1)/apksigner verify --print-certs "$APK"
-          cp "$APK" "Oris-${{ inputs.tag }}.apk"
+          cp "$APK" "Oris-${{ steps.meta.outputs.tag }}.apk"
       - name: Keep the APK as an artifact
         uses: actions/upload-artifact@v4
         with:
@@ -52,8 +68,8 @@ jobs:
           path: Oris-*.apk
           retention-days: 7
       - name: Publish release
-        if: ${{ inputs.publish == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ inputs.tag }}" "Oris-${{ inputs.tag }}.apk" --target "${{ github.sha }}" --title "Oris ${{ inputs.tag }}" --notes "${{ inputs.notes }}"
+          gh release create "${{ steps.meta.outputs.tag }}" "Oris-${{ steps.meta.outputs.tag }}.apk" --target "${{ github.sha }}" --title "Oris ${{ steps.meta.outputs.tag }}" --notes "${{ inputs.notes }}"
