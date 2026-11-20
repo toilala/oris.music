@@ -103,6 +103,7 @@ fun LibraryScreen(
         val ordered = if (shuffle) list.shuffled() else list
         c.playQueue(ListQueue(title = title, items = ordered.map { it.toPlayableItem() },
             startIndex = if (shuffle) 0 else start))
+        com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
     }
 
     if (creating) {

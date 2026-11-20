@@ -188,6 +188,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val openScope = androidx.compose.runtime.rememberCoroutineScope()
                 var navigation by rememberSaveable { mutableStateOf(NavigationState()) }
+                com.orismusic.client.ui.navigation.PlayerLaunch.request = { navigation = navigation.openPlayer() }
                 var settingsOpen by rememberSaveable { mutableStateOf(false) }
                 var detail by rememberSaveable { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
                 var detailBack by rememberSaveable { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
@@ -430,13 +431,14 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
         MainTab.Queue -> Icons.Rounded.QueueMusic
     }
     val hidden = collapsed && com.orismusic.client.settings.NavSettings.hideOnScroll
+    // Quick low-overshoot spring: the bar tucks away under the finger instead of bouncing out.
     val slide by androidx.compose.animation.core.animateFloatAsState(
-        if (hidden) 1f else 0f, spring(0.8f, 300f), label = "dock hide",
+        if (hidden) 1f else 0f, spring(0.9f, 700f), label = "dock hide",
     )
     androidx.compose.foundation.layout.Box(
         Modifier.fillMaxWidth().navigationBarsPadding()
             .padding(top = 4.dp, bottom = com.orismusic.client.settings.NavSettings.lift.bottom.dp)
-            .graphicsLayer { translationY = slide * (size.height + 80.dp.toPx()); alpha = 1f - slide * 0.6f },
+            .graphicsLayer { translationY = slide * (size.height + 80.dp.toPx()) },
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         com.orismusic.client.ui.components.OrisDock(

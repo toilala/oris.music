@@ -39,6 +39,7 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PlayerPreview()
+            ChoiceRow("Tapping a song", com.orismusic.client.settings.TapOpen.entries, PlayerSettings.tapOpen, { it.label }) { PlayerSettings.tapOpen = it; PlayerSettings.save() }
             ChoiceRow("Play key style", PlayKey.entries, PlayerSettings.keys, { it.label }) { PlayerSettings.keys = it; PlayerSettings.save() }
             ChoiceRow("Key size", PlaySize.entries, PlayerSettings.size, { it.label }) { PlayerSettings.size = it; PlayerSettings.save() }
             ChoiceRow("Previous and next icons", SkipIcons.entries, PlayerSettings.icons, { it.label }) { PlayerSettings.icons = it; PlayerSettings.save() }

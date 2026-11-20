@@ -61,6 +61,7 @@ fun HomeSettingsPage(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             HomeSettings.order.toList().forEach { sec -> SectionRow(sec) }
             ChoiceRow("Spacing", HomeDensity.entries, HomeSettings.density, { it.label }) { HomeSettings.density = it; HomeSettings.save() }
+            ChoiceRow("Motion", com.orismusic.client.settings.HomeMotion.entries, HomeSettings.motion, { it.label }) { HomeSettings.motion = it; HomeSettings.save() }
             ChoiceRow("Cover size", HomeCoverSize.entries, HomeSettings.coverSize, { it.label }) { HomeSettings.coverSize = it; HomeSettings.save() }
             ChoiceRow("Cover corners", HomeCorners.entries, HomeSettings.corners, { it.label }) { HomeSettings.corners = it; HomeSettings.save() }
             ChoiceRow("Recently played style", ShelfStyle.entries, HomeSettings.shelfStyle, { it.label }) { HomeSettings.shelfStyle = it; HomeSettings.save() }
