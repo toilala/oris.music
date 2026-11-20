@@ -828,6 +828,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         val maxRetries = if (pinned) 6 else 3
         if (errorRetries == 1) {
             com.orismusic.client.utils.PlaybackDiagnostic.report("Stream error on ${id ?: "unknown"}; retrying.")
+            // Drop the cached stream so the retry resolves a fresh one.
+            if (id != null) YTPlayerUtils.evict(id)
         }
         scope.launch {
             if (errorRetries <= maxRetries) {
@@ -847,6 +849,13 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         currentMediaMetadata.value = mediaItem?.mediaMetadata
         if (mediaItem?.mediaId != pinnedMediaId) pinnedMediaId = null
+        // Warm the next song's stream while this one plays, so skip costs no wait.
+        val next = runCatching { player.getMediaItemAt(player.currentMediaItemIndex + 1) }.getOrNull()
+        if (next != null && !resourcesReleased) {
+            scope.launch {
+                YTPlayerUtils.prefetch(next.mediaId, com.orismusic.client.constants.AudioQuality.AUTO, this@OrisMediaService)
+            }
+        }
         fillUpcomingMusic()
     }
 

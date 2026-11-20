@@ -33,7 +33,7 @@ object PlayerSettings {
     var titleMotion by mutableStateOf(true)
     var haptics by mutableStateOf(true)
     var upNext by mutableStateOf(true)
-    var tapOpen by mutableStateOf(TapOpen.Fullscreen)
+    var tapOpen by mutableStateOf(TapOpen.Miniplayer)
 
     private inline fun <reified E : Enum<E>> android.content.SharedPreferences.enum(key: String, default: E): E =
         enumValues<E>().firstOrNull { it.name == getString(key, "") } ?: default
@@ -54,7 +54,7 @@ object PlayerSettings {
         titleMotion = p.getBoolean("title_motion", true)
         haptics = p.getBoolean("haptics", true)
         upNext = p.getBoolean("up_next", true)
-        tapOpen = p.enum("tap_open", TapOpen.Fullscreen)
+        tapOpen = p.enum("tap_open", TapOpen.Miniplayer)
     }
 
     fun save() {
@@ -70,7 +70,7 @@ object PlayerSettings {
 
     fun reset() {
         keys = PlayKey.Solid; size = PlaySize.Regular; icons = SkipIcons.Skip
-        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true; tapOpen = TapOpen.Fullscreen
+        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true; tapOpen = TapOpen.Miniplayer
         save()
     }
 }

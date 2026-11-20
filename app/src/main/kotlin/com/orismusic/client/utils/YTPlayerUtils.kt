@@ -98,6 +98,20 @@ object YTPlayerUtils {
         // Engine warmup is owned by OrisApp through InnerTubeXResolver.init().
     }
 
+    /** Fresh resolutions, kept briefly so retries and the next song cost no network. */
+    private val resolved = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, PlaybackData>>()
+    private const val RESOLVED_TTL_MS = 10 * 60 * 1000L
+
+    /** Forget a resolved stream, for example after it failed to play. */
+    fun evict(videoId: String) {
+        resolved.keys.removeIf { it.startsWith("$videoId|") }
+    }
+
+    /** Warm the resolver for an upcoming song; failures are ignored. */
+    suspend fun prefetch(videoId: String, audioQuality: AudioQuality, context: android.content.Context) {
+        runCatching { getPlaybackData(videoId, audioQuality, context, quiet = true) }
+    }
+
     /**
      * Resolve [videoId] to a playable audio stream.
      *
@@ -107,7 +121,8 @@ object YTPlayerUtils {
     suspend fun getPlaybackData(
         videoId: String,
         audioQuality: AudioQuality,
-        context: android.content.Context
+        context: android.content.Context,
+        quiet: Boolean = false,
     ): PlaybackData = withContext(IO) {
         val maxKbps = when (audioQuality) {
             AudioQuality.LOW -> 64
@@ -115,15 +130,33 @@ object YTPlayerUtils {
             AudioQuality.HIGH -> 256
             else -> Int.MAX_VALUE
         }
-        PlaybackDiagnostic.report("Resolving selected song anonymously...")
+        val key = "$videoId|$maxKbps"
+        resolved[key]?.let { (at, data) ->
+            if (System.currentTimeMillis() - at < RESOLVED_TTL_MS) {
+                Timber.tag(TAG).d("Reusing fresh stream for $videoId")
+                return@withContext data
+            }
+        }
+        val data = resolveFresh(videoId, maxKbps, context, quiet)
+        resolved[key] = System.currentTimeMillis() to data
+        data
+    }
+
+    private suspend fun resolveFresh(
+        videoId: String,
+        maxKbps: Int,
+        context: android.content.Context,
+        quiet: Boolean,
+    ): PlaybackData = withContext(IO) {
+        if (!quiet) PlaybackDiagnostic.report("Resolving selected song anonymously...")
         Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps)")
         try {
             directAnonymous(videoId, maxKbps)?.let {
-                PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
+                if (!quiet) PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
                 return@withContext it
             }
         } catch (refused: GuestAccessRefused) {
-            PlaybackDiagnostic.report(refused.message.orEmpty())
+            if (!quiet) PlaybackDiagnostic.report(refused.message.orEmpty())
             throw refused
         }
         val extracted = try {
@@ -132,7 +165,7 @@ object YTPlayerUtils {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: StreamResolveException) {
-            PlaybackDiagnostic.report(PlaybackDiagnostic.message.value + "\nFallback: ${failure.reason}. No playable stream was returned.")
+            if (!quiet) PlaybackDiagnostic.report(PlaybackDiagnostic.message.value + "\nFallback: ${failure.reason}. No playable stream was returned.")
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
                 Timber.tag(TAG).w(
@@ -144,7 +177,7 @@ object YTPlayerUtils {
             throw IOException("Cannot resolve $videoId: ${failure.reason}", failure)
         }
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")
-        PlaybackDiagnostic.report("Stream resolved through ${extracted.clientName}. Listen and check that playback time advances.")
+        if (!quiet) PlaybackDiagnostic.report("Stream resolved through ${extracted.clientName}. Listen and check that playback time advances.")
         PlaybackData(
             streamUrl = extracted.url,
             cacheKey = videoId,
