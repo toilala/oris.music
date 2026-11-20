@@ -29,34 +29,6 @@ def tree():
     except (subprocess.CalledProcessError, ET.ParseError):
         return ET.Element('hierarchy')
 
-def xml_text():
-    try:
-        adb('shell', 'uiautomator', 'dump', '/sdcard/oris-nav.xml')
-        return adb('shell', 'cat', '/sdcard/oris-nav.xml').decode()
-    except subprocess.CalledProcessError:
-        return '<hierarchy/>'
-
-def has_label(label):
-    return any(label in (n.get('text'), n.get('content-desc')) for n in tree().iter('node'))
-
-def tap_bounds(bounds):
-    points = list(map(int, re.findall(r'\d+', bounds)))
-    adb('shell', 'input', 'tap', str((points[0]+points[2])//2), str((points[1]+points[3])//2))
-    time.sleep(1)
-
-def tap_clickable(label):
-    root = tree()
-    parent = {c: p for p in root.iter() for c in p}
-    target = None
-    for n in root.iter('node'):
-        if label in (n.get('text'), n.get('content-desc')):
-            target = n
-    while target is not None and target.get('clickable') != 'true':
-        target = parent.get(target)
-    if target is not None:
-        tap_bounds(target.get('bounds'))
-    return target is not None
-
 def wait_label(label, seconds=25):
     end = time.monotonic() + seconds
     while time.monotonic() < end:
@@ -106,14 +78,9 @@ if __name__ == '__main__':
     wait_label('Nothing queued yet. Pick a song on Home.')
     screen('queue')
     tap('Open player')
-    time.sleep(2)
-    open(f'{OUT}/after-tap-2s.xml', 'w').write(xml_text())
-    if not has_label('Lyrics'):
-        tap_clickable('Open player')
-        time.sleep(3)
-        open(f'{OUT}/after-tap2.xml', 'w').write(xml_text())
+    time.sleep(3)
     screen('player_after_open_tap')
-    wait_label('Lyrics')
+    wait_label('Lyrics', seconds=90)
     wait_label('Play')
     screen('player_idle')
     back()
