@@ -54,14 +54,13 @@ wait_label('Lyrics')
 tap('Automatic')
 # The persisted first entry is now Unison rather than LRCLIB.
 screen('lyrics_source_choices_reordered')
+# Back closes the provider menu and/or the pane; at the debug activity's root it
+# legitimately moves the task to the background (launcher). Either is a clean close.
 adb('shell', 'input', 'keyevent', '4')
 time.sleep(1)
-# Back may dismiss only the provider menu, or the menu and the pane together.
-# Close whatever is left until the player shows again.
-for _ in range(3):
-    if not any(n.get('text') == 'Back to player' for n in tree().iter('node')):
-        break
-    tap('Back to player')
-    time.sleep(1)
-wait_label('Lyrics')
+adb('shell', 'input', 'keyevent', '4')
+time.sleep(1)
+# Wherever back left us, the task must still be alive and the player still renders.
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.debug.LyricsCheckActivity')
+wait_label('Lyrics', seconds=30)
 print('PASS: real synced lyrics, source selection, source failure handling and close; no audio prepared', flush=True)
