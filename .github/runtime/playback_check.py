@@ -38,6 +38,12 @@ def wait_label(label, seconds=25):
                 return node
         time.sleep(1)
     screen('failure')
+    try:
+        open(f'{OUT}/failure-logcat.txt', 'wb').write(adb('logcat', '-d'))
+        adb('shell', 'uiautomator', 'dump', '/sdcard/oris-fail.xml')
+        open(f'{OUT}/failure-ui.xml', 'wb').write(adb('shell', 'cat', '/sdcard/oris-fail.xml'))
+    except subprocess.CalledProcessError:
+        pass
     print(adb('logcat', '-d', '-s', 'AndroidRuntime').decode(), flush=True)
     raise AssertionError(f'UI never showed {label}')
 
@@ -72,6 +78,8 @@ if __name__ == '__main__':
     wait_label('Nothing queued yet. Pick a song on Home.')
     screen('queue')
     tap('Open player')
+    time.sleep(3)
+    screen('player_after_open_tap')
     wait_label('Lyrics')
     wait_label('Play')
     screen('player_idle')
