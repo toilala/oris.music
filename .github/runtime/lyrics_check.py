@@ -55,5 +55,13 @@ tap('Automatic')
 # The persisted first entry is now Unison rather than LRCLIB.
 screen('lyrics_source_choices_reordered')
 adb('shell', 'input', 'keyevent', '4')
-tap('Back to player')
+time.sleep(1)
+# Back may dismiss only the provider menu, or the menu and the pane together.
+# Close whatever is left until the player shows again.
+for _ in range(3):
+    if not any(n.get('text') == 'Back to player' for n in tree().iter('node')):
+        break
+    tap('Back to player')
+    time.sleep(1)
+wait_label('Lyrics')
 print('PASS: real synced lyrics, source selection, source failure handling and close; no audio prepared', flush=True)
