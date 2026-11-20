@@ -19,6 +19,16 @@ class PlaybackPreferences(context: Context) {
         get() = store.getBoolean("playback_notification", true)
         set(value) { store.edit().putBoolean("playback_notification", value).apply() }
 
+    /** When on, swiping the app away stops music only if it is already paused. */
+    var stopOnlyWhenPaused: Boolean
+        get() = store.getBoolean("stop_only_when_paused", false)
+        set(value) { store.edit().putBoolean("stop_only_when_paused", value).apply() }
+
+    /** When on, the queue is kept on disk and restored (paused) on the next cold start. */
+    var persistentQueue: Boolean
+        get() = store.getBoolean("persistent_queue", true)
+        set(value) { store.edit().putBoolean("persistent_queue", value).apply() }
+
     var playbackSpeed: Float
         get() = store.getFloat("playback_speed", 1f).let { if (it in SPEEDS) it else 1f }
         set(value) { store.edit().putFloat("playback_speed", value).apply() }

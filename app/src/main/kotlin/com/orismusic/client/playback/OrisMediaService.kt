@@ -24,6 +24,8 @@ import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import com.orismusic.client.extensions.metadata
+import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.utils.GuestAccessRefused
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -562,6 +564,19 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 .build()
 
 
+        // Bring the last queue back, paused where it left off (Echo/Mochy persistent queue idea).
+        if (com.orismusic.client.settings.PlaybackPreferences(this).persistentQueue) {
+            QueueSnapshotStore.load(this)?.let { snap ->
+                val restoredItems = snap.items.map { it.toMediaItem() }
+                if (restoredItems.isNotEmpty()) {
+                    playQueue(
+                        com.orismusic.client.playback.queues.ListQueue(snap.title, restoredItems, snap.index, snap.positionMs),
+                        playWhenReady = false,
+                    )
+                }
+            }
+        }
+
         connectivityManager = getSystemService(ConnectivityManager::class.java)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -759,10 +774,17 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (com.orismusic.client.settings.PlaybackPreferences(this).keepPlayingAfterTaskRemoval) {
+        val taskPrefs = com.orismusic.client.settings.PlaybackPreferences(this)
+        if (taskPrefs.keepPlayingAfterTaskRemoval) {
             Timber.i("Task removed: background playback retained by preference")
             return
         }
+        // Optional Echo-style middle ground: only stop when nothing is actively playing.
+        if (taskPrefs.stopOnlyWhenPaused && ::player.isInitialized && (player.isPlaying || player.playWhenReady)) {
+            Timber.i("Task removed: music keeps playing (stop-only-when-paused is on)")
+            return
+        }
+        persistQueue()
         releasePlaybackResources()
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
@@ -803,7 +825,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 { NOTIFICATION_ID },
                 if (show) CHANNEL_ID else CHANNEL_ID_MIN,
                 R.string.music_player
-            )
+            ).apply { setSmallIcon(R.drawable.ic_notification) }
         )
     }
 
@@ -878,7 +900,26 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 YTPlayerUtils.prefetch(next.mediaId, com.orismusic.client.constants.AudioQuality.AUTO, this@OrisMediaService)
             }
         }
+        persistQueue()
         fillUpcomingMusic()
+    }
+
+    override fun onIsPlayingChanged(isPlaying: Boolean) {
+        if (!isPlaying) persistQueue()
+    }
+
+    /** Snapshot the queue to disk so a cold start can restore it (Echo/Mochy persistent queue idea). */
+    private fun persistQueue() {
+        if (resourcesReleased || !::player.isInitialized || player.mediaItemCount == 0) return
+        if (!com.orismusic.client.settings.PlaybackPreferences(this).persistentQueue) return
+        val title = queueTitle
+        val items = (0 until player.mediaItemCount).mapNotNull { player.getMediaItemAt(it).metadata }
+        if (items.isEmpty()) return
+        val index = player.currentMediaItemIndex
+        val position = player.currentPosition
+        scope.launch(Dispatchers.IO) {
+            runCatching { QueueSnapshotStore.save(this@OrisMediaService, title, items, index, position) }
+        }
     }
 
     private fun fillUpcomingMusic() {

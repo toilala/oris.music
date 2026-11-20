@@ -41,6 +41,8 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
     var keepPlaying by remember { mutableStateOf(preferences.keepPlayingAfterTaskRemoval) }
     var skipSilence by remember { mutableStateOf(preferences.skipSilence) }
     var playbackNotification by remember { mutableStateOf(preferences.playbackNotification) }
+    var stopOnlyWhenPaused by remember { mutableStateOf(preferences.stopOnlyWhenPaused) }
+    var persistentQueue by remember { mutableStateOf(preferences.persistentQueue) }
     var speed by remember { mutableStateOf(preferences.playbackSpeed) }
     Scaffold(
         topBar = { TopAppBar(title = { Text("Playback") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) },
@@ -59,6 +61,15 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                 keepPlaying = it
             }
             ToggleRow(
+                "Swipe away stops only when paused",
+                if (stopOnlyWhenPaused) "On: swiping the app away stops music only if it is already paused."
+                else "Off: swiping the app away always stops playback.",
+                stopOnlyWhenPaused,
+            ) {
+                preferences.stopOnlyWhenPaused = it
+                stopOnlyWhenPaused = it
+            }
+            ToggleRow(
                 "Playback notification",
                 if (playbackNotification) "On: the player controls show in your notifications."
                 else "Off: minimized, tucked at the bottom of the shade. Android still needs it while music plays. Applies on the next play or skip.",
@@ -66,6 +77,15 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
             ) {
                 preferences.playbackNotification = it
                 playbackNotification = it
+            }
+            ToggleRow(
+                "Remember the queue",
+                if (persistentQueue) "On: reopening the app brings back your last queue, paused where you left it."
+                else "Off: the app starts empty every time.",
+                persistentQueue,
+            ) {
+                preferences.persistentQueue = it
+                persistentQueue = it
             }
             ToggleRow("Skip silence", "Jumps over quiet gaps in songs and between tracks.", skipSilence) {
                 preferences.skipSilence = it
