@@ -516,6 +516,13 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                         NotificationManager.IMPORTANCE_LOW
                     )
                 )
+                nm?.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID_MIN,
+                        getString(R.string.music_player),
+                        NotificationManager.IMPORTANCE_MIN
+                    )
+                )
             }
             // No placeholder notification here: the media notification appears once something plays.
         } catch (e: Exception) {
@@ -523,14 +530,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             reportException(e)
         }
 
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider(
-                this,
-                { NOTIFICATION_ID },
-                CHANNEL_ID,
-                R.string.music_player
-            )
-        )
+        applyNotificationStyle()
+        notifPrefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "playback_notification") applyNotificationStyle()
+        }
+        getSharedPreferences("playback_behavior", MODE_PRIVATE)
+            .registerOnSharedPreferenceChangeListener(notifPrefsListener)
         player = createExoPlayer()
         _playerFlow.value = player
         player.addListener(this)
@@ -787,7 +792,24 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         Timber.i("Playback resources released; service work cancelled")
     }
 
+    private var notifPrefsListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
+
+    /** Posts the media notification on the full or the minimized channel, per the playback setting. */
+    private fun applyNotificationStyle() {
+        val show = com.orismusic.client.settings.PlaybackPreferences(this).playbackNotification
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider(
+                this,
+                { NOTIFICATION_ID },
+                if (show) CHANNEL_ID else CHANNEL_ID_MIN,
+                R.string.music_player
+            )
+        )
+    }
+
     override fun onDestroy() {
+        getSharedPreferences("playback_behavior", MODE_PRIVATE)
+            .unregisterOnSharedPreferenceChangeListener(notifPrefsListener)
         releasePlaybackResources()
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
@@ -1022,6 +1044,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     companion object {
         const val CHANNEL_ID = "media_playback"
+        const val CHANNEL_ID_MIN = "media_playback_min"
         const val NOTIFICATION_ID = 1
         var isRunning = false
     }

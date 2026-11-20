@@ -107,6 +107,14 @@ fun NowPlayingScreen(
     val lyricMeta = connection.currentMetadata.collectAsState().value
     val lyricDuration = connection.duration.collectAsState().value
     val lyricId = connection.player.currentMediaItem?.mediaId.orEmpty()
+    // If playback died while the app was away, the service restarts with an empty queue and
+    // this screen would sit blank. Give metadata a moment, then fold back to the miniplayer.
+    val noSong = connection.currentMetadata.collectAsState().value == null
+    androidx.compose.runtime.LaunchedEffect(noSong, connection) {
+        if (!noSong) return@LaunchedEffect
+        kotlinx.coroutines.delay(1500)
+        if (connection.currentMetadata.value == null && connection.player.mediaItemCount == 0) onCollapse()
+    }
     androidx.compose.runtime.LaunchedEffect(lyricId, lyricMeta?.title, lyricDuration > 0) {
         val title = lyricMeta?.title?.toString().orEmpty()
         if (lyricId.isBlank() || title.isBlank() || lyricDuration <= 0) return@LaunchedEffect

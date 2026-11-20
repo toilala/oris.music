@@ -14,6 +14,11 @@ class PlaybackPreferences(context: Context) {
         get() = store.getBoolean("skip_silence", false)
         set(value) { store.edit().putBoolean("skip_silence", value).apply() }
 
+    /** Whether the playback notification is fully shown (true) or minimized (false). */
+    var playbackNotification: Boolean
+        get() = store.getBoolean("playback_notification", true)
+        set(value) { store.edit().putBoolean("playback_notification", value).apply() }
+
     var playbackSpeed: Float
         get() = store.getFloat("playback_speed", 1f).let { if (it in SPEEDS) it else 1f }
         set(value) { store.edit().putFloat("playback_speed", value).apply() }

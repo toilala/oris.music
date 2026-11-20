@@ -74,6 +74,7 @@ import com.orismusic.client.ui.screens.QueueScreen
 import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -179,6 +180,17 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 val connection = connectionState.value
+                // Ask for notification access on first play, so the playback notification can show.
+                androidx.compose.runtime.LaunchedEffect(connection) {
+                    if (connection == null) return@LaunchedEffect
+                    if (Build.VERSION.SDK_INT < 33) return@LaunchedEffect
+                    if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return@LaunchedEffect
+                    val notifPrefs = getSharedPreferences("oris_first_run", MODE_PRIVATE)
+                    if (notifPrefs.getBoolean("notif_asked", false)) return@LaunchedEffect
+                    connection.isPlaying.first { it }
+                    notifPrefs.edit().putBoolean("notif_asked", true).apply()
+                    notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
                 val hideBar = com.orismusic.client.settings.AppearanceSettings.hideStatusBar
                 androidx.compose.runtime.SideEffect {
                     val bars = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)

@@ -40,6 +40,7 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
     val preferences = remember(context) { PlaybackPreferences(context) }
     var keepPlaying by remember { mutableStateOf(preferences.keepPlayingAfterTaskRemoval) }
     var skipSilence by remember { mutableStateOf(preferences.skipSilence) }
+    var playbackNotification by remember { mutableStateOf(preferences.playbackNotification) }
     var speed by remember { mutableStateOf(preferences.playbackSpeed) }
     Scaffold(
         topBar = { TopAppBar(title = { Text("Playback") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) },
@@ -56,6 +57,15 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
             ) {
                 preferences.keepPlayingAfterTaskRemoval = it
                 keepPlaying = it
+            }
+            ToggleRow(
+                "Playback notification",
+                if (playbackNotification) "On: the player controls show in your notifications."
+                else "Off: minimized, tucked at the bottom of the shade. Android still needs it while music plays. Applies on the next play or skip.",
+                playbackNotification,
+            ) {
+                preferences.playbackNotification = it
+                playbackNotification = it
             }
             ToggleRow("Skip silence", "Jumps over quiet gaps in songs and between tracks.", skipSilence) {
                 preferences.skipSilence = it
