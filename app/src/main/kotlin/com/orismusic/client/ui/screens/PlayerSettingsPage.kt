@@ -76,8 +76,6 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
 @Composable
 private fun PlayerPreview() {
     var playing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
-    var shuffle by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var repeat by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var pos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0.38f) }
     val accent = androidx.compose.ui.graphics.Color(0xFFE8B7AE)
     androidx.compose.material3.Surface(
@@ -90,9 +88,7 @@ private fun PlayerPreview() {
             com.orismusic.client.ui.player.SeekPreview(pos, accent) { pos = it }
             com.orismusic.client.ui.player.NowPlayingTransport(
                 isPlaying = playing, canPrevious = true, canNext = true, accent = accent,
-                shuffle = shuffle, repeatMode = repeat,
                 onPrevious = { pos = 0f }, onToggle = { playing = !playing }, onNext = { pos = 0f },
-                onShuffle = { shuffle = !shuffle }, onRepeat = { repeat = (repeat + 1) % 3 },
             )
         }
     }

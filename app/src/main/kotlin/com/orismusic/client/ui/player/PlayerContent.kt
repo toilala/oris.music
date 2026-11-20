@@ -35,7 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -150,23 +150,16 @@ internal fun NowPlayingContent(
             val likeScale by animateFloatAsState(if (isLiked) 1f else if (likePressed) 0.8f else 1f,
                 spring(dampingRatio = 0.35f, stiffness = 400f), label = "like pop")
             Box(
-                Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f))
+                Modifier.size(46.dp).clip(CircleShape)
                     .clickable(interactionSource = likePress, indication = null, enabled = nowSong != null) { if (PlayerSettings.haptics) likeView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); nowSong?.let { library.toggleLike(it) } },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     contentDescription = if (isLiked) "Remove from liked songs" else "Like song",
-                    tint = if (isLiked) accent else Color.White,
-                    modifier = Modifier.graphicsLayer { scaleX = likeScale; scaleY = likeScale },
+                    tint = if (isLiked) accent else Color.White.copy(alpha = 0.75f),
+                    modifier = Modifier.size(26.dp).graphicsLayer { scaleX = likeScale; scaleY = likeScale },
                 )
-            }
-            Spacer(Modifier.width(10.dp))
-            Box(
-                Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)).clickable { onCollapse() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse player", tint = Color.White)
             }
         }
 
@@ -181,62 +174,86 @@ internal fun NowPlayingContent(
         Spacer(Modifier.height(6.dp))
 
         Spacer(Modifier.weight(0.55f))
-        val shuffle by connection.shuffleModeEnabled.collectAsState()
-        val repeat by connection.repeatMode.collectAsState()
         NowPlayingTransport(
             isPlaying = isPlaying, canPrevious = canSkipPrevious, canNext = canSkipNext, accent = accent,
-            shuffle = shuffle, repeatMode = repeat,
             onPrevious = { connection.seekToPrevious() },
             onToggle = { if (isPlaying) connection.pause() else connection.play() },
             onNext = { connection.seekToNext() },
-            onShuffle = { connection.toggleShuffle() },
-            onRepeat = { connection.toggleRepeatMode() },
         )
         Spacer(Modifier.weight(0.45f))
 
+        // A quiet peek at the next song; tapping it opens the queue.
+        if (nextTitle != null && PlayerSettings.upNext) {
+            Text(
+                "Up next  \u00B7  " + nextTitle,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.5f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onQueue() }.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+        }
 
-        // One bar: lyrics icon on the left, a peek at what is next, and the tray behind a swipe up or a tap.
-        var swipe by remember { mutableStateOf(0f) }
+        // One compact pill at the bottom: lyrics, queue, and everything else. The lyrics half
+        // lights up while lyrics are open.
         Surface(
-            shape = RoundedCornerShape(30.dp),
-            color = Color.White.copy(alpha = 0.11f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-            modifier = Modifier.fillMaxWidth().height(64.dp).padding(bottom = 0.dp)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = { swipe = 0f },
-                        onVerticalDrag = { _, dy -> swipe += dy },
-                        onDragEnd = { if (swipe < -40f) trayOpen = true },
-                    )
-                },
+            shape = RoundedCornerShape(28.dp),
+            color = Color.White.copy(alpha = 0.10f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
         ) {
-            Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                val lyricsBg by animateFloatAsState(if (lyricsOpen) 0.22f else 0f, tween(300), label = "lyrics bg")
-                IconButton(
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val lyricsBg by animateFloatAsState(if (lyricsOpen) 0.20f else 0f, tween(300), label = "lyrics bg")
+                PillHalf(
+                    icon = { tint -> Icon(Icons.Rounded.Lyrics, contentDescription = "Lyrics", tint = tint, modifier = Modifier.size(19.dp)) },
+                    label = "Lyrics",
+                    active = lyricsOpen,
+                    accent = accent,
+                    backgroundAlpha = lyricsBg,
                     onClick = { setLyricsOpen(!lyricsOpen) },
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(accent.copy(alpha = lyricsBg)),
-                ) {
-                    Icon(Icons.Rounded.Lyrics, contentDescription = "Lyrics", tint = if (lyricsOpen) accent else Color.White)
-                }
-                Column(
-                    Modifier.weight(1f).clickable { trayOpen = true }.padding(horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(Modifier.width(28.dp).height(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)))
-                    Text(
-                        if (nextTitle != null && PlayerSettings.upNext) "Up next  " + nextTitle else "Swipe up for more",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 5.dp),
-                    )
-                }
-                IconButton(onClick = { trayOpen = true }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.MoreHoriz, contentDescription = "More", tint = Color.White)
-                }
+                )
+                Box(Modifier.width(1.dp).height(22.dp).background(Color.White.copy(alpha = 0.14f)))
+                PillHalf(
+                    icon = { tint -> Icon(Icons.Rounded.QueueMusic, contentDescription = "Queue", tint = tint, modifier = Modifier.size(19.dp)) },
+                    label = "Queue",
+                    active = false,
+                    accent = accent,
+                    backgroundAlpha = 0f,
+                    onClick = onQueue,
+                )
+                Box(Modifier.width(1.dp).height(22.dp).background(Color.White.copy(alpha = 0.14f)))
+                PillHalf(
+                    icon = { tint -> Icon(Icons.Rounded.MoreHoriz, contentDescription = "More", tint = tint, modifier = Modifier.size(19.dp)) },
+                    label = "More",
+                    active = false,
+                    accent = accent,
+                    backgroundAlpha = 0f,
+                    onClick = { trayOpen = true },
+                )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
     }
     if (trayOpen) PlayerTray(connection, onQueue = onQueue, onDismiss = { trayOpen = false })
+}
+
+/** One half of the bottom pill: a small icon and a word. Lights up in the accent colour when active. */
+@Composable
+private fun PillHalf(
+    icon: @Composable (Color) -> Unit,
+    label: String,
+    active: Boolean,
+    accent: Color,
+    backgroundAlpha: Float,
+    onClick: () -> Unit,
+) {
+    val tint = if (active) accent else Color.White.copy(alpha = 0.85f)
+    Row(
+        Modifier.clip(RoundedCornerShape(28.dp)).background(accent.copy(alpha = backgroundAlpha))
+            .clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon(tint)
+        Spacer(Modifier.width(7.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = tint)
+    }
 }

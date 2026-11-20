@@ -32,9 +32,6 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
@@ -79,23 +76,22 @@ internal fun NowPlayingTitle(title: String, artist: String, modifier: Modifier =
 }
 
 /**
- * Shuffle, previous, play, next, repeat. Skip keys are soft glass circles that lean the way they go
- * when pressed. The play key is the accent colour, squeezes under the finger and, while playing,
- * settles into a rounded square (it is a circle when paused). Shuffle and repeat glow when on.
+ * Previous, play, next — nothing else. Shuffle and repeat live in the player tray instead of
+ * flanking the transport, so the play key and the skip pair carry the whole row. Skip keys are
+ * soft glass circles that lean the way they go when pressed. The play key is the accent colour,
+ * squeezes under the finger and, while playing, settles into a rounded square (a circle when paused).
  */
 @Composable
 internal fun NowPlayingTransport(
     isPlaying: Boolean, canPrevious: Boolean, canNext: Boolean, accent: Color,
-    shuffle: Boolean, repeatMode: Int,
     onPrevious: () -> Unit, onToggle: () -> Unit, onNext: () -> Unit,
-    onShuffle: () -> Unit, onRepeat: () -> Unit,
 ) {
     val view = LocalView.current
     fun tick() { if (PlayerSettings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
     val size = PlayerSettings.size
     val skipIcons = PlayerSettings.icons
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        ModeKey(Icons.Rounded.Shuffle, "Shuffle", shuffle, accent) { tick(); onShuffle() }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((size.skip / 2).dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically) {
         SkipKey(if (skipIcons == SkipIcons.Skip) Icons.Rounded.SkipPrevious else Icons.Rounded.FastRewind, "Previous", canPrevious, -1, size.skip) {
             tick(); onPrevious()
         }
@@ -103,24 +99,6 @@ internal fun NowPlayingTransport(
         SkipKey(if (skipIcons == SkipIcons.Skip) Icons.Rounded.SkipNext else Icons.Rounded.FastForward, "Next", canNext, 1, size.skip) {
             tick(); onNext()
         }
-        ModeKey(if (repeatMode == 1) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat", repeatMode != 0, accent) { tick(); onRepeat() }
-    }
-}
-
-@Composable
-private fun ModeKey(icon: ImageVector, label: String, on: Boolean, accent: Color, onClick: () -> Unit) {
-    val press = remember { MutableInteractionSource() }
-    val pressed by press.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.82f else 1f, spring(0.45f, 500f), label = "mode scale")
-    val glow by animateFloatAsState(if (on) 1f else 0f, tween(220), label = "mode glow")
-    Box(
-        Modifier.size(44.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(CircleShape).background(accent.copy(alpha = 0.22f * glow))
-            .clickable(interactionSource = press, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp),
-            tint = androidx.compose.ui.graphics.lerp(Color.White.copy(alpha = 0.6f), accent, glow))
     }
 }
 
