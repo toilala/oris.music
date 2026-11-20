@@ -41,6 +41,8 @@ def settings():
     tap('Library')
     tap('Settings')
     wait_label('Playback')
+    tap('Playback', bottom=False)
+    wait_label('Keep playing after app is removed from recents')
 
 def switch_node():
     return next(n for n in tree().iter('node') if n.get('checkable') == 'true')
