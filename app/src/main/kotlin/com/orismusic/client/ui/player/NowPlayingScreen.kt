@@ -142,14 +142,24 @@ fun NowPlayingScreen(
     val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
     Box(modifier.fillMaxSize().background(base)) {
         // Glass: the same cover, blurred and enlarged, fills the whole screen behind everything.
-        Crossfade(targetState = art, label = "glass art", modifier = Modifier.fillMaxSize()) { url ->
-            com.orismusic.client.ui.components.Artwork(
-                url,
-                Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(70.dp),
-                androidx.compose.ui.graphics.RectangleShape,
-                null,
-                px = 300,
+        if (adaptive && mode == com.orismusic.client.settings.BackgroundMode.Ambient) {
+            // Ambient: artwork colours drift behind everything instead of the still blur.
+            AmbientBackground(
+                floor,
+                tint,
+                androidx.compose.ui.graphics.lerp(tint, base, 0.45f),
+                Modifier.fillMaxSize(),
             )
+        } else {
+            Crossfade(targetState = art, label = "glass art", modifier = Modifier.fillMaxSize()) { url ->
+                com.orismusic.client.ui.components.Artwork(
+                    url,
+                    Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(70.dp),
+                    androidx.compose.ui.graphics.RectangleShape,
+                    null,
+                    px = 300,
+                )
+            }
         }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.15f), 1f to Color.Black.copy(alpha = 0.6f))))
         // Full-bleed cover over the top of the screen, melting into the glass below it.

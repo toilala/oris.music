@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 enum class BackgroundMode(val label: String) {
     Gradient("Gradient"),
     Blur("Blurred art"),
+    Ambient("Ambient"),
     Solid("Solid"),
 }
 
