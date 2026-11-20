@@ -17,6 +17,9 @@ on:
   push:
     branches: [main]
     paths: ['app/build.gradle.kts']
+  workflow_run:
+    workflows: ['Apply verified patch']
+    types: [completed]
 
 permissions:
   contents: write
@@ -29,23 +32,35 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
       - name: Resolve tag
         id: meta
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            V=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
-            echo "tag=v$V" >> "$GITHUB_OUTPUT"
-          else
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          CUR=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
+          PREV=$(git show HEAD~1:app/build.gradle.kts 2>/dev/null | grep -oE 'versionName = "[^"]+"' | head -1 | cut -d'"' -f2)
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "$CUR" = "$PREV" ]; then
+            echo "version unchanged ($CUR), nothing to build"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=v$CUR" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v5
+        if: ${{ steps.meta.outputs.skip != 'true' }}
         with:
           java-version: '17'
           distribution: temurin
       - uses: gradle/actions/setup-gradle@v4
+        if: ${{ steps.meta.outputs.skip != 'true' }}
       - name: Build signed release APK
+        if: ${{ steps.meta.outputs.skip != 'true' }}
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -57,11 +72,13 @@ jobs:
           ./gradlew :app:assembleFossRelease --console=plain --warning-mode summary
           rm -f keystore.jks
       - name: Check signature
+        if: ${{ steps.meta.outputs.skip != 'true' }}
         run: |
           APK=$(ls app/build/outputs/apk/foss/release/*.apk | head -1)
           "$ANDROID_HOME"/build-tools/$(ls "$ANDROID_HOME"/build-tools | sort -V | tail -1)/apksigner verify --print-certs "$APK"
           cp "$APK" "Oris-${{ steps.meta.outputs.tag }}.apk"
       - name: Keep the APK as an artifact
+        if: ${{ steps.meta.outputs.skip != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: oris-release-apk
