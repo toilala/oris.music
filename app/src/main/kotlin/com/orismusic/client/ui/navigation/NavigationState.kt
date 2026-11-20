@@ -30,6 +30,13 @@ data class NavigationState(
  */
 object PlayerLaunch {
     var request: (() -> Unit)? = null
+
+    /** Set by MainActivity when the activity was recreated after process death. The first
+     *  NowPlayingScreen composition consumes it: only that restored open may auto-collapse
+     *  when the queue comes back empty; a player the user opened by hand stays open. */
+    var activityRecreated = false
+    fun consumeRecreatedFlag(): Boolean { val v = activityRecreated; activityRecreated = false; return v }
+
     fun maybeOpen() {
         if (com.orismusic.client.settings.PlayerSettings.tapOpen == com.orismusic.client.settings.TapOpen.Fullscreen) request?.invoke()
     }
