@@ -88,13 +88,13 @@ if __name__ == '__main__':
     tap('Search')
     tap('Library')
     back()
-    wait_label('Search music')
+    wait_label('Songs, albums, artists')
     still_open()
     back()
     wait_label('Home')
     still_open()
     tap('Search')
-    wait_label('Search music')
+    wait_label('Songs, albums, artists')
     screen('search_empty')
     edit = next(n for n in tree().iter('node') if n.get('class') == 'android.widget.EditText')
     xy = list(map(int, re.findall(r'\d+', edit.get('bounds'))))
@@ -103,7 +103,8 @@ if __name__ == '__main__':
     time.sleep(2)
     # Hide IME, then press the app's explicit Search button (not generic keyboard Enter).
     back()
-    tap('Search', bottom=False)
+    # beta5: no Search button any more; typing auto-submits after a short pause.
+    time.sleep(3)
     # Search is permitted; this check never taps a song or resolves an audio stream.
     end = time.monotonic()+45
     while time.monotonic() < end:
