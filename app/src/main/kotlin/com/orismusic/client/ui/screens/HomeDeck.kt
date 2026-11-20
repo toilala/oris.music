@@ -162,4 +162,5 @@ private fun startFrom(connection: PlayerConnection?, scope: kotlinx.coroutines.C
     val c = connection ?: return
     val loaded = runCatching { c.player.currentMediaItem?.mediaId }.getOrNull()
     if (loaded == song.id) c.play() else scope.launch { c.playQueue(MusicRadioQueue("Picked for you", songs, song.id)) }
+    com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
 }

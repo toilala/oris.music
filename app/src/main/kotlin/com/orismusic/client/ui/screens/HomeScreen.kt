@@ -330,6 +330,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
                             .background(MaterialTheme.colorScheme.tertiary)
                             .pressClickable({
                                 scope.launch { connection?.playQueue(MusicRadioQueue("Picked for you", songs, song.id)) }
+                                com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
                             }, 0.94f)
                             .padding(start = 18.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -451,7 +452,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
         items = page.sections.filter { it.items.isNotEmpty() && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
         key = { i, it -> "$i-${it.title}" },
     ) { sectionIndex, section ->
-        Column(Modifier.entrance(sectionIndex)) {
+        val lively = HomeSettings.motion == com.orismusic.client.settings.HomeMotion.Lively
+        Column(if (lively) Modifier.entrance(sectionIndex) else Modifier) {
             SectionHeader(title = section.title)
             val songs = MusicCandidates.select(section.items.filterIsInstance<SongItem>())
             com.orismusic.client.ui.components.OrbitRow(
@@ -468,6 +470,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
                                 scope.launch {
                                     connection.playQueue(MusicRadioQueue(section.title, songs, item.id))
                                 }
+                                com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
                             }
                         },
                     )
@@ -642,15 +645,13 @@ private fun PinnedMark(listState: androidx.compose.foundation.lazy.LazyListState
         androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing)),
         label = "mark angle",
     )
+    // Bare mark: no chip or container, just the logo and name over the artwork.
     Row(
-        modifier.statusBarsPadding().padding(start = 14.dp, top = 8.dp)
-            .clip(RoundedCornerShape(50))
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f * p))
-            .border(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f * p), RoundedCornerShape(50))
+        modifier.statusBarsPadding().padding(start = 16.dp, top = 10.dp)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OrisLogo(Modifier.size(26.dp).graphicsLayer { rotationZ = angle }, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
+        OrisLogo(Modifier.size(24.dp).graphicsLayer { rotationZ = angle; alpha = 0.55f + 0.45f * p }, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
         androidx.compose.animation.AnimatedVisibility(visible = p > 0.6f) {
             Text("Oris", style = MaterialTheme.typography.titleSmall, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f),
                 modifier = Modifier.padding(start = 8.dp, end = 6.dp))

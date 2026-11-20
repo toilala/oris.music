@@ -184,6 +184,7 @@ fun DetailScreen(
                     val ordered = if (shuffle) content.songs.shuffled() else content.songs
                     c.playQueue(ListQueue(title = content.title, items = ordered.map { it.toMediaItem() },
                         startIndex = if (shuffle) 0 else start))
+                    com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
                 }
                 // A single or one-track release is just a song: play it now instead of showing a page.
                 androidx.compose.runtime.LaunchedEffect(content) {

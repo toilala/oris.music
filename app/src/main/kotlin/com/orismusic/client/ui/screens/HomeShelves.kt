@@ -103,6 +103,7 @@ suspend fun loadArtistShelves(names: List<String>): List<ArtistShelf> = coroutin
 
 private fun playHistory(c: PlayerConnection?, title: String, songs: List<SavedSong>, song: SavedSong) {
     c?.playQueue(ListQueue(title = title, items = songs.map { it.toPlayableItem() }, startIndex = songs.indexOf(song)))
+    com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
 }
 
 fun LazyListScope.listeningShelves(
@@ -115,9 +116,10 @@ fun LazyListScope.listeningShelves(
 ) {
     val blocks = HashMap<HomeSection, LazyListScope.() -> Unit>()
     val uniqueShelves = shelves.distinctBy { it.artist.id }
+    val lively = HomeSettings.motion == com.orismusic.client.settings.HomeMotion.Lively
     blocks[HomeSection.Jump] = {
     if (history.isNotEmpty()) item(key = "jump") {
-        Column(Modifier.entrance(0)) {
+        Column(if (lively) Modifier.entrance(0) else Modifier) {
             SectionHeader(title = "Jump back in")
             val tiles = history.take(4)
             if (HomeSettings.jumpStyle == JumpStyle.Strip) LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -160,7 +162,7 @@ fun LazyListScope.listeningShelves(
             ) {
                 itemsIndexed(older, key = { _, it -> "rs-${it.id}" }) { i, s ->
                     val size = HomeSettings.coverSize.dp(150)
-                    Column(Modifier.width(size).graphicsLayer {
+                    Column((if (lively) Modifier.entrance(i) else Modifier).width(size).graphicsLayer {
                         rotationZ = if (i % 2 == 0) -3.5f else 3f
                         translationY = if (i % 2 == 0) 0f else 12.dp.toPx()
                     }.pressClickable({ playHistory(connection, "Recently played", older, s) }, 0.95f)) {
@@ -229,10 +231,11 @@ fun LazyListScope.listeningShelves(
                     }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(shelf.songs.distinctBy { it.id }.take(12), key = { "bc-${shelf.artist.id}-${it.id}" }) { s ->
-                        Column(Modifier.width(HomeSettings.coverSize.dp(140)).pressClickable({
+                    itemsIndexed(shelf.songs.distinctBy { it.id }.take(12), key = { _, it -> "bc-${shelf.artist.id}-${it.id}" }) { i, s ->
+                        Column((if (lively) Modifier.entrance(i) else Modifier).width(HomeSettings.coverSize.dp(140)).pressClickable({
                             val c = connection
                             if (c != null) scope.launch { c.playQueue(MusicRadioQueue(shelf.artist.title, shelf.songs, s.id)) }
+                            com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
                         })) {
                             Artwork(s.thumbnail, Modifier.size(HomeSettings.coverSize.dp(140)), HomeSettings.corners.shape(16), s.title)
                             Text(s.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
