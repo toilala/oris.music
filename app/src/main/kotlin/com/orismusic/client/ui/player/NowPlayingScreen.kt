@@ -110,8 +110,11 @@ fun NowPlayingScreen(
     // If playback died while the app was away, the service restarts with an empty queue and
     // this screen would sit blank. Give metadata a moment, then fold back to the miniplayer.
     val noSong = connection.currentMetadata.collectAsState().value == null
+    // Only a player restored after process death may fold itself back when the queue is
+    // empty; one the user opened by hand stays open (PlayerLaunch.consumeRecreatedFlag).
+    val restoredOpen = remember { com.orismusic.client.ui.navigation.PlayerLaunch.consumeRecreatedFlag() }
     androidx.compose.runtime.LaunchedEffect(noSong, connection) {
-        if (!noSong) return@LaunchedEffect
+        if (!noSong || !restoredOpen) return@LaunchedEffect
         kotlinx.coroutines.delay(1500)
         if (connection.currentMetadata.value == null && connection.player.mediaItemCount == 0) onCollapse()
     }
