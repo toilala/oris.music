@@ -814,19 +814,28 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var errorRetries = 0
     private var errorMediaId: String? = null
 
+    /** The song a fresh queue was started from. It gets more patience: skipping past it would
+     *  quietly play something the user did not tap. */
+    private var pinnedMediaId: String? = null
+
     /** A stream that fails to load used to leave the player idle, so the user had to tap play again. Retry, then skip. */
     private fun handlePlaybackError(error: PlaybackException) {
         val id = player.currentMediaItem?.mediaId
         if (id != errorMediaId) { errorMediaId = id; errorRetries = 0 }
         errorRetries++
         val keepPlaying = player.playWhenReady
+        val pinned = id != null && id == pinnedMediaId
+        val maxRetries = if (pinned) 6 else 3
+        if (errorRetries == 1) {
+            com.orismusic.client.utils.PlaybackDiagnostic.report("Stream error on ${id ?: "unknown"}; retrying.")
+        }
         scope.launch {
-            if (errorRetries <= 3) {
-                delay(500L * errorRetries)
+            if (errorRetries <= maxRetries) {
+                delay((500L * errorRetries).coerceAtMost(2000L))
                 if (player.currentMediaItem?.mediaId != id) return@launch
                 player.prepare()
                 player.playWhenReady = keepPlaying
-            } else if (player.hasNextMediaItem()) {
+            } else if (!pinned && player.hasNextMediaItem()) {
                 errorRetries = 0
                 player.seekToNextMediaItem()
                 player.prepare()
@@ -837,6 +846,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         currentMediaMetadata.value = mediaItem?.mediaMetadata
+        if (mediaItem?.mediaId != pinnedMediaId) pinnedMediaId = null
         fillUpcomingMusic()
     }
 
@@ -876,9 +886,24 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 currentQueue = queue
                 queueTitle = status.title
                 if (status.items.isNotEmpty()) {
+                    pinnedMediaId = status.items.getOrNull(status.mediaItemIndex)?.mediaId
                     player.setMediaItems(status.items, status.mediaItemIndex, status.position)
-                    player.prepare()
+                    // Intent to play goes down before prepare so autoplay starts the moment the
+                    // stream is ready, and a slow resolve never leaves a loaded-but-stopped queue.
                     player.playWhenReady = playWhenReady
+                    player.prepare()
+                    val tappedId = pinnedMediaId
+                    scope.launch {
+                        delay(7000)
+                        if (generation == queueGeneration && playWhenReady && player.playWhenReady &&
+                            !player.isPlaying && player.playbackState == Player.STATE_IDLE &&
+                            player.currentMediaItem?.mediaId == tappedId
+                        ) {
+                            Timber.w("Tap watchdog: idle 7s after a tap; preparing again")
+                            com.orismusic.client.utils.PlaybackDiagnostic.report("The player sat idle after the tap; preparing again.")
+                            player.prepare()
+                        }
+                    }
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled

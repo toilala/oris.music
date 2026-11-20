@@ -11,6 +11,9 @@ enum class SeekStyle(val label: String) { Wave("Wave"), Line("Line"), Bars("Bars
 enum class LyricSize(val label: String) { Compact("Compact"), Regular("Regular"), Large("Large") }
 enum class SkipIcons(val label: String) { Skip("Skip"), Seek("Seek") }
 
+/** Where a tapped song starts playing. */
+enum class TapOpen(val label: String) { Fullscreen("Full player"), Miniplayer("Miniplayer") }
+
 /**
  * Player options. Compose state, saved in their own preferences file. To add an option:
  * add a field here, read and write it below, then add a row on the Player settings page.
@@ -30,6 +33,7 @@ object PlayerSettings {
     var titleMotion by mutableStateOf(true)
     var haptics by mutableStateOf(true)
     var upNext by mutableStateOf(true)
+    var tapOpen by mutableStateOf(TapOpen.Fullscreen)
 
     private inline fun <reified E : Enum<E>> android.content.SharedPreferences.enum(key: String, default: E): E =
         enumValues<E>().firstOrNull { it.name == getString(key, "") } ?: default
@@ -50,6 +54,7 @@ object PlayerSettings {
         titleMotion = p.getBoolean("title_motion", true)
         haptics = p.getBoolean("haptics", true)
         upNext = p.getBoolean("up_next", true)
+        tapOpen = p.enum("tap_open", TapOpen.Fullscreen)
     }
 
     fun save() {
@@ -59,12 +64,13 @@ object PlayerSettings {
             ?.putString("lyric_size", lyricSize.name)?.putBoolean("lyrics_centered", lyricsCentered)?.putBoolean("lyrics_blur", lyricsBlur)
             ?.putBoolean("morph", morph)?.putBoolean("title_motion", titleMotion)
             ?.putBoolean("haptics", haptics)?.putBoolean("up_next", upNext)
+            ?.putString("tap_open", tapOpen.name)
             ?.apply()
     }
 
     fun reset() {
         keys = PlayKey.Solid; size = PlaySize.Regular; icons = SkipIcons.Skip
-        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true
+        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true; tapOpen = TapOpen.Fullscreen
         save()
     }
 }

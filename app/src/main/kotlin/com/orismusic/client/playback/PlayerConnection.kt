@@ -383,6 +383,11 @@ class PlayerConnection(
         try {
             if (index in 0 until player.mediaItemCount) {
                 player.seekTo(index, 0L)
+                // A row can point at an item whose earlier load failed: without prepare it
+                // stayed idle and only the big player's play key brought it back.
+                if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
+                    player.prepare()
+                }
                 player.playWhenReady = true
             }
         } catch (e: Exception) {

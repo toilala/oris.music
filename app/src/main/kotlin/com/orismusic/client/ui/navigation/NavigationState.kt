@@ -23,3 +23,14 @@ data class NavigationState(
         else -> this
     }
 }
+
+/**
+ * Song taps ask here whether the full player should open. MainActivity installs the
+ * opener; screens stay free of navigation plumbing. Follows the player's TapOpen setting.
+ */
+object PlayerLaunch {
+    var request: (() -> Unit)? = null
+    fun maybeOpen() {
+        if (com.orismusic.client.settings.PlayerSettings.tapOpen == com.orismusic.client.settings.TapOpen.Fullscreen) request?.invoke()
+    }
+}

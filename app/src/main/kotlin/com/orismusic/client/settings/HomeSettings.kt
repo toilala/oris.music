@@ -20,6 +20,9 @@ enum class HeroStyle(val label: String) { Deck("Deck"), Banner("Banner") }
 enum class ShelfStyle(val label: String) { Row("Row"), Scatter("Scatter") }
 enum class JumpStyle(val label: String) { Tiles("Tiles"), Strip("Strip") }
 
+/** How much entrance and swipe motion Home shows. */
+enum class HomeMotion(val label: String) { Calm("Calm"), Lively("Lively") }
+
 /** Home sections that can be hidden or moved. The YouTube shelves always come last. */
 enum class HomeSection(val id: String, val title: String) {
     Jump("jump", "Jump back in"),
@@ -46,6 +49,7 @@ object HomeSettings {
     var corners by mutableStateOf(HomeCorners.Soft)
     var coverSize by mutableStateOf(HomeCoverSize.Medium)
     var jumpStyle by mutableStateOf(JumpStyle.Tiles)
+    var motion by mutableStateOf(HomeMotion.Lively)
     var becauseCount by mutableStateOf(3)
     val order = mutableStateListOf<HomeSection>().apply { addAll(HomeSection.entries) }
     val hidden = mutableStateListOf<HomeSection>()
@@ -65,6 +69,7 @@ object HomeSettings {
         corners = p.enum("corners", HomeCorners.Soft)
         coverSize = p.enum("cover_size", HomeCoverSize.Medium)
         jumpStyle = p.enum("jump_style", JumpStyle.Tiles)
+        motion = p.enum("motion", HomeMotion.Lively)
         becauseCount = p.getInt("because_count", 3).coerceIn(1, 5)
         val saved = (p.getString("order", "") ?: "").split(",").mapNotNull { n -> HomeSection.entries.firstOrNull { it.name == n } }
         order.clear(); order.addAll(saved + HomeSection.entries.filter { it !in saved })
@@ -97,6 +102,7 @@ object HomeSettings {
             ?.putString("corners", corners.name)
             ?.putString("cover_size", coverSize.name)
             ?.putString("jump_style", jumpStyle.name)
+            ?.putString("motion", motion.name)
             ?.putInt("because_count", becauseCount)
             ?.putString("order", order.joinToString(",") { it.name })
             ?.putString("hidden", hidden.joinToString(",") { it.name })
@@ -105,7 +111,7 @@ object HomeSettings {
 
     fun reset() {
         shelfStyle = ShelfStyle.Scatter; hero = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
-        coverSize = HomeCoverSize.Medium; jumpStyle = JumpStyle.Tiles; becauseCount = 3
+        coverSize = HomeCoverSize.Medium; jumpStyle = JumpStyle.Tiles; motion = HomeMotion.Lively; becauseCount = 3
         order.clear(); order.addAll(HomeSection.entries); hidden.clear()
         save()
     }

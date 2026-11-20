@@ -85,15 +85,26 @@ fun OrisTheme(
         }
     }
 
-    val colorScheme = remember(baseColorScheme, pureBlack, darkTheme, amoledOn) {
+    // Accent seed tints the Oris palette; Material You supplies its own accent.
+    val seed = com.orismusic.client.settings.AppearanceSettings.accent
+    val colorScheme = remember(baseColorScheme, pureBlack, darkTheme, amoledOn, seed) {
+        var scheme = baseColorScheme
+        if (!useDynamic && darkTheme) {
+            scheme = scheme.copy(
+                tertiary = seed.accent,
+                onTertiary = seed.onAccent,
+                tertiaryContainer = seed.container,
+                onTertiaryContainer = seed.onContainer,
+            )
+        }
         if (darkTheme && (pureBlack || amoledOn)) {
-            baseColorScheme.copy(
+            scheme.copy(
                 surface = Color.Black,
                 background = Color.Black,
                 surfaceContainerLow = Color.Black,
             )
         } else {
-            baseColorScheme
+            scheme
         }
     }
 
