@@ -143,6 +143,16 @@ fun NowPlayingScreen(
         animationSpec = androidx.compose.animation.core.tween(450), label = "hero blur")
     val heroAlpha by animateFloatAsState(if (lyricsOpen) 0.35f else 1f,
         animationSpec = androidx.compose.animation.core.tween(450), label = "hero alpha")
+    // A slow drift keeps the artwork alive while playing; it rests where it is when paused.
+    val heroDrift = remember { androidx.compose.animation.core.Animatable(0f) }
+    val playingNow by connection.isPlaying.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(playingNow, art) {
+        if (!playingNow) return@LaunchedEffect
+        while (true) {
+            heroDrift.animateTo(1f, androidx.compose.animation.core.tween(26000, easing = androidx.compose.animation.core.LinearEasing))
+            heroDrift.animateTo(0f, androidx.compose.animation.core.tween(26000, easing = androidx.compose.animation.core.LinearEasing))
+        }
+    }
     val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
     Box(modifier.fillMaxSize().background(base)) {
         // Glass: the same cover, blurred and enlarged, fills the whole screen behind everything.
@@ -171,7 +181,14 @@ fun NowPlayingScreen(
             com.orismusic.client.ui.components.Artwork(
                 url,
                 Modifier.fillMaxSize()
-                    .graphicsLayer { alpha = heroAlpha; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .graphicsLayer {
+                        alpha = heroAlpha
+                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                        val driftScale = 1f + heroDrift.value * 0.07f
+                        scaleX = driftScale
+                        scaleY = driftScale
+                        translationX = (heroDrift.value - 0.5f) * 14.dp.toPx()
+                    }
                     .blur(heroBlur)
                     .drawWithContent {
                         drawContent()

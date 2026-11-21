@@ -52,6 +52,7 @@ class PlayerConnection(
     val context: Context = context.applicationContext
 
     val service = binder.service
+    private var fadeJob: Job? = null
     private val playerReadinessFlow = service.isPlayerReady
 
     private fun getPlayerSafe(): ExoPlayer {
@@ -346,7 +347,19 @@ class PlayerConnection(
                 if (player.playbackState == Player.STATE_IDLE || player.playerError != null) {
                     player.prepare()
                 }
-                player.playWhenReady = true
+                fadeJob?.cancel()
+                fadeJob = scope.launch {
+                    // A short ramp in, so a track never starts with a hard cut.
+                    player.volume = 0.25f
+                    player.playWhenReady = true
+                    var v = 0.25f
+                    while (v < 1f) {
+                        delay(24)
+                        v += 0.05f
+                        player.volume = v.coerceAtMost(1f)
+                    }
+                    player.volume = 1f
+                }
             }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error in play")
@@ -359,7 +372,18 @@ class PlayerConnection(
             if (castHandler?.isCasting?.value == true) {
                 castHandler.pause()
             } else {
-                player.playWhenReady = false
+                fadeJob?.cancel()
+                fadeJob = scope.launch {
+                    // A short ramp out before the pause lands, so it never snaps silent.
+                    var v = player.volume
+                    while (v > 0.02f) {
+                        v -= 0.06f
+                        player.volume = v.coerceAtLeast(0f)
+                        delay(24)
+                    }
+                    player.playWhenReady = false
+                    player.volume = 1f
+                }
             }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error in pause")
