@@ -2,14 +2,15 @@ package com.orismusic.client.settings
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class PlayKey(val label: String) { Glass("Glass"), Solid("Solid"), Plain("Plain") }
-enum class PlaySize(val label: String, val play: Int, val skip: Int) { Compact("Compact", 76, 52), Regular("Regular", 92, 60), Large("Large", 104, 68) }
-enum class SeekStyle(val label: String) { Wave("Wave"), Line("Line"), Bars("Bars") }
-enum class LyricSize(val label: String) { Compact("Compact"), Regular("Regular"), Large("Large") }
-enum class SkipIcons(val label: String) { Skip("Skip"), Seek("Seek") }
+enum class PlayerBackgroundStyle(val label: String) { Gradient("Artwork gradient"), Blur("Blurred artwork"), Solid("Solid black") }
+enum class PlayButtonStyle(val label: String) { Wavy("Wavy blob"), Squircle("Squircle") }
+enum class PlayerSeekBar(val label: String) { Slim("Slim line"), Wave("Wave") }
+enum class LyricSize(val label: String) { Compact("Small"), Regular("Regular"), Large("Large") }
+enum class SwipeSensitivity(val label: String) { Low("Low"), Regular("Regular"), High("High") }
 
 /** Where a tapped song starts playing. */
 enum class TapOpen(val label: String) { Fullscreen("Full player"), Miniplayer("Miniplayer") }
@@ -21,16 +22,15 @@ enum class TapOpen(val label: String) { Fullscreen("Full player"), Miniplayer("M
 object PlayerSettings {
     private var store: android.content.SharedPreferences? = null
 
-    var keys by mutableStateOf(PlayKey.Plain)
-    var size by mutableStateOf(PlaySize.Regular)
-    var icons by mutableStateOf(SkipIcons.Skip)
-    var seek by mutableStateOf(SeekStyle.Wave)
+    var backgroundStyle by mutableStateOf(PlayerBackgroundStyle.Gradient)
+    var playButton by mutableStateOf(PlayButtonStyle.Wavy)
+    var seekBar by mutableStateOf(PlayerSeekBar.Slim)
     var remaining by mutableStateOf(false)
     var lyricSize by mutableStateOf(LyricSize.Regular)
     var lyricsCentered by mutableStateOf(false)
-    var lyricsBlur by mutableStateOf(true)
-    var morph by mutableStateOf(true)
-    var titleMotion by mutableStateOf(true)
+    var lyricsTapSeek by mutableStateOf(true)
+    var lyricsAutoScroll by mutableStateOf(true)
+    var swipeSensitivity by mutableStateOf(SwipeSensitivity.Regular)
     var haptics by mutableStateOf(true)
     var tapOpen by mutableStateOf(TapOpen.Miniplayer)
 
@@ -41,34 +41,65 @@ object PlayerSettings {
         if (store != null) return
         val p = context.applicationContext.getSharedPreferences("player_look", Context.MODE_PRIVATE)
         store = p
-        keys = p.enum("keys", PlayKey.Plain)
-        size = p.enum("size", PlaySize.Regular)
-        icons = p.enum("icons", SkipIcons.Skip)
-        seek = p.enum("seek", SeekStyle.Wave)
+        backgroundStyle = p.enum("background_style", PlayerBackgroundStyle.Gradient)
+        playButton = p.enum("play_button", PlayButtonStyle.Wavy)
+        seekBar = p.enum("seek_bar", PlayerSeekBar.Slim)
         remaining = p.getBoolean("remaining", false)
         lyricSize = p.enum("lyric_size", LyricSize.Regular)
         lyricsCentered = p.getBoolean("lyrics_centered", false)
-        lyricsBlur = p.getBoolean("lyrics_blur", true)
-        morph = p.getBoolean("morph", true)
-        titleMotion = p.getBoolean("title_motion", true)
+        lyricsTapSeek = p.getBoolean("lyrics_tap_seek", true)
+        lyricsAutoScroll = p.getBoolean("lyrics_auto_scroll", true)
+        swipeSensitivity = p.enum("swipe_sensitivity", SwipeSensitivity.Regular)
         haptics = p.getBoolean("haptics", true)
         tapOpen = p.enum("tap_open", TapOpen.Miniplayer)
+        LyricTiming.init(context)
     }
 
     fun save() {
         store?.edit()
-            ?.putString("keys", keys.name)?.putString("size", size.name)?.putString("icons", icons.name)
-            ?.putString("seek", seek.name)?.putBoolean("remaining", remaining)
-            ?.putString("lyric_size", lyricSize.name)?.putBoolean("lyrics_centered", lyricsCentered)?.putBoolean("lyrics_blur", lyricsBlur)
-            ?.putBoolean("morph", morph)?.putBoolean("title_motion", titleMotion)
+            ?.putString("background_style", backgroundStyle.name)
+            ?.putString("play_button", playButton.name)
+            ?.putString("seek_bar", seekBar.name)
+            ?.putBoolean("remaining", remaining)
+            ?.putString("lyric_size", lyricSize.name)?.putBoolean("lyrics_centered", lyricsCentered)
+            ?.putBoolean("lyrics_tap_seek", lyricsTapSeek)?.putBoolean("lyrics_auto_scroll", lyricsAutoScroll)
+            ?.putString("swipe_sensitivity", swipeSensitivity.name)
             ?.putBoolean("haptics", haptics)
             ?.putString("tap_open", tapOpen.name)
             ?.apply()
     }
 
     fun reset() {
-        keys = PlayKey.Plain; size = PlaySize.Regular; icons = SkipIcons.Skip
-        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; tapOpen = TapOpen.Miniplayer
+        backgroundStyle = PlayerBackgroundStyle.Gradient; playButton = PlayButtonStyle.Wavy; seekBar = PlayerSeekBar.Slim
+        remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false
+        lyricsTapSeek = true; lyricsAutoScroll = true; swipeSensitivity = SwipeSensitivity.Regular
+        haptics = true; tapOpen = TapOpen.Miniplayer
         save()
+    }
+}
+
+/**
+ * Per-song lyrics timing nudges, in milliseconds. A positive value hears the words earlier.
+ * Kept in its own preferences file, one entry per song id.
+ */
+object LyricTiming {
+    private var store: android.content.SharedPreferences? = null
+    private val offsets = mutableStateMapOf<String, Int>()
+
+    fun init(context: Context) {
+        if (store != null) return
+        val p = context.applicationContext.getSharedPreferences("lyrics_timing", Context.MODE_PRIVATE)
+        store = p
+        offsets.clear()
+        p.all.forEach { (k, v) -> (v as? Int)?.let { offsets[k] = it } }
+    }
+
+    fun offset(songId: String): Int = offsets[songId] ?: 0
+
+    fun set(songId: String, ms: Int) {
+        if (ms == 0) offsets.remove(songId) else offsets[songId] = ms
+        val e = store?.edit() ?: return
+        if (ms == 0) e.remove(songId) else e.putInt(songId, ms)
+        e.apply()
     }
 }

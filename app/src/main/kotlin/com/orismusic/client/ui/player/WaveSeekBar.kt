@@ -1,5 +1,7 @@
 package com.orismusic.client.ui.player
 
+/** Wave seek bar flavours. The player uses Wave; the rest are kept for the settings preview. */
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -45,6 +47,8 @@ import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
 
+enum class SeekStyle(val label: String) { Wave("Wave"), Line("Line"), Bars("Bars") }
+
 /**
  * Seek bar that moves every frame instead of once a second. The played part is a soft wave that
  * flows while the song plays and settles into a straight line when paused or while you drag.
@@ -73,9 +77,9 @@ fun WaveSeekBar(
         }
     }
 
-    val style = com.orismusic.client.settings.PlayerSettings.seek
+    val style = SeekStyle.Wave
     val view = androidx.compose.ui.platform.LocalView.current
-    val amp by animateFloatAsState(if (isPlaying && !dragging && style == com.orismusic.client.settings.SeekStyle.Wave) 1f else 0f, tween(600), label = "wave amp")
+    val amp by animateFloatAsState(if (isPlaying && !dragging && style == SeekStyle.Wave) 1f else 0f, tween(600), label = "wave amp")
     val thumb by animateFloatAsState(if (dragging) 34f else 22f, spring(dampingRatio = 0.6f, stiffness = 400f), label = "thumb")
     val phaseAnim = rememberInfiniteTransition(label = "wave phase")
     val phase by phaseAnim.animateFloat(
@@ -121,7 +125,7 @@ fun WaveSeekBar(
             val cy = size.height / 2f
             val x = (if (dragging) dragFrac else progress) * w
             val strokeW = 5.dp.toPx()
-            if (style == com.orismusic.client.settings.SeekStyle.Bars) {
+            if (style == SeekStyle.Bars) {
                 val gap = 3.dp.toPx(); val bw = 3.dp.toPx()
                 val n = (w / (bw + gap)).toInt().coerceAtLeast(1)
                 for (i in 0 until n) {
@@ -175,7 +179,7 @@ fun WaveSeekBar(
 /** Static sample of the seek bar styles for the settings preview. Tap or drag to move it. */
 @Composable
 fun SeekPreview(progress: Float, accent: Color, onChange: (Float) -> Unit) {
-    val style = com.orismusic.client.settings.PlayerSettings.seek
+    val style = SeekStyle.Wave
     val phaseAnim = rememberInfiniteTransition(label = "preview phase")
     val phase by phaseAnim.animateFloat(
         0f, (2 * PI).toFloat(),
@@ -188,7 +192,7 @@ fun SeekPreview(progress: Float, accent: Color, onChange: (Float) -> Unit) {
     ) {
         val w = size.width; val cy = size.height / 2f; val x = progress * w
         val track = Color.White.copy(alpha = 0.28f)
-        if (style == com.orismusic.client.settings.SeekStyle.Bars) {
+        if (style == SeekStyle.Bars) {
             val gap = 3.dp.toPx(); val bw = 3.dp.toPx()
             val n = (w / (bw + gap)).toInt().coerceAtLeast(1)
             for (i in 0 until n) {
@@ -200,7 +204,7 @@ fun SeekPreview(progress: Float, accent: Color, onChange: (Float) -> Unit) {
         }
         val sw = 5.dp.toPx()
         drawLine(track, Offset(x, cy), Offset(w, cy), sw, StrokeCap.Round)
-        val a = if (style == com.orismusic.client.settings.SeekStyle.Wave) 2.2.dp.toPx() else 0f
+        val a = if (style == SeekStyle.Wave) 2.2.dp.toPx() else 0f
         val path = Path(); var px = 0f
         path.moveTo(0f, cy + a * sin(-phase))
         while (px < x) { px = (px + 3.dp.toPx()).coerceAtMost(x); path.lineTo(px, cy + a * sin(px / 26.dp.toPx() * 2f * PI.toFloat() - phase)) }

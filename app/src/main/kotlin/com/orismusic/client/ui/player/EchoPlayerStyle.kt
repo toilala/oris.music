@@ -114,6 +114,7 @@ internal fun PlayPauseBlob(
     modifier: Modifier = Modifier,
     icon: ImageVector,
     contentDescription: String,
+    wavy: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -125,7 +126,7 @@ internal fun PlayPauseBlob(
         infiniteRepeatable(tween(8000, easing = LinearEasing)),
         label = "blob rotation",
     )
-    val shape: Shape = if (playing) WavyShape(9, indent, if (playing) degrees else 0f) else RoundedCornerShape(26.dp)
+    val shape: Shape = if (wavy && playing) WavyShape(9, indent, degrees) else RoundedCornerShape(26.dp)
     FilledIconButton(
         onClick = onClick,
         interactionSource = interaction,
@@ -187,8 +188,12 @@ internal fun ClusterButton(
     val border = if (active) null else androidx.compose.foundation.BorderStroke(1.dp, PlayerTextButtonColor.copy(alpha = 0.3f))
     val container by animateColorAsState(if (active) PlayerTextButtonColor else Color.Transparent, tween(200), label = "cluster bg")
     val contentColor = if (active) PlayerIconButtonColor else PlayerTextButtonColor
+    val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.material3.Surface(
-        onClick = onClick,
+        onClick = {
+            if (com.orismusic.client.settings.PlayerSettings.haptics) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            onClick()
+        },
         enabled = enabled,
         shape = shape,
         color = container,

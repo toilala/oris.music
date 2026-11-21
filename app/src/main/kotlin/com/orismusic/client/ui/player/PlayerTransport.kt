@@ -50,9 +50,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.orismusic.client.settings.PlayKey
 import com.orismusic.client.settings.PlayerSettings
-import com.orismusic.client.settings.SkipIcons
 
 /** Title and artist. A new song slides the old text up and out and brings the new one in from below. */
 @Composable
@@ -68,7 +66,6 @@ internal fun NowPlayingTitle(title: String, artist: String, modifier: Modifier =
                 ) { onArtistClick() } else Modifier)
         }
     }
-    if (!PlayerSettings.titleMotion) { Box(modifier) { content(title to artist) }; return }
     AnimatedContent(
         targetState = title to artist, modifier = modifier, label = "title",
         transitionSpec = {
@@ -91,15 +88,13 @@ internal fun NowPlayingTransport(
 ) {
     val view = LocalView.current
     fun tick() { if (PlayerSettings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
-    val size = PlayerSettings.size
-    val skipIcons = PlayerSettings.icons
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((size.skip / 2).dp, Alignment.CenterHorizontally),
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically) {
-        SkipKey(if (skipIcons == SkipIcons.Skip) Icons.Rounded.SkipPrevious else Icons.Rounded.FastRewind, "Previous", canPrevious, -1, size.skip) {
+        SkipKey(Icons.Rounded.SkipPrevious, "Previous", canPrevious, -1, 52) {
             tick(); onPrevious()
         }
-        PlayKeyButton(isPlaying, accent, size.play) { tick(); onToggle() }
-        SkipKey(if (skipIcons == SkipIcons.Skip) Icons.Rounded.SkipNext else Icons.Rounded.FastForward, "Next", canNext, 1, size.skip) {
+        PlayKeyButton(isPlaying, accent, 76) { tick(); onToggle() }
+        SkipKey(Icons.Rounded.SkipNext, "Next", canNext, 1, 52) {
             tick(); onNext()
         }
     }
@@ -127,17 +122,12 @@ private fun PlayKeyButton(isPlaying: Boolean, accent: Color, box: Int, onClick: 
     val pressed by press.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(0.5f, 500f), label = "play scale")
     val corner by animateDpAsState(
-        if (PlayerSettings.morph && isPlaying) (box * 0.3f).dp else (box / 2f).dp,
+        if (isPlaying) (box * 0.3f).dp else (box / 2f).dp,
         spring(Spring.DampingRatioLowBouncy, 260f), label = "play corner",
     )
     val shape = RoundedCornerShape(corner)
-    val style = PlayerSettings.keys
-    val container = when (style) {
-        PlayKey.Glass -> Modifier.background(Color.White.copy(alpha = 0.16f), shape).border(BorderStroke(1.dp, Color.White.copy(alpha = 0.26f)), shape)
-        PlayKey.Solid -> Modifier.background(accent, shape)
-        PlayKey.Plain -> Modifier
-    }
-    val tint = if (style == PlayKey.Solid) Color(0xFF1A1613) else Color.White
+    val container = Modifier.background(accent, shape)
+    val tint = Color(0xFF1A1613)
     Box(
         Modifier.size(box.dp).graphicsLayer { scaleX = scale; scaleY = scale }.then(container).clip(shape)
             .clickable(interactionSource = press, indication = null, onClick = onClick),
@@ -147,7 +137,7 @@ private fun PlayKeyButton(isPlaying: Boolean, accent: Color, box: Int, onClick: 
             Icon(
                 if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (playing) "Pause" else "Play", tint = tint,
-                modifier = Modifier.size((box * if (style == PlayKey.Plain) 0.82f else 0.54f).dp),
+                modifier = Modifier.size((box * 0.54f).dp),
             )
         }
     }

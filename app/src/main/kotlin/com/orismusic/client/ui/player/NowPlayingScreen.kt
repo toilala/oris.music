@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +84,11 @@ import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.playback.PlayerConnection
+import com.orismusic.client.settings.PlayButtonStyle
+import com.orismusic.client.settings.PlayerBackgroundStyle
+import com.orismusic.client.settings.PlayerSeekBar
+import com.orismusic.client.settings.PlayerSettings
+import com.orismusic.client.settings.SwipeSensitivity
 import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.ui.components.Artwork
 import com.orismusic.client.utils.formatTime
@@ -118,6 +125,17 @@ fun NowPlayingScreen(
 
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var trayOpen by remember { mutableStateOf(false) }
+    var offsetDialog by remember { mutableStateOf(false) }
+    // "Finish current song": pause when the track changes or the queue ends.
+    var stopAfterSongId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(stopAfterSongId, mediaId, playbackState) {
+        val target = stopAfterSongId ?: return@LaunchedEffect
+        val moved = mediaId.isNotBlank() && mediaId != target
+        if (moved || playbackState == Player.STATE_ENDED) {
+            stopAfterSongId = null
+            connection.pause()
+        }
+    }
 
     // Fetch lyrics as soon as a song starts so the Lyrics view opens already filled.
     LaunchedEffect(mediaId, metadata?.title, duration > 0) {
@@ -140,19 +158,36 @@ fun NowPlayingScreen(
     }
 
     val gradientColors = rememberPlayerGradientColors(art)
+    val backgroundStyle = PlayerSettings.backgroundStyle
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
-        // Gradient background: three stops from the artwork, crossfading on song change.
-        Crossfade(targetState = gradientColors, animationSpec = tween(800), label = "player gradient") { colors ->
-            if (colors != null) {
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(listOf(colors[0], colors[1], colors[2]))
-                    )
-                )
+        when (backgroundStyle) {
+            PlayerBackgroundStyle.Gradient -> {
+                // Gradient background: three stops from the artwork, crossfading on song change.
+                Crossfade(targetState = gradientColors, animationSpec = tween(800), label = "player gradient") { colors ->
+                    if (colors != null) {
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                Brush.verticalGradient(listOf(colors[0], colors[1], colors[2]))
+                            )
+                        )
+                    }
+                }
             }
+            PlayerBackgroundStyle.Blur -> {
+                Crossfade(targetState = art, animationSpec = tween(800), label = "player blur") { url ->
+                    Artwork(
+                        url,
+                        Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(70.dp),
+                        androidx.compose.ui.graphics.RectangleShape,
+                        null,
+                        px = 300,
+                    )
+                }
+            }
+            PlayerBackgroundStyle.Solid -> {}
         }
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (backgroundStyle == PlayerBackgroundStyle.Blur) 0.6f else 0.2f)))
 
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Spacer(Modifier.height(48.dp))
@@ -242,9 +277,9 @@ fun NowPlayingScreen(
                             shape = ClusterStartShape,
                         )
                         ClusterButton(
-                            onClick = { trayOpen = true },
+                            onClick = { offsetDialog = true },
                             icon = Icons.Rounded.MoreVert,
-                            contentDescription = "More",
+                            contentDescription = "Lyrics options",
                             shape = ClusterEndShape,
                         )
                     } else {
@@ -300,27 +335,55 @@ fun NowPlayingScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Slim seek bar.
+            // Seek bar: the slim line, or the wave bar when chosen in Player settings.
             var sliderPosition by remember { mutableStateOf<Float?>(null) }
             val safeDuration = duration.coerceAtLeast(0L)
             val shownPosition = sliderPosition?.let { (it * safeDuration).toLong() } ?: position.coerceAtLeast(0L)
             val fraction = if (safeDuration > 0) (shownPosition.toFloat() / safeDuration).coerceIn(0f, 1f) else 0f
-            Slider(
-                value = fraction,
-                onValueChange = { sliderPosition = it },
-                onValueChangeFinished = {
-                    sliderPosition?.let { connection.seekTo((it * safeDuration).toLong()) }
-                    sliderPosition = null
-                },
-                thumb = { InvisibleSliderThumb() },
-                track = { SlimSliderTrack(fraction, Modifier.fillMaxWidth().height(10.dp)) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(20.dp),
-            )
-            Spacer(Modifier.height(4.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp)) {
-                Text(formatTime(shownPosition), style = MaterialTheme.typography.labelMedium, color = PlayerTextButtonColor.copy(alpha = 0.7f))
-                Spacer(Modifier.weight(1f))
-                Text(if (safeDuration > 0) formatTime(safeDuration) else "", style = MaterialTheme.typography.labelMedium, color = PlayerTextButtonColor.copy(alpha = 0.7f))
+            if (PlayerSettings.seekBar == PlayerSeekBar.Wave) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                    WaveSeekBar(
+                        player = player,
+                        durationMs = safeDuration,
+                        isPlaying = isPlaying,
+                        onSeek = { connection.seekTo(it) },
+                        accent = PlayerTextButtonColor,
+                    )
+                }
+            } else {
+                val view = androidx.compose.ui.platform.LocalView.current
+                var lastTick by remember { mutableStateOf(-1) }
+                Slider(
+                    value = fraction,
+                    onValueChange = { v ->
+                        sliderPosition = v
+                        val tick = (v * 20).toInt()
+                        if (tick != lastTick) {
+                            lastTick = tick
+                            if (PlayerSettings.haptics) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                        }
+                    },
+                    onValueChangeFinished = {
+                        sliderPosition?.let { connection.seekTo((it * safeDuration).toLong()) }
+                        sliderPosition = null
+                        lastTick = -1
+                    },
+                    thumb = { InvisibleSliderThumb() },
+                    track = { SlimSliderTrack(fraction, Modifier.fillMaxWidth().height(10.dp)) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(20.dp),
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp)) {
+                    Text(formatTime(shownPosition), style = MaterialTheme.typography.labelMedium, color = PlayerTextButtonColor.copy(alpha = 0.7f))
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (safeDuration <= 0) ""
+                        else if (PlayerSettings.remaining) "-" + formatTime((safeDuration - shownPosition).coerceAtLeast(0))
+                        else formatTime(safeDuration),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = PlayerTextButtonColor.copy(alpha = 0.7f),
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -340,6 +403,7 @@ fun NowPlayingScreen(
                 Spacer(Modifier.width(16.dp))
                 val ended = playbackState == Player.STATE_ENDED
                 PlayPauseBlob(
+                    wavy = PlayerSettings.playButton == PlayButtonStyle.Wavy,
                     playing = isPlaying,
                     onClick = {
                         if (ended) {
@@ -371,12 +435,13 @@ fun NowPlayingScreen(
                 Box {
                     var timerMenu by remember { mutableStateOf(false) }
                     val timerEnd by SleepTimer.endsAt.collectAsState()
-                    ClusterButton(onClick = { timerMenu = true }, icon = Icons.Rounded.Timer, contentDescription = "Sleep timer", shape = ClusterMiddleShape, active = timerEnd != null)
+                    ClusterButton(onClick = { timerMenu = true }, icon = Icons.Rounded.Timer, contentDescription = "Sleep timer", shape = ClusterMiddleShape, active = timerEnd != null || stopAfterSongId != null)
                     DropdownMenu(timerMenu, { timerMenu = false }) {
-                        if (timerEnd != null) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); timerMenu = false })
+                        if (timerEnd != null || stopAfterSongId != null) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); stopAfterSongId = null; timerMenu = false })
                         listOf(15, 30, 45, 60).forEach { minutes ->
                             DropdownMenuItem({ Text("Stop after $minutes min") }, { SleepTimer.start(minutes) { connection.pause() }; timerMenu = false })
                         }
+                        DropdownMenuItem({ Text("Stop when this song ends") }, { SleepTimer.cancel(); stopAfterSongId = mediaId; timerMenu = false })
                     }
                 }
                 ClusterButton(
@@ -406,6 +471,22 @@ fun NowPlayingScreen(
 
     if (trayOpen) {
         PlayerTray(connection, onQueue = { trayOpen = false; onQueue() }, onDismiss = { trayOpen = false })
+    }
+    if (offsetDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { offsetDialog = false },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { offsetDialog = false }) { Text("Done") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { com.orismusic.client.settings.LyricTiming.set(mediaId, 0) }) { Text("Reset") } },
+            title = { Text("Lyrics timing") },
+            text = {
+                val lyricOffset = com.orismusic.client.settings.LyricTiming.offset(mediaId)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.TextButton(onClick = { com.orismusic.client.settings.LyricTiming.set(mediaId, lyricOffset - 100) }) { Text("-100ms") }
+                    Text((if (lyricOffset >= 0) "+" else "") + lyricOffset + "ms")
+                    androidx.compose.material3.TextButton(onClick = { com.orismusic.client.settings.LyricTiming.set(mediaId, lyricOffset + 100) }) { Text("+100ms") }
+                }
+            },
+        )
     }
 }
 
@@ -439,6 +520,14 @@ private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose
         state = pagerState,
         modifier = Modifier.size(side),
         pageSpacing = 16.dp,
+        flingBehavior = PagerDefaults.flingBehavior(
+            state = pagerState,
+            snapPositionalThreshold = when (PlayerSettings.swipeSensitivity) {
+                SwipeSensitivity.Low -> 0.5f
+                SwipeSensitivity.Regular -> 0.35f
+                SwipeSensitivity.High -> 0.2f
+            },
+        ),
     ) { page ->
         val item = itemAt(page)
         val pageOffset = abs((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).coerceIn(0f, 1f)

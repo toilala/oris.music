@@ -10,7 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.blur
@@ -82,8 +84,10 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
         } catch (cancelled: CancellationException) { throw cancelled }
         finally { loading = false }
     }
-    val active = document?.let { activeLyric(it.lines, position) } ?: -1
+    val lyricOffset = com.orismusic.client.settings.LyricTiming.offset(id)
+    val active = document?.let { activeLyric(it.lines, position + lyricOffset) } ?: -1
     LaunchedEffect(active) {
+        if (!com.orismusic.client.settings.PlayerSettings.lyricsAutoScroll) return@LaunchedEffect
         if (active >= 0 && !list.isScrollInProgress) list.animateScrollToItem(active, scrollOffset = -(list.layoutInfo.viewportSize.height / 3))
     }
     val artUrl = metadata?.artworkUri?.toString()
@@ -161,8 +165,8 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                             LyricRow(
                                 line = line, timed = lyrics.timed, selected = index == active,
                                 distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active),
-                                position = position, embedded = embedded,
-                                onSeek = { ms -> connection.player.seekTo(ms) },
+                                position = position + lyricOffset, embedded = embedded,
+                                onSeek = { ms -> connection.player.seekTo((ms - lyricOffset).coerceAtLeast(0)) },
                             )
                         }
                     }
@@ -174,6 +178,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
 
 /** One lyric line: bold white words that dim with distance; karaoke sweep on the active line.
  * Line styling follows Echo Music's MetroLyricsLine (GPL-3.0); code is Oris's own. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LyricRow(
     line: LyricLine,
@@ -194,11 +199,20 @@ private fun LyricRow(
     }
     val alpha by animateFloatAsState(targetAlpha, tween(300), label = "line alpha")
     val scale by animateFloatAsState(if (selected) 1f else 0.85f, tween(400), label = "line scale")
+    val settings = com.orismusic.client.settings.PlayerSettings
+    val sizeSp = when (settings.lyricSize) {
+        com.orismusic.client.settings.LyricSize.Compact -> 20
+        com.orismusic.client.settings.LyricSize.Regular -> 24
+        com.orismusic.client.settings.LyricSize.Large -> 28
+    }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val lineStyle = androidx.compose.ui.text.TextStyle(
-        fontSize = 24.sp,
+        fontSize = sizeSp.sp,
         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-        lineHeight = (24 * 1.3f).sp,
+        lineHeight = (sizeSp * 1.3f).sp,
         letterSpacing = (-0.5).sp,
+        textAlign = if (settings.lyricsCentered) TextAlign.Center else TextAlign.Start,
         platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
         lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
@@ -208,12 +222,17 @@ private fun LyricRow(
     val lineModifier = Modifier
         .fillMaxWidth()
         .graphicsLayer {
-            transformOrigin = TransformOrigin(0f, 0.5f)
+            transformOrigin = TransformOrigin(if (settings.lyricsCentered) 0.5f else 0f, 0.5f)
             scaleX = scale; scaleY = scale
         }
         .clip(RoundedCornerShape(16.dp))
-        .then(if (line.timeMs != null)
-            Modifier.clickable { onSeek(line.timeMs) } else Modifier)
+        .combinedClickable(
+            onClick = { if (settings.lyricsTapSeek) line.timeMs?.let(onSeek) },
+            onLongClick = {
+                if (settings.haptics) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(line.text))
+            },
+        )
         .padding(horizontal = 24.dp, vertical = (8 * 1.3f).dp)
     val lineWords = line.words
     if (selected && timed && !lineWords.isNullOrEmpty()) {
@@ -277,7 +296,8 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
         } catch (cancelled: CancellationException) { throw cancelled }
         finally { loading = false }
     }
-    val active = document?.let { activeLyric(it.lines, position) } ?: -1
+    val lyricOffset = com.orismusic.client.settings.LyricTiming.offset(id)
+    val active = document?.let { activeLyric(it.lines, position + lyricOffset) } ?: -1
     LaunchedEffect(active) {
         if (active >= 0 && !list.isScrollInProgress) list.animateScrollToItem(active, scrollOffset = -(list.layoutInfo.viewportSize.height / 3))
     }
@@ -339,8 +359,8 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
                             LyricRow(
                                 line = line, timed = lyrics.timed, selected = index == active,
                                 distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active),
-                                position = position, embedded = true,
-                                onSeek = { ms -> connection.player.seekTo(ms) },
+                                position = position + lyricOffset, embedded = true,
+                                onSeek = { ms -> connection.player.seekTo((ms - lyricOffset).coerceAtLeast(0)) },
                             )
                         }
                     }
