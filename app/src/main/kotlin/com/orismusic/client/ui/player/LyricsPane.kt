@@ -19,6 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -157,20 +160,36 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                                 animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
                             val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(5) * 1.4f),
                                 label = "lyric blur")
-                            Text(line.text.ifBlank { "♪" }, style=(when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
+                            val lineStyle = (when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
                                     com.orismusic.client.settings.LyricSize.Compact -> MaterialTheme.typography.titleMedium
                                     com.orismusic.client.settings.LyricSize.Large -> if (embedded) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
                                     else -> if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
-                                }).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                                textAlign = if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
-                                color=ink,
-                                modifier=Modifier.fillMaxWidth()
+                                }).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            val lineAlign = if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
+                            val lineModifier = Modifier.fillMaxWidth()
                                     .then(if (soften > 0.1f) Modifier.blur(soften.dp) else Modifier)
                                     .graphicsLayer {
                                     transformOrigin = TransformOrigin(if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) 0.5f else 0f, 0.5f)
                                     scaleX = emphasis; scaleY = emphasis
                                 }.then(if (line.timeMs != null)
-                                    Modifier.clickable { connection.player.seekTo(line.timeMs) } else Modifier))
+                                    Modifier.clickable { connection.player.seekTo(line.timeMs) } else Modifier)
+                            val lineWords = line.words
+                            if (selected && lyrics.timed && !lineWords.isNullOrEmpty()) {
+                                // Karaoke: the sung words sweep through the active line in the accent.
+                                val currentWord = lineWords.indexOfLast { position >= it.startMs }
+                                val karaoke = buildAnnotatedString {
+                                    lineWords.forEachIndexed { wi, w ->
+                                        withStyle(SpanStyle(
+                                            color = if (wi <= currentWord) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = if (wi == currentWord) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold,
+                                        )) { append(w.text) }
+                                        if (wi < lineWords.lastIndex) append(" ")
+                                    }
+                                }
+                                Text(karaoke, style=lineStyle, textAlign=lineAlign, modifier=lineModifier)
+                            } else {
+                                Text(line.text.ifBlank { "♪" }, style=lineStyle, textAlign=lineAlign, color=ink, modifier=lineModifier)
+                            }
                         }
                     }
                 }

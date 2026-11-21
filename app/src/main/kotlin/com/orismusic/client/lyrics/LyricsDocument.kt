@@ -1,6 +1,7 @@
 package com.orismusic.client.lyrics
 
-data class LyricLine(val timeMs: Long?, val text: String)
+data class LyricWord(val startMs: Long, val text: String)
+data class LyricLine(val timeMs: Long?, val text: String, val words: List<LyricWord>? = null)
 data class LyricCredit(val label: String, val url: String)
 data class LyricsDocument(val source: String, val lines: List<LyricLine>, val credits: List<LyricCredit> = emptyList()) {
     val timed: Boolean get() = lines.any { it.timeMs != null }

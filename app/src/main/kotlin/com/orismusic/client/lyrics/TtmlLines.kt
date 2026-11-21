@@ -31,6 +31,18 @@ fun readTtml(xml: String): List<LyricLine> {
     return (0 until paragraphs.length).mapNotNull { index ->
         val node = paragraphs.item(index) as Element
         val text = node.textContent.replace(Regex("\\s+"), " ").trim()
-        if (text.isEmpty()) null else LyricLine(ttmlClock(node.getAttribute("begin")), text)
+        if (text.isEmpty()) return@mapNotNull null
+        // Deepest spans carry one word each when the source has word timings; line-level
+        // spans contain other spans and are skipped.
+        val spans = node.getElementsByTagNameNS("*", "span")
+        val words = (0 until spans.length)
+            .map { spans.item(it) as Element }
+            .filter { it.getElementsByTagNameNS("*", "span").length == 0 }
+            .mapNotNull { span ->
+                val start = ttmlClock(span.getAttribute("begin")) ?: return@mapNotNull null
+                val word = span.textContent.replace(Regex("\\s+"), " ").trim()
+                if (word.isEmpty()) null else LyricWord(start, word)
+            }
+        LyricLine(ttmlClock(node.getAttribute("begin")), text, words.takeIf { it.size > 1 })
     }.sortedBy { it.timeMs ?: Long.MAX_VALUE }
 }
