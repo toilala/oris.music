@@ -527,7 +527,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                     )
                 )
             }
-            // No placeholder notification here: the media notification appears once something plays.
+            // Enter foreground immediately with a placeholder so the media notification
+            // always has a live record to update. Without this, Media3's deferred first
+            // post can be dropped entirely on aggressive OEM builds, leaving playback
+            // running with no notification and the service unprotected in background.
+            // Pattern adapted from Echo (GPL) MusicService.onCreate; reimplemented here.
+            startForegroundCompat(buildPlaceholderNotification())
         } catch (e: Exception) {
             Timber.tag("OrisMediaService").e(e, "Failed to create foreground notification")
             reportException(e)
@@ -1111,6 +1116,35 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     fun unfollowArtist(mediaId: String) {
         Timber.d("unfollowArtist: $mediaId")
+    }
+
+    private fun buildPlaceholderNotification(): Notification {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: android.content.Intent()
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            launchIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.music_player))
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+    }
+
+    private fun startForegroundCompat(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     companion object {
