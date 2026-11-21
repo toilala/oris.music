@@ -187,37 +187,6 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 }
-                var showBatteryNudge by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(
-                        Build.MANUFACTURER.lowercase().let { it.contains("vivo") || it.contains("iqoo") } &&
-                            !getSharedPreferences("oris_first_run", MODE_PRIVATE).getBoolean("battery_nudge_done", false) &&
-                            getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) != true,
-                    )
-                }
-                if (showBatteryNudge && !showWelcome) {
-                    androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { },
-                        title = { androidx.compose.material3.Text("Keep music playing in the background") },
-                        text = {
-                            androidx.compose.material3.Text(
-                                "vivo phones stop apps that play in the background. Two quick fixes: allow unrestricted battery use, then lock Oris in recents (open recents, pull down on the Oris card, tap the lock).",
-                            )
-                        },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(onClick = {
-                                getSharedPreferences("oris_first_run", MODE_PRIVATE).edit().putBoolean("battery_nudge_done", true).apply()
-                                showBatteryNudge = false
-                                com.orismusic.client.ui.screens.openBackgroundBatterySettings(this@MainActivity)
-                            }) { androidx.compose.material3.Text("Allow") }
-                        },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(onClick = {
-                                getSharedPreferences("oris_first_run", MODE_PRIVATE).edit().putBoolean("battery_nudge_done", true).apply()
-                                showBatteryNudge = false
-                            }) { androidx.compose.material3.Text("Not now") }
-                        },
-                    )
-                }
                 val connection = connectionState.value
                 val hideBar = com.orismusic.client.settings.AppearanceSettings.hideStatusBar
                 androidx.compose.runtime.SideEffect {

@@ -83,7 +83,7 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     Spacer(Modifier.height(4.dp))
                     Text(
                         if (batteryExempt) "On: Android will not limit the app in the background."
-                        else "Off: strict phones (vivo, Oppo, Xiaomi) can stop music in the background. Tap to allow unrestricted background use.",
+                        else "Off: some phones stop music in the background to save battery. Tap to allow unrestricted background use.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -176,18 +176,11 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
     }
 }
 
-/** Best-effort path to this phone's background/battery allowlist: vivo/iQOO autostart manager
- *  first on those devices, then the standard battery-optimization exemption, then the list page. */
-fun openBackgroundBatterySettings(context: android.content.Context) {
+/** Best-effort path to the phone's battery allowlist: the standard battery-optimization
+ *  exemption first, then the list page when a build refuses the direct request. */
+private fun openBackgroundBatterySettings(context: android.content.Context) {
     val pkg = context.packageName
-    val maker = android.os.Build.MANUFACTURER.lowercase()
     val candidates = mutableListOf<android.content.Intent>()
-    if (maker.contains("vivo") || maker.contains("iqoo")) {
-        candidates += android.content.Intent().setClassName(
-            "com.vivo.permissionmanager",
-            "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
-        )
-    }
     candidates += android.content.Intent(
         android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
         android.net.Uri.parse("package:" + pkg),

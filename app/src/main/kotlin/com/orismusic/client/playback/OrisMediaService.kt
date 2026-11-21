@@ -516,7 +516,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                     NotificationChannel(
                         CHANNEL_ID,
                         getString(R.string.music_player),
-                        NotificationManager.IMPORTANCE_LOW
+                        NotificationManager.IMPORTANCE_DEFAULT
                     )
                 )
                 nm?.createNotificationChannel(
@@ -1114,7 +1114,10 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     }
 
     companion object {
-        const val CHANNEL_ID = "media_playback"
+        // v2 channels: channel importance is frozen at creation, and the originals were created
+        // at LOW/MIN, which some phones hide from the shade. New ids give every install the
+        // default-visible importance.
+        const val CHANNEL_ID = "media_playback_v2"
         const val CHANNEL_ID_MIN = "media_playback_min"
         const val NOTIFICATION_ID = 1
         var isRunning = false
