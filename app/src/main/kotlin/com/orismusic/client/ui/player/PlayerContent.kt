@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.orismusic.client.library.LibraryStore
@@ -163,7 +164,13 @@ internal fun NowPlayingContent(
         Surface(
             color = Color.White.copy(alpha = 0.08f),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            modifier = Modifier.padding(horizontal = (-22).dp).fillMaxWidth().clickable { trayOpen = true },
+            modifier = Modifier.fillMaxWidth().layout { measurable, constraints ->
+                    // Reach past the column's side padding so the peek sits on the screen edges.
+                    val extra = 22.dp.roundToPx()
+                    val wide = constraints.maxWidth + extra * 2
+                    val placeable = measurable.measure(constraints.copy(minWidth = wide, maxWidth = wide))
+                    layout(wide, placeable.height) { placeable.place(-extra, 0) }
+                }.clickable { trayOpen = true },
         ) {
             Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.width(40.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.35f)))
