@@ -4,10 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
@@ -15,12 +20,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -148,51 +158,207 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                     }
                     LazyColumn(modifier = if (embedded) Modifier.weight(1f) else Modifier, state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = if (embedded) 8.dp else 24.dp, bottom = if (embedded) 48.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
                         itemsIndexed(lyrics.lines) { index, line ->
-                            val selected = index == active
-                            val distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active)
-                            val ink by animateColorAsState(
-                                when {
-                                    !lyrics.timed -> MaterialTheme.colorScheme.onSurface
-                                    selected -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = (0.5f - 0.09f * distance).coerceAtLeast(0.18f))
-                                }, label = "lyric ink")
-                            val emphasis by animateFloatAsState(if (selected) 1f else 0.9f,
-                                animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
-                            val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(5) * 1.4f),
-                                label = "lyric blur")
-                            val lineStyle = (when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
-                                    com.orismusic.client.settings.LyricSize.Compact -> MaterialTheme.typography.titleMedium
-                                    com.orismusic.client.settings.LyricSize.Large -> if (embedded) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
-                                    else -> if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
-                                }).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            val lineAlign = if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
-                            val lineModifier = Modifier.fillMaxWidth()
-                                    .then(if (soften > 0.1f) Modifier.blur(soften.dp) else Modifier)
-                                    .graphicsLayer {
-                                    transformOrigin = TransformOrigin(if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) 0.5f else 0f, 0.5f)
-                                    scaleX = emphasis; scaleY = emphasis
-                                }.then(if (line.timeMs != null)
-                                    Modifier.clickable { connection.player.seekTo(line.timeMs) } else Modifier)
-                            val lineWords = line.words
-                            if (selected && lyrics.timed && !lineWords.isNullOrEmpty()) {
-                                // Karaoke: the sung words sweep through the active line in the accent.
-                                val currentWord = lineWords.indexOfLast { position >= it.startMs }
-                                val karaoke = buildAnnotatedString {
-                                    lineWords.forEachIndexed { wi, w ->
-                                        withStyle(SpanStyle(
-                                            color = if (wi <= currentWord) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = if (wi == currentWord) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold,
-                                        )) { append(w.text) }
-                                        if (wi < lineWords.lastIndex) append(" ")
-                                    }
-                                }
-                                Text(karaoke, style=lineStyle, textAlign=lineAlign, modifier=lineModifier)
-                            } else {
-                                Text(line.text.ifBlank { "♪" }, style=lineStyle, textAlign=lineAlign, color=ink, modifier=lineModifier)
-                            }
+                            LyricRow(
+                                line = line, timed = lyrics.timed, selected = index == active,
+                                distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active),
+                                position = position, embedded = embedded,
+                                onSeek = { ms -> connection.player.seekTo(ms) },
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** One lyric line: karaoke sweep when the active line has word timings, plain ink otherwise. */
+@Composable
+private fun LyricRow(
+    line: LyricLine,
+    timed: Boolean,
+    selected: Boolean,
+    distance: Int,
+    position: Long,
+    embedded: Boolean,
+    onSeek: (Long) -> Unit,
+) {
+    val ink by animateColorAsState(
+        when {
+            !timed -> MaterialTheme.colorScheme.onSurface
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = (0.5f - 0.09f * distance).coerceAtLeast(0.18f))
+        }, label = "lyric ink")
+    val emphasis by animateFloatAsState(if (selected) 1f else 0.9f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
+    val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !timed || selected || distance == 1) 0f else (distance.coerceAtMost(5) * 1.4f),
+        label = "lyric blur")
+    val lineStyle = (when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
+            com.orismusic.client.settings.LyricSize.Compact -> MaterialTheme.typography.titleMedium
+            com.orismusic.client.settings.LyricSize.Large -> if (embedded) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
+            else -> if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
+        }).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+    val lineAlign = if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) TextAlign.Center else TextAlign.Start
+    val lineModifier = Modifier.fillMaxWidth()
+            .then(if (soften > 0.1f) Modifier.blur(soften.dp) else Modifier)
+            .graphicsLayer {
+            transformOrigin = TransformOrigin(if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) 0.5f else 0f, 0.5f)
+            scaleX = emphasis; scaleY = emphasis
+        }.then(if (line.timeMs != null)
+            Modifier.clickable { onSeek(line.timeMs) } else Modifier)
+    val lineWords = line.words
+    if (selected && timed && !lineWords.isNullOrEmpty()) {
+        // Karaoke: the sung words sweep through the active line in the accent.
+        val currentWord = lineWords.indexOfLast { position >= it.startMs }
+        val karaoke = buildAnnotatedString {
+            lineWords.forEachIndexed { wi, w ->
+                withStyle(SpanStyle(
+                    color = if (wi <= currentWord) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (wi == currentWord) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold,
+                )) { append(w.text) }
+                if (wi < lineWords.lastIndex) append(" ")
+            }
+        }
+        Text(karaoke, style=lineStyle, textAlign=lineAlign, modifier=lineModifier)
+    } else {
+        Text(line.text.ifBlank { "♪" }, style=lineStyle, textAlign=lineAlign, color=ink, modifier=lineModifier)
+    }
+}
+
+/**
+ * LYRICS mode: a compact header (collapse, mini artwork, title, artist), a scrollable
+ * lyrics viewport faded at both ends, and a pinned bottom bar with the same seek bar and
+ * transport as the player. Lyrics and controls never share a zone, so nothing overlaps.
+ */
+@Composable
+fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
+    // --- state: the words, the position, the accent ---
+    val metadata by connection.currentMetadata.collectAsState()
+    val position by connection.currentPosition.collectAsState()
+    val duration by connection.duration.collectAsState()
+    val isPlaying by connection.isPlaying.collectAsState()
+    val canSkipPrevious by connection.canSkipPrevious.collectAsState()
+    val canSkipNext by connection.canSkipNext.collectAsState()
+    val durationSeconds = (duration.coerceAtLeast(0) / 1000).toInt()
+    val id = connection.player.currentMediaItem?.mediaId.orEmpty()
+    val title = metadata?.title?.toString().orEmpty()
+    val artist = metadata?.artist?.toString().orEmpty()
+    val album = metadata?.albumTitle?.toString().orEmpty()
+    val source = "automatic"
+    val context = LocalContext.current
+    val options = remember(context) { LyricsPreferences(context).read() }
+    var retry by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(false) }
+    var document by remember(id, title, artist, album, durationSeconds, options) {
+        mutableStateOf(LyricsRepository.cached(id, title, artist, album, durationSeconds, source, options))
+    }
+    val list = rememberLazyListState()
+    BackHandler { onClose() }
+    LaunchedEffect(id, title, artist, album, durationSeconds, retry, options) {
+        if (document != null) return@LaunchedEffect
+        if (id.isBlank() || title.isBlank()) return@LaunchedEffect
+        loading = true
+        try {
+            document = LyricsRepository.load(id, title, artist, album, durationSeconds, source, options)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        finally { loading = false }
+    }
+    val active = document?.let { activeLyric(it.lines, position) } ?: -1
+    LaunchedEffect(active) {
+        if (active >= 0 && !list.isScrollInProgress) list.animateScrollToItem(active, scrollOffset = -(list.layoutInfo.viewportSize.height / 3))
+    }
+    val artUrl = metadata?.artworkUri?.toString()
+    val tint by androidx.compose.animation.animateColorAsState(
+        com.orismusic.client.ui.components.rememberArtworkColor(artUrl) ?: Color(0xFFE9E4DC),
+        animationSpec = tween(700), label = "lyrics accent")
+    val accent = lerp(tint, Color.White, 0.55f)
+
+    // --- layout ---
+    Column(Modifier.fillMaxSize()) {
+        // Compact header: drag handle, then collapse + mini artwork + the song's words.
+        Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.35f)))
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onClose),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.KeyboardArrowDown, "Back to player", Modifier.size(22.dp), tint = Color.White.copy(alpha = 0.85f))
+            }
+            Spacer(Modifier.width(12.dp))
+            com.orismusic.client.ui.components.Artwork(artUrl, Modifier.size(44.dp), RoundedCornerShape(8.dp), null, px = 200)
+            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
+                    color = Color.White, overflow = TextOverflow.Ellipsis)
+                Text(artist, style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        // The viewport: lyrics scroll between the header and the bottom bar, faded at both ends.
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                loading && document == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = accent)
+                }
+                document == null -> Column(
+                    Modifier.fillMaxSize().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        if (id.isBlank()) "Choose a song to see its lyrics." else "Lyrics unavailable from this source. Try Automatic or another source.",
+                        color = Color.White.copy(alpha = 0.75f), textAlign = TextAlign.Center,
+                    )
+                    if (id.isNotBlank()) TextButton(onClick = { retry++ }) { Text("Try again", color = accent) }
+                }
+                else -> {
+                    val lyrics = document!!
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = list,
+                        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(22.dp),
+                    ) {
+                        itemsIndexed(lyrics.lines) { index, line ->
+                            LyricRow(
+                                line = line, timed = lyrics.timed, selected = index == active,
+                                distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active),
+                                position = position, embedded = true,
+                                onSeek = { ms -> connection.player.seekTo(ms) },
+                            )
+                        }
+                    }
+                    // The words melt away before they reach the header or the bottom bar.
+                    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(40.dp)
+                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(40.dp)
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
+                }
+            }
+        }
+        // Pinned controls: the same seek bar and transport as the player, on their own scrim.
+        Column(
+            Modifier.fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.62f))))
+                .navigationBarsPadding()
+                .padding(horizontal = 22.dp),
+        ) {
+            WaveSeekBar(
+                player = connection.player,
+                durationMs = duration.coerceAtLeast(0L),
+                isPlaying = isPlaying,
+                onSeek = { connection.seekTo(it) },
+                accent = accent,
+            )
+            Box(Modifier.fillMaxWidth().padding(bottom = 10.dp), contentAlignment = Alignment.Center) {
+                NowPlayingTransport(
+                    isPlaying = isPlaying, canPrevious = canSkipPrevious, canNext = canSkipNext, accent = accent,
+                    onPrevious = { connection.seekToPrevious() },
+                    onToggle = { if (isPlaying) connection.pause() else connection.play() },
+                    onNext = { connection.seekToNext() },
+                )
             }
         }
     }

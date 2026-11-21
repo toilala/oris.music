@@ -157,14 +157,14 @@ fun WaveSeekBar(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val big by animateFloatAsState(if (dragging) 1.3f else 1f, spring(0.6f, 400f), label = "time pop")
             Text(
-                formatTime(shownSec * 1000L), style = MaterialTheme.typography.labelSmall,
+                if (durationMs > 0) formatTime(shownSec * 1000L) else "--:--", style = MaterialTheme.typography.labelSmall,
                 color = if (dragging) accent else Color.White.copy(alpha = 0.75f),
                 modifier = Modifier.graphicsLayer { scaleX = big; scaleY = big; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) },
             )
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
             val total = durationMs.coerceAtLeast(0L)
             Text(
-                if (com.orismusic.client.settings.PlayerSettings.remaining) "-" + formatTime((total - shownSec * 1000L).coerceAtLeast(0L)) else formatTime(total),
+                if (total <= 0) "--:--" else if (com.orismusic.client.settings.PlayerSettings.remaining) "-" + formatTime((total - shownSec * 1000L).coerceAtLeast(0L)) else formatTime(total),
                 style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f),
             )
         }

@@ -64,7 +64,8 @@ internal fun NowPlayingContent(
     connection: PlayerConnection,
     onCollapse: () -> Unit,
     onQueue: () -> Unit,
-    setLyricsOpen: (Boolean) -> Unit,
+    lyricsOpen: Boolean,
+    onToggleLyrics: () -> Unit,
     onOpenArtist: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
@@ -134,13 +135,13 @@ internal fun NowPlayingContent(
                 )
             }
             Spacer(Modifier.width(10.dp))
-            CircleKey(onClick = { setLyricsOpen(true) }, desc = "Lyrics", icon = Icons.Rounded.Lyrics)
+            CircleKey(onClick = onToggleLyrics, desc = if (lyricsOpen) "Close lyrics" else "Lyrics", icon = Icons.Rounded.Lyrics, active = lyricsOpen, accent = accent)
             Spacer(Modifier.width(10.dp))
             CircleKey(onClick = onCollapse, desc = "Collapse player", icon = Icons.Rounded.KeyboardArrowDown)
         }
 
-        // Share the rest of the screen evenly between the gaps, so the seek bar and the
-        // controls spread over the full height instead of bunching up under the title.
+        // Two balanced gaps: one above the seek bar, one below the transport. The space
+        // between seek and controls is fixed so no tall screen grows a void there.
         Spacer(Modifier.weight(1f))
         WaveSeekBar(
             player = connection.player,
@@ -149,7 +150,7 @@ internal fun NowPlayingContent(
             onSeek = { connection.seekTo(it) },
             accent = accent,
         )
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(24.dp))
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             NowPlayingTransport(
                 isPlaying = isPlaying, canPrevious = canSkipPrevious, canNext = canSkipNext, accent = accent,
@@ -180,13 +181,15 @@ internal fun NowPlayingContent(
     if (trayOpen) PlayerTray(connection, onQueue = onQueue, onDismiss = { trayOpen = false })
 }
 
-/** A small quiet circle for the actions around the title row. */
+/** A small quiet circle for the actions around the title row. Active tints it in the accent. */
 @Composable
-private fun CircleKey(onClick: () -> Unit, desc: String, icon: ImageVector) {
+private fun CircleKey(onClick: () -> Unit, desc: String, icon: ImageVector, active: Boolean = false, accent: Color = Color.White) {
     Box(
-        Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onClick),
+        Modifier.size(44.dp).clip(CircleShape)
+            .background(if (active) accent.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.10f))
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, desc, Modifier.size(22.dp), tint = Color.White.copy(alpha = 0.85f))
+        Icon(icon, desc, Modifier.size(22.dp), tint = if (active) accent else Color.White.copy(alpha = 0.85f))
     }
 }

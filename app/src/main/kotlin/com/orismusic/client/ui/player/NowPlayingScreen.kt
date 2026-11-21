@@ -203,14 +203,13 @@ fun NowPlayingScreen(
             )
         }
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
-        NowPlayingContent(connection, onCollapse, onQueue, setLyricsOpen = { lyricsOpen = it }, onOpenArtist = onOpenArtist)
-        // Lyrics take over the whole screen when asked; the hero melts further into the tint behind them.
-        androidx.compose.animation.AnimatedVisibility(
-            visible = lyricsOpen,
-            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(280)) + androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(340)) { it / 12 },
-            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(260)) { it / 12 },
-        ) {
-            LyricsPane(connection, onClose = { lyricsOpen = false }, embedded = true)
+        // Two modes, never stacked: NOW_PLAYING and LYRICS crossfade; one is always gone.
+        Crossfade(targetState = lyricsOpen, animationSpec = androidx.compose.animation.core.tween(300), label = "player mode") { open ->
+            if (open) {
+                LyricsMode(connection, onClose = { lyricsOpen = false })
+            } else {
+                NowPlayingContent(connection, onCollapse, onQueue, lyricsOpen = lyricsOpen, onToggleLyrics = { lyricsOpen = !lyricsOpen }, onOpenArtist = onOpenArtist)
+            }
         }
     }
 }
