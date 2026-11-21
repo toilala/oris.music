@@ -54,8 +54,10 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionToken
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.MoreExecutors
 import com.orismusic.client.MainActivity
 import com.orismusic.client.R
@@ -877,6 +879,34 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var mediaNotificationProvider: OrisMediaNotificationProvider? = null
 
+    private val notificationActionFactory by lazy { OrisNotificationActionFactory(this) }
+
+    /**
+     * Media3's MediaNotificationManager never posts its update in Oris (proven in CI: the
+     * shade keeps the placeholder forever), so the service builds the media notification
+     * itself on every player change and promotes it. Same builder media3 would have used,
+     * so title, artist, artwork and controls look like every other player.
+     */
+    private fun refreshMediaNotification() {
+        val provider = mediaNotificationProvider ?: return
+        if (resourcesReleased || !::mediaSession.isInitialized || !::player.isInitialized) return
+        if (player.currentMediaItem == null) return
+        try {
+            val mediaNotification =
+                provider.createNotification(
+                    mediaSession,
+                    ImmutableList.of(),
+                    notificationActionFactory,
+                ) { updated ->
+                    // Artwork resolves after the first build; repost with it.
+                    if (!resourcesReleased) startForegroundCompat(updated.notification)
+                }
+            startForegroundCompat(mediaNotification.notification)
+        } catch (e: Exception) {
+            Timber.tag("OrisMediaService").w(e, "refreshMediaNotification failed")
+        }
+    }
+
     /**
      * Posts the media notification on the full or the minimized channel, per the playback setting.
      * The provider wrapper is ported from Metrolist (GPL): it caches the built notification,
@@ -911,6 +941,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         Timber.d("Playback state changed: $state")
         if (state == Player.STATE_READY) errorRetries = 0
         if (state == Player.STATE_READY || state == Player.STATE_ENDED) fillUpcomingMusic()
+        refreshMediaNotification()
     }
 
     override fun onPlayerError(error: PlaybackException) {
@@ -969,11 +1000,17 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         }
         persistQueue()
         fillUpcomingMusic()
+        refreshMediaNotification()
+    }
+
+    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+        refreshMediaNotification()
     }
 
     private var positionPersistJob: kotlinx.coroutines.Job? = null
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+        refreshMediaNotification()
         if (!isPlaying) {
             positionPersistJob?.cancel()
             positionPersistJob = null
