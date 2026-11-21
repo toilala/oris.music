@@ -23,11 +23,13 @@ def screen(name):
         print(f'ORIS_IMAGE {name} {encoded[start:start+3000]}', flush=True)
 
 def tree():
-    try:
-        adb('shell', 'uiautomator', 'dump', '/sdcard/oris-nav.xml')
-        return ET.fromstring(adb('shell', 'cat', '/sdcard/oris-nav.xml'))
-    except (subprocess.CalledProcessError, ET.ParseError):
-        return ET.Element('hierarchy')
+    for _ in range(2):
+        try:
+            adb('shell', 'uiautomator', 'dump', '/sdcard/oris-nav.xml')
+            return ET.fromstring(adb('shell', 'cat', '/sdcard/oris-nav.xml'))
+        except (subprocess.CalledProcessError, ET.ParseError):
+            time.sleep(1)
+    return ET.Element('hierarchy')
 
 def wait_label(label, seconds=25):
     end = time.monotonic() + seconds

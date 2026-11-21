@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Screenshots of the library, playlists and settings screens. Never plays audio."""
 from playback_check import adb, tap, wait_label, screen, PKG
+import re
 import time
 
 adb('shell', 'am', 'force-stop', PKG)
@@ -68,7 +69,8 @@ for i in range(8):
     adb('shell', 'input', 'swipe', '540', '1200', '540', '400', '350')
     time.sleep(1.5)
     crash = adb('logcat', '-d', '-b', 'crash').decode()
-    if 'FATAL EXCEPTION' in crash:
+    dead = [p for p in re.findall(r'FATAL EXCEPTION[^\n]*\nProcess: ([^,]+)', crash) if p.strip() == PKG]
+    if dead:
         print(crash[-3000:], flush=True)
         screen('failure')
         raise AssertionError('app crashed while scrolling Home')
