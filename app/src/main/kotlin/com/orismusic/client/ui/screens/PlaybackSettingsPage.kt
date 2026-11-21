@@ -178,7 +178,7 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
 
 /** Best-effort path to this phone's background/battery allowlist: vivo/iQOO autostart manager
  *  first on those devices, then the standard battery-optimization exemption, then the list page. */
-private fun openBackgroundBatterySettings(context: android.content.Context) {
+fun openBackgroundBatterySettings(context: android.content.Context) {
     val pkg = context.packageName
     val maker = android.os.Build.MANUFACTURER.lowercase()
     val candidates = mutableListOf<android.content.Intent>()
