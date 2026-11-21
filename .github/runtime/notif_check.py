@@ -3,6 +3,7 @@
 and that playback survives a short stint in the background. Uses the debug local tone, no streaming."""
 from playback_check import adb, wait_label, PKG, OUT
 import glob
+import subprocess
 import re
 import time
 
@@ -50,14 +51,33 @@ assert 'category=transport' in late_dump, \
     'steady-state notification is not a media notification (no transport category)'
 assert 'android.mediaSession=Token' in late_dump, \
     'steady-state notification has no live media session token'
+media_sessions = adb('shell', 'dumpsys', 'media_session').decode()
+open(OUT + '/dumpsys-media-session.txt', 'w').write(media_sessions)
+assert 'Runtime local tone' in media_sessions, 'media session is not carrying the track title'
+assert 'Oris test' in media_sessions, 'media session is not carrying the track artist'
+# The shade chronometer ticks while playing, so uiautomator never reaches idle; pause,
+# read the rendered shade, then resume before the survival checks below.
+adb('shell', 'input', 'keyevent', '127')
+time.sleep(2)
 adb('shell', 'cmd', 'statusbar', 'expand-notifications')
 time.sleep(2)
-adb('shell', 'uiautomator', 'dump', '/data/local/tmp/oris_shade.xml')
-shade_xml = adb('shell', 'cat', '/data/local/tmp/oris_shade.xml').decode()
+shade_xml = ''
+for _ in range(3):
+    try:
+        adb('shell', 'uiautomator', 'dump', '/data/local/tmp/oris_shade.xml')
+        shade_xml = adb('shell', 'cat', '/data/local/tmp/oris_shade.xml').decode()
+        if shade_xml.strip():
+            break
+    except subprocess.CalledProcessError:
+        time.sleep(3)
 open(OUT + '/uiautomator-shade.xml', 'w').write(shade_xml)
 screen('notification_shade_late')
 adb('shell', 'cmd', 'statusbar', 'collapse')
 time.sleep(1)
+adb('shell', 'input', 'keyevent', '126')
+time.sleep(2)
+assert '3' in session_states(), 'playback did not resume after the shade read'
+assert shade_xml.strip(), 'could not dump the expanded shade UI'
 assert 'Runtime local tone' in shade_xml, 'steady-state shade does not render the track title'
 assert 'Oris test' in shade_xml, 'steady-state shade does not render the track artist'
 print('NOTIF: steady-state shade renders the track title and artist', flush=True)

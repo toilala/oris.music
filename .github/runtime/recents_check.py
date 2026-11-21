@@ -11,8 +11,15 @@ def services():
     return adb('shell', 'dumpsys', 'activity', 'services', PKG).decode()
 
 def assert_running():
-    assert 'ServiceRecord{' in services(), 'Playback service missing'
-    sessions = adb('shell', 'dumpsys', 'media_session').decode()
+    end = time.monotonic() + 20
+    dump = ''
+    while time.monotonic() < end:
+        dump = services()
+        sessions = adb('shell', 'dumpsys', 'media_session').decode()
+        if 'ServiceRecord{' in dump and PKG in sessions and 'state=3' in sessions:
+            return
+        time.sleep(1)
+    assert 'ServiceRecord{' in dump, 'Playback service missing'
     assert PKG in sessions and 'state=3' in sessions, sessions
 
 def assert_stopped():
@@ -68,7 +75,7 @@ adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
 settings()
-assert switch_node().get('checked') == 'true', 'New installation must default ON (Echo/Metrolist behavior)'
+assert switch_node().get('checked') == 'true', 'New installation must default ON'
 screen('settings_default_on')
 local_audio()
 screen('local_tone_playing')
