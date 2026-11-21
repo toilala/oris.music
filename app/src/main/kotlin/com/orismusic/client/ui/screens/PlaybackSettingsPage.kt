@@ -89,6 +89,31 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     )
                 }
             }
+            run {
+                val notifGranted = android.os.Build.VERSION.SDK_INT < 33 ||
+                    context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                androidx.compose.foundation.layout.Column(
+                    Modifier.clickable(
+                        indication = null,
+                        interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    ) {
+                        context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    },
+                ) {
+                    Text("Player controls in notifications", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (notifGranted) "On: Android lets the app show the player notification."
+                        else "Off: the player notification is blocked, which makes background playback fragile. Tap to allow it.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             ToggleRow(
                 "Playback notification",
                 if (playbackNotification) "On: the player controls show in your notifications."
