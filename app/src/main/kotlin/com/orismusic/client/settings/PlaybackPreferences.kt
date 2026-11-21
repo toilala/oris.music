@@ -7,7 +7,7 @@ class PlaybackPreferences(context: Context) {
     private val store = context.applicationContext.getSharedPreferences("playback_behavior", Context.MODE_PRIVATE)
 
     var keepPlayingAfterTaskRemoval: Boolean
-        get() = store.getBoolean("continue_after_task_removed", false)
+        get() = store.getBoolean("continue_after_task_removed", true)
         set(value) { store.edit().putBoolean("continue_after_task_removed", value).apply() }
 
     var skipSilence: Boolean

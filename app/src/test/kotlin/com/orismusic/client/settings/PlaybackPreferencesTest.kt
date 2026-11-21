@@ -14,8 +14,8 @@ import org.robolectric.annotation.Config
 class PlaybackPreferencesTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
     @Before fun reset() { context.getSharedPreferences("playback_behavior", Context.MODE_PRIVATE).edit().clear().commit() }
-    @Test fun removalDefaultsToFullStop() {
-        assertFalse(PlaybackPreferences(context).keepPlayingAfterTaskRemoval)
+    @Test fun removalDefaultsToKeepPlaying() {
+        assertTrue(PlaybackPreferences(context).keepPlayingAfterTaskRemoval)
     }
     @Test fun explicitOptInSurvivesANewReader() {
         PlaybackPreferences(context).keepPlayingAfterTaskRemoval = true

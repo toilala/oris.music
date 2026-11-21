@@ -696,15 +696,15 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             ))
             .build()
 
-        // Buffer minutes ahead like other serious players (Echo keeps six), and ask for a few
-        // seconds of cushion before resuming after a stall: the old 500/500 thresholds made
-        // playback flap pause/play/pause on any network dip.
+        // Buffer minutes ahead like other serious players (Echo keeps six), and resume almost
+        // immediately after a stall: Echo's 150/500 startup thresholds keep dips from turning
+        // into multi-second pauses, while the old 500/500 made playback flap pause/play/pause.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 180_000,
                 360_000,
-                2_500,
-                5_000
+                150,
+                500
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -790,6 +790,24 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         super.onStartCommand(intent, flags, startId)
         // Do not resurrect an idle playback service after Android reclaims it.
         return START_NOT_STICKY
+    }
+
+    // Echo (GPL) guards this the same way: on Android 12+, a backgrounded app cannot
+    // always promote to foreground, and Media3's promotion would otherwise crash here.
+    override fun startForegroundService(service: Intent): android.content.ComponentName? {
+        return try {
+            super.startForegroundService(service)
+        } catch (e: Exception) {
+            if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                e is android.app.ForegroundServiceStartNotAllowedException
+            ) {
+                Timber.e(e, "Suppressed ForegroundServiceStartNotAllowedException in OrisMediaService")
+                null
+            } else {
+                throw e
+            }
+        }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
