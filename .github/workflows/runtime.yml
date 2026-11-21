@@ -38,7 +38,7 @@ jobs:
           api-level: 29
           arch: x86_64
           target: default
-          profile: pixel_2
+          profile: pixel_6
           ram-size: 3072M
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
