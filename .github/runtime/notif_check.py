@@ -42,6 +42,11 @@ time.sleep(1)
 # starts, so capture again before judging what the shade really shows during steady play.
 time.sleep(10)
 open(OUT + '/dumpsys-notification-late.txt', 'w').write(adb('shell', 'dumpsys', 'notification').decode())
+# The steady-state notification must be the real media notification carrying the track title,
+# not only the startup placeholder.
+assert 'Runtime local tone' in open(OUT + '/dumpsys-notification-late.txt').read(), \
+    'steady-state shade still shows only the placeholder, not the media notification'
+print('NOTIF: steady-state notification carries the track title', flush=True)
 adb('shell', 'cmd', 'statusbar', 'expand-notifications')
 time.sleep(2)
 screen('notification_shade_late')

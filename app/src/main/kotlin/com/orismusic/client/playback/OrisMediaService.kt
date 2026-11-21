@@ -61,7 +61,6 @@ import com.orismusic.client.MainActivity
 import com.orismusic.client.R
 import com.orismusic.client.constants.AudioNormalizationKey
 import com.orismusic.client.constants.AudioOffload
-import com.orismusic.client.constants.AudioQualityKey
 import com.orismusic.client.constants.CrossfadeDurationKey
 import com.orismusic.client.constants.CrossfadeEnabledKey
 import com.orismusic.client.constants.CrossfadeGaplessKey
@@ -255,7 +254,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var failureJob: Job? = null
     private val isNetworkConnected = MutableStateFlow(false)
 
-    private lateinit var audioQuality: AudioQuality
     private lateinit var ipVersion: Any // IpVersion placeholder
 
     private var currentQueue: Queue = EmptyQueue
@@ -786,7 +784,31 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var resourcesReleased = false
 
+    // Ported from Metrolist (GPL) MusicService: a media-button start must promote to
+    // foreground immediately with the latest cached notification, then verify shortly
+    // after so a spurious start cannot leave a dismissed or empty notification behind.
+    private var foregroundStartCleanupJob: Job? = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == Intent.ACTION_MEDIA_BUTTON) {
+            try {
+                startForegroundCompat(
+                    mediaNotificationProvider?.latestNotification?.notification
+                        ?: buildPlaceholderNotification()
+                )
+            } catch (e: RuntimeException) {
+                Timber.tag("OrisMediaService").w(e, "Media-button foreground start failed")
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
+            foregroundStartCleanupJob?.cancel()
+            foregroundStartCleanupJob = scope.launch {
+                delay(10_000L)
+                if (::player.isInitialized && ::mediaSession.isInitialized && player.currentMediaItem != null) {
+                    onUpdateNotification(mediaSession, player.isPlaying)
+                }
+            }
+        }
         super.onStartCommand(intent, flags, startId)
         // Do not resurrect an idle playback service after Android reclaims it.
         return START_NOT_STICKY
@@ -853,10 +875,17 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var notifPrefsListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
 
-    /** Posts the media notification on the full or the minimized channel, per the playback setting. */
+    private var mediaNotificationProvider: OrisMediaNotificationProvider? = null
+
+    /**
+     * Posts the media notification on the full or the minimized channel, per the playback setting.
+     * The provider wrapper is ported from Metrolist (GPL): it caches the built notification,
+     * marks it ongoing while playing, and lets the service reconcile foreground state.
+     */
     private fun applyNotificationStyle() {
         val show = com.orismusic.client.settings.PlaybackPreferences(this).playbackNotification
-        setMediaNotificationProvider(
+        mediaNotificationProvider = OrisMediaNotificationProvider(
+            this,
             DefaultMediaNotificationProvider(
                 this,
                 { NOTIFICATION_ID },
@@ -864,6 +893,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 R.string.music_player
             ).apply { setSmallIcon(R.drawable.ic_notification) }
         )
+        setMediaNotificationProvider(checkNotNull(mediaNotificationProvider))
     }
 
     override fun onDestroy() {

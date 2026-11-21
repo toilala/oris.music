@@ -96,6 +96,7 @@ fun NowPlayingScreen(
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
     onQueue: () -> Unit = {},
+    onOpenArtist: (String, String) -> Unit = { _, _ -> },
 ) {
     val look = com.orismusic.client.settings.AppearanceSettings
     val mode = look.backgroundMode
@@ -185,6 +186,6 @@ fun NowPlayingScreen(
             )
         }
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
-        NowPlayingContent(connection, onCollapse, onQueue, lyricsOpen, setLyricsOpen = { lyricsOpen = it })
+        NowPlayingContent(connection, onCollapse, onQueue, lyricsOpen, setLyricsOpen = { lyricsOpen = it }, onOpenArtist = onOpenArtist)
     }
 }

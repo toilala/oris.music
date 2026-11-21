@@ -56,13 +56,16 @@ import com.orismusic.client.settings.SkipIcons
 
 /** Title and artist. A new song slides the old text up and out and brings the new one in from below. */
 @Composable
-internal fun NowPlayingTitle(title: String, artist: String, modifier: Modifier = Modifier) {
+internal fun NowPlayingTitle(title: String, artist: String, modifier: Modifier = Modifier, onArtistClick: (() -> Unit)? = null) {
     val content: @Composable (Pair<String, String>) -> Unit = { (t, a) ->
         Column {
             Text(t, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(a, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.68f),
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = if (onArtistClick != null) Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null,
+                ) { onArtistClick() } else Modifier)
         }
     }
     if (!PlayerSettings.titleMotion) { Box(modifier) { content(title to artist) }; return }

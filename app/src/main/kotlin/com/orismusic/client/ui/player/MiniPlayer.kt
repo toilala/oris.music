@@ -1,6 +1,7 @@
 package com.orismusic.client.ui.player
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
@@ -15,6 +16,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,9 +61,11 @@ import com.orismusic.client.ui.components.rememberArtworkColor
 fun MiniPlayer(
     connection: PlayerConnection,
     onExpand: () -> Unit,
+    onOpenArtist: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value ?: return
+    val artistId = metadata.extras?.getString("artist_id")
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val offX = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
     val offY = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
@@ -138,6 +143,9 @@ fun MiniPlayer(
                     Text(
                         artist, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = if (artistId != null) Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() }, indication = null,
+                        ) { onOpenArtist(artistId, artist) } else Modifier,
                     )
                 }
             }

@@ -248,6 +248,13 @@ class MainActivity : ComponentActivity() {
                                         MiniPlayer(
                                             connection = it,
                                             onExpand = { navigation = navigation.openPlayer() },
+                                            onOpenArtist = { id, name ->
+                                                openScope.launch {
+                                                    com.orismusic.client.ui.screens.openOrPlay(
+                                                        com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
+                                                    ) { detail = it; detailBack = null }
+                                                }
+                                            },
                                         )
                                     }
                                     FloatingNav(
@@ -375,6 +382,13 @@ class MainActivity : ComponentActivity() {
                                         connection = it,
                                         onCollapse = { navigation = navigation.closePlayer() },
                                         onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
+                                        onOpenArtist = { id, name ->
+                                            openScope.launch {
+                                                com.orismusic.client.ui.screens.openOrPlay(
+                                                    com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
+                                                ) { navigation = navigation.closePlayer(); detail = it; detailBack = null }
+                                            }
+                                        },
                                     )
                                 }
                             }

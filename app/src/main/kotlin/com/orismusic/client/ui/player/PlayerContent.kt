@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,6 +87,7 @@ internal fun NowPlayingContent(
     onQueue: () -> Unit,
     lyricsOpen: Boolean,
     setLyricsOpen: (Boolean) -> Unit,
+    onOpenArtist: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value
@@ -143,7 +145,11 @@ internal fun NowPlayingContent(
         }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            NowPlayingTitle(metadata?.title?.toString().orEmpty(), metadata?.artist?.toString().orEmpty(), Modifier.weight(1f))
+            val artistId = metadata?.extras?.getString("artist_id")
+            NowPlayingTitle(
+                metadata?.title?.toString().orEmpty(), metadata?.artist?.toString().orEmpty(), Modifier.weight(1f),
+                onArtistClick = artistId?.let { id -> { onOpenArtist(id, metadata?.artist?.toString().orEmpty()) } },
+            )
             val likeView = androidx.compose.ui.platform.LocalView.current
             val likePress = remember { MutableInteractionSource() }
             val likePressed by likePress.collectIsPressedAsState()
@@ -162,6 +168,8 @@ internal fun NowPlayingContent(
                 )
             }
         }
+
+        MiniSyncedLyrics(connection, metadata)
 
         Spacer(Modifier.height(10.dp))
         WaveSeekBar(
@@ -255,5 +263,49 @@ private fun PillHalf(
         icon(tint)
         Spacer(Modifier.width(7.dp))
         Text(label, style = MaterialTheme.typography.labelLarge, color = tint)
+    }
+}
+
+/** One or two lines of the synced lyric currently being sung, just above the seek bar.
+ *  Hidden when the song has no synced lyrics, so the layout stays exactly as before. */
+@Composable
+private fun MiniSyncedLyrics(connection: PlayerConnection, metadata: androidx.media3.common.MediaMetadata?) {
+    val context = LocalContext.current
+    val id = connection.player.currentMediaItem?.mediaId.orEmpty()
+    val title = metadata?.title?.toString().orEmpty()
+    val artist = metadata?.artist?.toString().orEmpty()
+    val album = metadata?.albumTitle?.toString().orEmpty()
+    val duration by connection.duration.collectAsState()
+    val durationSeconds = (duration.coerceAtLeast(0) / 1000).toInt()
+    val options = remember(context) { com.orismusic.client.settings.LyricsPreferences(context).read() }
+    var document by remember(id, title, artist, album, durationSeconds) {
+        mutableStateOf(com.orismusic.client.lyrics.LyricsRepository.cached(id, title, artist, album, durationSeconds, "automatic", options))
+    }
+    LaunchedEffect(id, title, artist, album, durationSeconds) {
+        if (document != null || id.isBlank() || title.isBlank() || durationSeconds <= 0) return@LaunchedEffect
+        document = runCatching {
+            com.orismusic.client.lyrics.LyricsRepository.load(id, title, artist, album, durationSeconds, "automatic", options)
+        }.getOrNull()
+    }
+    val position by connection.currentPosition.collectAsState()
+    val lines = document?.lines?.filter { it.timeMs != null && it.text.isNotBlank() }.orEmpty()
+    if (lines.isEmpty()) return
+    val active = com.orismusic.client.lyrics.activeLyric(lines, position)
+    if (active < 0) return
+    Crossfade(targetState = active, animationSpec = tween(250), label = "mini lyric") { idx ->
+        Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                lines.getOrNull(idx)?.text.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            val next = lines.getOrNull(idx + 1)?.text
+            if (!next.isNullOrBlank()) {
+                Text(
+                    next, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.45f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
