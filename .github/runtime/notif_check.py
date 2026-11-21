@@ -41,17 +41,26 @@ time.sleep(1)
 # Late capture: the full media-style notification can land a few seconds after playback
 # starts, so capture again before judging what the shade really shows during steady play.
 time.sleep(10)
-open(OUT + '/dumpsys-notification-late.txt', 'w').write(adb('shell', 'dumpsys', 'notification').decode())
-# The steady-state notification must be the real media notification carrying the track title,
-# not only the startup placeholder.
-assert 'Runtime local tone' in open(OUT + '/dumpsys-notification-late.txt').read(), \
-    'steady-state shade still shows only the placeholder, not the media notification'
-print('NOTIF: steady-state notification carries the track title', flush=True)
+late_dump = adb('shell', 'dumpsys', 'notification').decode()
+open(OUT + '/dumpsys-notification-late.txt', 'w').write(late_dump)
+# The steady-state notification must be a real media notification: transport category and a
+# live session token. dumpsys prints extra TYPES, never values, so the title itself is
+# judged on the rendered shade below.
+assert 'category=transport' in late_dump, \
+    'steady-state notification is not a media notification (no transport category)'
+assert 'android.mediaSession=Token' in late_dump, \
+    'steady-state notification has no live media session token'
 adb('shell', 'cmd', 'statusbar', 'expand-notifications')
 time.sleep(2)
+adb('shell', 'uiautomator', 'dump', '/data/local/tmp/oris_shade.xml')
+shade_xml = adb('shell', 'cat', '/data/local/tmp/oris_shade.xml').decode()
+open(OUT + '/uiautomator-shade.xml', 'w').write(shade_xml)
 screen('notification_shade_late')
 adb('shell', 'cmd', 'statusbar', 'collapse')
 time.sleep(1)
+assert 'Runtime local tone' in shade_xml, 'steady-state shade does not render the track title'
+assert 'Oris test' in shade_xml, 'steady-state shade does not render the track artist'
+print('NOTIF: steady-state shade renders the track title and artist', flush=True)
 
 adb('shell', 'input', 'keyevent', '3')
 for i in range(6):

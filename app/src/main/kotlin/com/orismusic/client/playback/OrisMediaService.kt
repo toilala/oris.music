@@ -941,7 +941,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         Timber.d("Playback state changed: $state")
         if (state == Player.STATE_READY) errorRetries = 0
         if (state == Player.STATE_READY || state == Player.STATE_ENDED) fillUpcomingMusic()
-        refreshMediaNotification()
+        // BUFFERING is followed by READY within a moment; refreshing on both builds the
+        // notification twice for no visible change.
+        if (state != Player.STATE_BUFFERING) refreshMediaNotification()
     }
 
     override fun onPlayerError(error: PlaybackException) {
