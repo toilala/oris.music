@@ -1,95 +1,94 @@
 package com.orismusic.client.ui.player
 
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.material.icons.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.fadeIn
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.blur
-import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.widthIn
+/*
+ * Full player screen. The layout, controls and motion follow the Echo Music app's player
+ * (GPL-3.0, https://github.com/EchoMusicApp/Echo-Music): gradient artwork background, square
+ * artwork carousel, slim seek bar, wavy play blob, cluster buttons and the bottom action bar.
+ * Playback, queue, lyrics and timers run on Oris's own PlayerConnection. All code is Oris's own.
+ */
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.draw.shadow
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
+import androidx.media3.common.C
 import androidx.media3.common.Player
-import coil3.compose.AsyncImage
-import androidx.compose.ui.platform.LocalContext
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.currentSavedSong
-import android.os.SystemClock
-import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.SleepTimer
+import com.orismusic.client.ui.components.Artwork
 import com.orismusic.client.utils.formatTime
+import kotlin.math.abs
+import kotlin.math.min
 
-/**
- * Full now-playing screen: artwork, title/artist, draggable seek bar, and
- * transport controls (shuffle, previous, play/pause, next, repeat).
- * Genuine Oris code.
- */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
     connection: PlayerConnection,
@@ -98,118 +97,381 @@ fun NowPlayingScreen(
     onQueue: () -> Unit = {},
     onOpenArtist: (String, String) -> Unit = { _, _ -> },
 ) {
-    val look = com.orismusic.client.settings.AppearanceSettings
-    val mode = look.backgroundMode
-    val adaptive = look.adaptiveBackground
-    val art = connection.currentMetadata.collectAsState().value?.artworkUri?.toString()
+    val context = LocalContext.current
+    val metadata by connection.currentMetadata.collectAsState()
+    val isPlaying by connection.isPlaying.collectAsState()
+    val playbackState by connection.playbackState.collectAsState()
+    val repeatMode by connection.repeatMode.collectAsState()
+    val shuffle by connection.shuffleModeEnabled.collectAsState()
+    val canSkipPrevious by connection.canSkipPrevious.collectAsState()
+    val canSkipNext by connection.canSkipNext.collectAsState()
+    val index by connection.currentMediaItemIndex.collectAsState()
+    val position by connection.currentPosition.collectAsState()
+    val duration by connection.duration.collectAsState()
+    val player = connection.player
+
+    val art = metadata?.artworkUri?.toString()
+    val title = metadata?.title?.toString().orEmpty()
+    val artist = metadata?.artist?.toString().orEmpty()
+    val artistId = metadata?.extras?.getString("artist_id")
+    val mediaId = player.currentMediaItem?.mediaId.orEmpty()
+
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
+    var trayOpen by remember { mutableStateOf(false) }
+
     // Fetch lyrics as soon as a song starts so the Lyrics view opens already filled.
-    val lyricContext = androidx.compose.ui.platform.LocalContext.current
-    val lyricMeta = connection.currentMetadata.collectAsState().value
-    val lyricDuration = connection.duration.collectAsState().value
-    val lyricId = connection.player.currentMediaItem?.mediaId.orEmpty()
+    LaunchedEffect(mediaId, metadata?.title, duration > 0) {
+        if (mediaId.isBlank() || title.isBlank() || duration <= 0) return@LaunchedEffect
+        runCatching {
+            com.orismusic.client.lyrics.LyricsRepository.load(
+                mediaId, title, artist, metadata?.albumTitle?.toString().orEmpty(),
+                (duration.coerceAtLeast(0) / 1000).toInt(), "automatic",
+                com.orismusic.client.settings.LyricsPreferences(context).read(),
+            )
+        }
+    }
     // If playback died while the app was away, the service restarts with an empty queue and
     // this screen would sit blank. Give metadata a moment, then fold back to the miniplayer.
-    val noSong = connection.currentMetadata.collectAsState().value == null
-    // Only a player restored after process death may fold itself back when the queue is
-    // empty; one the user opened by hand stays open (PlayerLaunch.consumeRecreatedFlag).
     val restoredOpen = remember { com.orismusic.client.ui.navigation.PlayerLaunch.consumeRecreatedFlag() }
-    androidx.compose.runtime.LaunchedEffect(noSong, connection) {
-        if (!noSong || !restoredOpen) return@LaunchedEffect
+    LaunchedEffect(metadata == null, connection) {
+        if (metadata != null || !restoredOpen) return@LaunchedEffect
         kotlinx.coroutines.delay(1500)
         if (connection.currentMetadata.value == null && connection.player.mediaItemCount == 0) onCollapse()
     }
-    androidx.compose.runtime.LaunchedEffect(lyricId, lyricMeta?.title, lyricDuration > 0) {
-        val title = lyricMeta?.title?.toString().orEmpty()
-        if (lyricId.isBlank() || title.isBlank() || lyricDuration <= 0) return@LaunchedEffect
-        runCatching {
-            com.orismusic.client.lyrics.LyricsRepository.load(
-                lyricId, title, lyricMeta?.artist?.toString().orEmpty(), lyricMeta?.albumTitle?.toString().orEmpty(),
-                (lyricDuration.coerceAtLeast(0) / 1000).toInt(), "automatic",
-                com.orismusic.client.settings.LyricsPreferences(lyricContext).read(),
-            )
-        }
-    }
-    val tint by androidx.compose.animation.animateColorAsState(
-        targetValue = com.orismusic.client.ui.components.rememberArtworkColor(art) ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = androidx.compose.animation.core.tween(700),
-        label = "player tint",
-    )
-    val base = MaterialTheme.colorScheme.background
-    val k = look.intensity
-    val floor = if (!adaptive || mode == com.orismusic.client.settings.BackgroundMode.Solid) base
-        else androidx.compose.ui.graphics.lerp(base, tint, 0.38f * k)
-    val heroBlur by androidx.compose.animation.core.animateDpAsState(if (lyricsOpen) 36.dp else 0.dp,
-        animationSpec = androidx.compose.animation.core.tween(450), label = "hero blur")
-    val heroAlpha by animateFloatAsState(if (lyricsOpen) 0.35f else 1f,
-        animationSpec = androidx.compose.animation.core.tween(450), label = "hero alpha")
-    // A slow drift keeps the artwork alive while playing; it rests where it is when paused.
-    val heroDrift = remember { androidx.compose.animation.core.Animatable(0f) }
-    val playingNow by connection.isPlaying.collectAsState()
-    androidx.compose.runtime.LaunchedEffect(playingNow, art) {
-        if (!playingNow) return@LaunchedEffect
-        while (true) {
-            heroDrift.animateTo(1f, androidx.compose.animation.core.tween(26000, easing = androidx.compose.animation.core.LinearEasing))
-            heroDrift.animateTo(0f, androidx.compose.animation.core.tween(26000, easing = androidx.compose.animation.core.LinearEasing))
-        }
-    }
-    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
-    Box(modifier.fillMaxSize().background(base)) {
-        // Glass: the same cover, blurred and enlarged, fills the whole screen behind everything.
-        if (adaptive && mode == com.orismusic.client.settings.BackgroundMode.Ambient) {
-            // Ambient: artwork colours drift behind everything instead of the still blur.
-            AmbientBackground(
-                floor,
-                tint,
-                androidx.compose.ui.graphics.lerp(tint, base, 0.45f),
-                Modifier.fillMaxSize(),
-            )
-        } else {
-            Crossfade(targetState = art, label = "glass art", modifier = Modifier.fillMaxSize()) { url ->
-                com.orismusic.client.ui.components.Artwork(
-                    url,
-                    Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(70.dp),
-                    androidx.compose.ui.graphics.RectangleShape,
-                    null,
-                    px = 300,
+
+    val gradientColors = rememberPlayerGradientColors(art)
+
+    Box(modifier.fillMaxSize().background(Color.Black)) {
+        // Gradient background: three stops from the artwork, crossfading on song change.
+        Crossfade(targetState = gradientColors, animationSpec = tween(800), label = "player gradient") { colors ->
+            if (colors != null) {
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(colors[0], colors[1], colors[2]))
+                    )
                 )
             }
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.15f), 1f to Color.Black.copy(alpha = 0.6f))))
-        // Full-bleed cover over the top of the screen, melting into the glass below it.
-        Crossfade(targetState = art, label = "hero art", modifier = Modifier.fillMaxWidth().height(screenH * 0.62f).align(Alignment.TopCenter)) { url ->
-            com.orismusic.client.ui.components.Artwork(
-                url,
-                Modifier.fillMaxSize()
-                    .graphicsLayer {
-                        alpha = heroAlpha
-                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
-                        val driftScale = 1f + heroDrift.value * 0.07f
-                        scaleX = driftScale
-                        scaleY = driftScale
-                        translationX = (heroDrift.value - 0.5f) * 14.dp.toPx()
-                    }
-                    .blur(heroBlur)
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            Brush.verticalGradient(0.68f to Color.Black, 1f to Color.Transparent),
-                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                        )
-                    },
-                androidx.compose.ui.graphics.RectangleShape,
-                null,
-                px = 1200,
-            )
-        }
-        Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
-        // Two modes, never stacked: NOW_PLAYING and LYRICS crossfade; one is always gone.
-        Crossfade(targetState = lyricsOpen, animationSpec = androidx.compose.animation.core.tween(300), label = "player mode") { open ->
-            if (open) {
-                LyricsMode(connection, onClose = { lyricsOpen = false })
-            } else {
-                NowPlayingContent(connection, onCollapse, onQueue, lyricsOpen = lyricsOpen, onToggleLyrics = { lyricsOpen = !lyricsOpen }, onOpenArtist = onOpenArtist)
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
+
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Spacer(Modifier.height(48.dp))
+            // Header: collapse control, or a mini artwork + title while lyrics are open.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (lyricsOpen) {
+                    Artwork(art, Modifier.size(56.dp), RoundedCornerShape(6.dp), title, px = 200)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                        color = PlayerTextButtonColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).basicMarquee(),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                ClusterButton(
+                    onClick = onCollapse,
+                    icon = Icons.Rounded.KeyboardArrowDown,
+                    contentDescription = "Collapse player",
+                    shape = CircleShape,
+                )
             }
+            Spacer(Modifier.height(4.dp))
+
+            // Top area: artwork carousel, or the lyrics list in its place.
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                Crossfade(targetState = lyricsOpen, animationSpec = tween(300), label = "player mode") { open ->
+                    if (open) {
+                        LyricsPane(connection, onClose = { lyricsOpen = false }, embedded = true)
+                    } else {
+                        val side = min(maxWidth.value - 64f, maxHeight.value).coerceAtLeast(120f).dp
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            ArtworkCarousel(connection, side)
+                        }
+                    }
+                }
+            }
+
+            // Title / artist + action cluster.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Crossfade(targetState = title, label = "title fade") { t ->
+                        Text(
+                            t,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = PlayerTextButtonColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Crossfade(targetState = artist, label = "artist fade") { a ->
+                        Text(
+                            a,
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                            color = PlayerTextButtonColor.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp)
+                                .then(
+                                    if (artistId != null) Modifier.clickable { onOpenArtist(artistId, artist) } else Modifier
+                                ),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (lyricsOpen) {
+                        ClusterButton(
+                            onClick = { lyricsOpen = false },
+                            icon = Icons.Rounded.Lyrics,
+                            contentDescription = "Close lyrics",
+                            shape = ClusterStartShape,
+                        )
+                        ClusterButton(
+                            onClick = { trayOpen = true },
+                            icon = Icons.Rounded.MoreVert,
+                            contentDescription = "More",
+                            shape = ClusterEndShape,
+                        )
+                    } else {
+                        ClusterButton(
+                            onClick = {
+                                if (mediaId.isNotBlank()) runCatching {
+                                    val text = (title + " https://music.youtube.com/watch?v=" + mediaId).trim()
+                                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(send, "Share song").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                                }
+                            },
+                            icon = Icons.Rounded.Share,
+                            contentDescription = "Share",
+                            shape = ClusterStartShape,
+                        )
+                        Box {
+                            var playlistMenu by remember { mutableStateOf(false) }
+                            val store = remember { PlaylistStore.get(context) }
+                            val playlists by store.playlists.collectAsState()
+                            val song = remember(metadata, index) { connection.currentSavedSong() }
+                            ClusterButton(
+                                onClick = { playlistMenu = true },
+                                icon = Icons.Rounded.PlaylistAdd,
+                                contentDescription = "Add to playlist",
+                                shape = ClusterMiddleShape,
+                            )
+                            DropdownMenu(playlistMenu, { playlistMenu = false }) {
+                                if (playlists.isEmpty()) DropdownMenuItem({ Text("Make a playlist in Library first") }, { playlistMenu = false })
+                                playlists.forEach { p ->
+                                    DropdownMenuItem({ Text(p.name) }, { song?.let { store.add(p.id, it) }; playlistMenu = false })
+                                }
+                            }
+                        }
+                        val library = remember { LibraryStore.get(context) }
+                        val liked by library.liked.collectAsState()
+                        val saved = remember(metadata, index) { connection.currentSavedSong() }
+                        val isLiked = saved != null && liked.any { it.id == saved.id }
+                        ClusterButton(
+                            onClick = { saved?.let { library.toggleLike(it) } },
+                            icon = Icons.Rounded.PlaylistAdd, // placeholder replaced by HeartBurstIcon content below
+                            contentDescription = if (isLiked) "Unlike" else "Like",
+                            shape = ClusterEndShape,
+                            active = isLiked,
+                            content = {
+                                HeartBurstIcon(isLiked, if (isLiked) PlayerIconButtonColor else PlayerTextButtonColor, Modifier.size(22.dp))
+                            },
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Slim seek bar.
+            var sliderPosition by remember { mutableStateOf<Float?>(null) }
+            val safeDuration = duration.coerceAtLeast(0L)
+            val shownPosition = sliderPosition?.let { (it * safeDuration).toLong() } ?: position.coerceAtLeast(0L)
+            val fraction = if (safeDuration > 0) (shownPosition.toFloat() / safeDuration).coerceIn(0f, 1f) else 0f
+            Slider(
+                value = fraction,
+                onValueChange = { sliderPosition = it },
+                onValueChangeFinished = {
+                    sliderPosition?.let { connection.seekTo((it * safeDuration).toLong()) }
+                    sliderPosition = null
+                },
+                thumb = { InvisibleSliderThumb() },
+                track = { SlimSliderTrack(fraction, Modifier.fillMaxWidth().height(10.dp)) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(20.dp),
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp)) {
+                Text(formatTime(shownPosition), style = MaterialTheme.typography.labelMedium, color = PlayerTextButtonColor.copy(alpha = 0.7f))
+                Spacer(Modifier.weight(1f))
+                Text(if (safeDuration > 0) formatTime(safeDuration) else "", style = MaterialTheme.typography.labelMedium, color = PlayerTextButtonColor.copy(alpha = 0.7f))
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Transport.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SkipSquircle(
+                    onClick = { connection.seekToPrevious() },
+                    enabled = canSkipPrevious,
+                    icon = Icons.Rounded.SkipPrevious,
+                    contentDescription = "Previous",
+                )
+                Spacer(Modifier.width(16.dp))
+                val ended = playbackState == Player.STATE_ENDED
+                PlayPauseBlob(
+                    playing = isPlaying,
+                    onClick = {
+                        if (ended) {
+                            connection.player.seekTo(0, 0)
+                            connection.player.playWhenReady = true
+                        } else connection.togglePlayPause()
+                    },
+                    icon = if (ended) Icons.Rounded.Replay else if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (ended) "Replay" else if (isPlaying) "Pause" else "Play",
+                )
+                Spacer(Modifier.width(16.dp))
+                SkipSquircle(
+                    onClick = { connection.seekToNext() },
+                    enabled = canSkipNext,
+                    icon = Icons.Rounded.SkipNext,
+                    contentDescription = "Next",
+                )
+            }
+
+            Spacer(Modifier.height(30.dp))
+
+            // Bottom bar: queue, sleep timer, lyrics, shuffle, repeat, more.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 12.dp).navigationBarsPadding(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ClusterButton(onClick = onQueue, icon = Icons.Rounded.QueueMusic, contentDescription = "Queue", shape = ClusterStartShape)
+                Box {
+                    var timerMenu by remember { mutableStateOf(false) }
+                    val timerEnd by SleepTimer.endsAt.collectAsState()
+                    ClusterButton(onClick = { timerMenu = true }, icon = Icons.Rounded.Timer, contentDescription = "Sleep timer", shape = ClusterMiddleShape, active = timerEnd != null)
+                    DropdownMenu(timerMenu, { timerMenu = false }) {
+                        if (timerEnd != null) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); timerMenu = false })
+                        listOf(15, 30, 45, 60).forEach { minutes ->
+                            DropdownMenuItem({ Text("Stop after $minutes min") }, { SleepTimer.start(minutes) { connection.pause() }; timerMenu = false })
+                        }
+                    }
+                }
+                ClusterButton(
+                    onClick = { lyricsOpen = !lyricsOpen },
+                    icon = Icons.Rounded.Lyrics,
+                    contentDescription = "Lyrics",
+                    shape = ClusterMiddleShape,
+                    active = lyricsOpen,
+                )
+                ClusterButton(onClick = { connection.toggleShuffle() }, icon = Icons.Rounded.Shuffle, contentDescription = "Shuffle", shape = ClusterMiddleShape, active = shuffle)
+                ClusterButton(
+                    onClick = { connection.toggleRepeatMode() },
+                    icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                    contentDescription = when (repeatMode) {
+                        Player.REPEAT_MODE_ONE -> "Repeat one"
+                        Player.REPEAT_MODE_ALL -> "Repeat all"
+                        else -> "Repeat"
+                    },
+                    shape = ClusterEndShape,
+                    active = repeatMode != Player.REPEAT_MODE_OFF,
+                )
+                Spacer(Modifier.weight(1f))
+                ClusterButton(onClick = { trayOpen = true }, icon = Icons.Rounded.MoreVert, contentDescription = "More", shape = CircleShape)
+            }
+        }
+    }
+
+    if (trayOpen) {
+        PlayerTray(connection, onQueue = { trayOpen = false; onQueue() }, onDismiss = { trayOpen = false })
+    }
+}
+
+/**
+ * Square artwork with a three-page carousel: swipe left/right to skip, pages off centre
+ * shrink and fade, double tap edges to jump ten seconds, centre to play or pause.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose.ui.unit.Dp) {
+    val player = connection.player
+    val index by connection.currentMediaItemIndex.collectAsState()
+    val pagerState = rememberPagerState(initialPage = 1) { 3 }
+
+    LaunchedEffect(pagerState.settledPage) {
+        when (pagerState.settledPage) {
+            0 -> if (index > 0 || player.hasPreviousMediaItem()) connection.seekToPrevious()
+            2 -> connection.seekToNext()
+        }
+    }
+    LaunchedEffect(index) {
+        if (pagerState.currentPage != 1) pagerState.scrollToPage(1)
+    }
+
+    fun itemAt(page: Int): androidx.media3.common.MediaItem? {
+        val target = index + (page - 1)
+        return runCatching { if (target in 0 until player.mediaItemCount) player.getMediaItemAt(target) else null }.getOrNull()
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.size(side),
+        pageSpacing = 16.dp,
+    ) { page ->
+        val item = itemAt(page)
+        val pageOffset = abs((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).coerceIn(0f, 1f)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val t = 1f - pageOffset
+                    val s = lerp(0.85f, 1f, t)
+                    scaleX = s; scaleY = s
+                    alpha = lerp(0.3f, 1f, t)
+                }
+                .clip(RoundedCornerShape(6.dp))
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val pos = connection.player.currentPosition
+                            when {
+                                offset.x < size.width / 3f -> connection.seekTo((pos - 10_000).coerceAtLeast(0))
+                                offset.x > size.width * 2f / 3f -> connection.seekTo(pos + 10_000)
+                                else -> connection.togglePlayPause()
+                            }
+                        },
+                    )
+                },
+        ) {
+            Artwork(
+                item?.mediaMetadata?.artworkUri?.toString(),
+                Modifier.fillMaxSize(),
+                RoundedCornerShape(6.dp),
+                item?.mediaMetadata?.title?.toString(),
+                px = 1000,
+            )
         }
     }
 }
