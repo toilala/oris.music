@@ -691,17 +691,24 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             ))
             .build()
 
+        // Buffer minutes ahead like other serious players (Echo keeps six), and ask for a few
+        // seconds of cushion before resuming after a stall: the old 500/500 thresholds made
+        // playback flap pause/play/pause on any network dip.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                500,
-                500
+                180_000,
+                360_000,
+                2_500,
+                5_000
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         return ExoPlayer.Builder(this, renderersFactory)
+            // Keep the CPU and the radio awake while streaming, like every serious player does;
+            // without this the OS can suspend us mid-song in the background.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setHandleAudioBecomingNoisy(true)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory())
                 .setLoadErrorHandlingPolicy(object : DefaultLoadErrorHandlingPolicy() {

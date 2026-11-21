@@ -41,5 +41,20 @@ for i in range(6):
     print(f'NOTIF: {(i+1)*10}s alive={alive} states={session_states()}', flush=True)
 assert '3' in session_states(), 'playback stopped within 60s in background'
 assert 'isForeground=true' in services(), 'service dropped foreground within 60s in background'
+
+# Screen off: the wake lock is the only thing keeping the CPU alive for the stream now.
+adb('shell', 'input', 'keyevent', '26')
+for i in range(6):
+    time.sleep(10)
+    alive = ''
+    try:
+        alive = adb('shell', 'pidof', PKG).decode().strip()
+    except Exception:
+        pass
+    print(f'NOTIF: screen-off {(i+1)*10}s alive={alive} states={session_states()}', flush=True)
+adb('shell', 'input', 'keyevent', '26')
+adb('shell', 'input', 'keyevent', '82')
+assert '3' in session_states(), 'playback stopped within 60s with the screen off'
+assert 'isForeground=true' in services(), 'service dropped foreground with the screen off'
 adb('shell', 'am', 'force-stop', PKG)
-print('PASS: media notification posted, service foreground, playback survived 60s in background', flush=True)
+print('PASS: media notification posted, service foreground, playback survived 60s in background and 60s with the screen off', flush=True)
