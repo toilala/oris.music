@@ -30,6 +30,14 @@ assert active, 'no Oris notification record while playing'
 assert 'isForeground=true' in svc, 'media service not foreground while playing'
 print('NOTIF: notification posted and service foreground while playing', flush=True)
 
+# Visual proof of the media notification design: open the shade and capture it.
+adb('shell', 'cmd', 'statusbar', 'expand-notifications')
+time.sleep(2)
+from playback_check import screen
+screen('notification_shade')
+adb('shell', 'cmd', 'statusbar', 'collapse')
+time.sleep(1)
+
 adb('shell', 'input', 'keyevent', '3')
 for i in range(6):
     time.sleep(10)
