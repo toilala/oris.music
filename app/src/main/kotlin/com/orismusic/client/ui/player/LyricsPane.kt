@@ -107,9 +107,10 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
+                            color = androidx.compose.ui.graphics.Color.White,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text(artist, style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f), maxLines = 1)
                     }
                 }
             } else Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
