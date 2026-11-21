@@ -1,6 +1,7 @@
 package com.orismusic.client.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -69,6 +70,25 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                 preferences.stopOnlyWhenPaused = it
                 stopOnlyWhenPaused = it
             }
+            run {
+                val powerManager = remember(context) { context.getSystemService(android.os.PowerManager::class.java) }
+                val batteryExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+                androidx.compose.foundation.layout.Column(
+                    Modifier.clickable(
+                        indication = null,
+                        interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    ) { openBackgroundBatterySettings(context) },
+                ) {
+                    Text("Unrestricted battery use", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (batteryExempt) "On: Android will not limit the app in the background."
+                        else "Off: strict phones (vivo, Oppo, Xiaomi) can stop music in the background. Tap to allow unrestricted background use.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             ToggleRow(
                 "Playback notification",
                 if (playbackNotification) "On: the player controls show in your notifications."
@@ -127,6 +147,33 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** Best-effort path to this phone's background/battery allowlist: vivo/iQOO autostart manager
+ *  first on those devices, then the standard battery-optimization exemption, then the list page. */
+private fun openBackgroundBatterySettings(context: android.content.Context) {
+    val pkg = context.packageName
+    val maker = android.os.Build.MANUFACTURER.lowercase()
+    val candidates = mutableListOf<android.content.Intent>()
+    if (maker.contains("vivo") || maker.contains("iqoo")) {
+        candidates += android.content.Intent().setClassName(
+            "com.vivo.permissionmanager",
+            "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+        )
+    }
+    candidates += android.content.Intent(
+        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+        android.net.Uri.parse("package:" + pkg),
+    )
+    candidates += android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    for (intent in candidates) {
+        try {
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return
+        } catch (_: Exception) {
         }
     }
 }

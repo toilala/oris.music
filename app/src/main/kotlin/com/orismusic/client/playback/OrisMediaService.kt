@@ -204,6 +204,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private var wasPlayingBeforeAudioFocusLoss = false
     private var hasAudioFocus = false
     private var reentrantFocusGain = false
+    private var ducked = false
     private var mixWithOtherApps = false
     private var wasPlayingBeforeCall = false
     private var wasPlayingBeforeVolumeMute = false
@@ -615,7 +616,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                     { focusChange -> onAudioFocusChange(focusChange) },
                     Handler(Looper.getMainLooper())
                 )
-                .setWillPauseWhenDucked(true)
+                .setWillPauseWhenDucked(false)
                 .build()
         } else {
             legacyFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
@@ -646,6 +647,10 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         when (focusChange) {
             AudioManager.AUDIOFOCUS_GAIN -> {
                 hasAudioFocus = true
+                if (ducked) {
+                    ducked = false
+                    player.volume = if (isMuted.value) 0f else (if (::playerVolume.isInitialized) playerVolume.value else 1f)
+                }
                 if (wasPlayingBeforeAudioFocusLoss) {
                     wasPlayingBeforeAudioFocusLoss = false
                     if (!reentrantFocusGain) {
@@ -669,7 +674,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 }
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // Lower volume temporarily
+                // Actually duck (notification sounds etc.), then restore on AUDIOFOCUS_GAIN.
+                ducked = true
+                if (!isMuted.value) player.volume = (if (::playerVolume.isInitialized) playerVolume.value else 1f) * 0.2f
             }
         }
     }
@@ -904,8 +911,24 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         fillUpcomingMusic()
     }
 
+    private var positionPersistJob: kotlinx.coroutines.Job? = null
+
     override fun onIsPlayingChanged(isPlaying: Boolean) {
-        if (!isPlaying) persistQueue()
+        if (!isPlaying) {
+            positionPersistJob?.cancel()
+            positionPersistJob = null
+            persistQueue()
+            return
+        }
+        // Save the position every few seconds while playing, so a system/OEM kill in the
+        // background restores the song where it actually stopped instead of at 0:00.
+        if (positionPersistJob?.isActive == true) return
+        positionPersistJob = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(5000)
+                persistQueue()
+            }
+        }
     }
 
     /** Snapshot the queue to disk so a cold start can restore it (Echo/Mochy persistent queue idea). */
