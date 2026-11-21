@@ -38,6 +38,16 @@ screen('notification_shade')
 adb('shell', 'cmd', 'statusbar', 'collapse')
 time.sleep(1)
 
+# Late capture: the full media-style notification can land a few seconds after playback
+# starts, so capture again before judging what the shade really shows during steady play.
+time.sleep(10)
+open(OUT + '/dumpsys-notification-late.txt', 'w').write(adb('shell', 'dumpsys', 'notification').decode())
+adb('shell', 'cmd', 'statusbar', 'expand-notifications')
+time.sleep(2)
+screen('notification_shade_late')
+adb('shell', 'cmd', 'statusbar', 'collapse')
+time.sleep(1)
+
 adb('shell', 'input', 'keyevent', '3')
 for i in range(6):
     time.sleep(10)
