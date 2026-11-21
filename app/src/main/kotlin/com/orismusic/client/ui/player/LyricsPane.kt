@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import com.orismusic.client.settings.LyricsPreferences
@@ -111,21 +113,7 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
                 .statusBarsPadding().navigationBarsPadding())) {
             if (embedded) {
-                // Player's lyrics view: a drag handle, a small artwork header, then only the words.
-                Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 12.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)))
-                }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    com.orismusic.client.ui.components.Artwork(artUrl, Modifier.size(44.dp), RoundedCornerShape(8.dp), null, px = 200)
-                    Column(Modifier.padding(start = 12.dp)) {
-                        Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
-                            color = androidx.compose.ui.graphics.Color.White,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text(artist, style = MaterialTheme.typography.bodyMedium,
-                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f), maxLines = 1)
-                    }
-                }
+                // Player's lyrics view: only the words. The player screen draws the header.
             } else Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onClose) { Text("Back to player") }
                 sourceMenu(sourceName)
@@ -156,7 +144,19 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                             }
                         }
                     }
-                    LazyColumn(modifier = if (embedded) Modifier.weight(1f) else Modifier, state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = if (embedded) 8.dp else 24.dp, bottom = if (embedded) 48.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
+                    LazyColumn(
+                        modifier = (if (embedded) Modifier.weight(1f) else Modifier)
+                            .then(if (embedded) Modifier
+                                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                                .drawWithContent {
+                                    drawContent()
+                                    val fade = 64.dp.toPx() / size.height
+                                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(0f to androidx.compose.ui.graphics.Color.Black, fade.coerceAtMost(0.5f) to androidx.compose.ui.graphics.Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient((1f - fade).coerceAtLeast(0.5f) to androidx.compose.ui.graphics.Color.Transparent, 1f to androidx.compose.ui.graphics.Color.Black), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                                } else Modifier),
+                        state=list,
+                        contentPadding=PaddingValues(top = if (embedded) 8.dp else 24.dp, bottom = if (embedded) 48.dp else 320.dp),
+                    ) {
                         itemsIndexed(lyrics.lines) { index, line ->
                             LyricRow(
                                 line = line, timed = lyrics.timed, selected = index == active,
@@ -172,7 +172,8 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
     }
 }
 
-/** One lyric line: karaoke sweep when the active line has word timings, plain ink otherwise. */
+/** One lyric line: bold white words that dim with distance; karaoke sweep on the active line.
+ * Line styling follows Echo Music's MetroLyricsLine (GPL-3.0); code is Oris's own. */
 @Composable
 private fun LyricRow(
     line: LyricLine,
@@ -183,45 +184,58 @@ private fun LyricRow(
     embedded: Boolean,
     onSeek: (Long) -> Unit,
 ) {
-    val ink by animateColorAsState(
-        when {
-            !timed -> MaterialTheme.colorScheme.onSurface
-            selected -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = (0.5f - 0.09f * distance).coerceAtLeast(0.18f))
-        }, label = "lyric ink")
-    val emphasis by animateFloatAsState(if (selected) 1f else 0.9f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
-    val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !timed || selected || distance == 1) 0f else (distance.coerceAtMost(5) * 1.4f),
-        label = "lyric blur")
-    val lineStyle = (when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
-            com.orismusic.client.settings.LyricSize.Compact -> MaterialTheme.typography.titleMedium
-            com.orismusic.client.settings.LyricSize.Large -> if (embedded) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
-            else -> if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
-        }).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-    val lineAlign = if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) TextAlign.Center else TextAlign.Start
-    val lineModifier = Modifier.fillMaxWidth()
-            .then(if (soften > 0.1f) Modifier.blur(soften.dp) else Modifier)
-            .graphicsLayer {
-            transformOrigin = TransformOrigin(if (com.orismusic.client.settings.PlayerSettings.lyricsCentered) 0.5f else 0f, 0.5f)
-            scaleX = emphasis; scaleY = emphasis
-        }.then(if (line.timeMs != null)
+    val targetAlpha = when {
+        !timed -> 1f
+        selected -> 1f
+        distance <= 2 -> 0.2f
+        distance == 3 -> 0.15f
+        distance == 4 -> 0.1f
+        else -> 0.08f
+    }
+    val alpha by animateFloatAsState(targetAlpha, tween(300), label = "line alpha")
+    val scale by animateFloatAsState(if (selected) 1f else 0.85f, tween(400), label = "line scale")
+    val lineStyle = androidx.compose.ui.text.TextStyle(
+        fontSize = 24.sp,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        lineHeight = (24 * 1.3f).sp,
+        letterSpacing = (-0.5).sp,
+        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+        ),
+    )
+    val lineModifier = Modifier
+        .fillMaxWidth()
+        .graphicsLayer {
+            transformOrigin = TransformOrigin(0f, 0.5f)
+            scaleX = scale; scaleY = scale
+        }
+        .clip(RoundedCornerShape(16.dp))
+        .then(if (line.timeMs != null)
             Modifier.clickable { onSeek(line.timeMs) } else Modifier)
+        .padding(horizontal = 24.dp, vertical = (8 * 1.3f).dp)
     val lineWords = line.words
     if (selected && timed && !lineWords.isNullOrEmpty()) {
-        // Karaoke: the sung words sweep through the active line in the accent.
+        // Karaoke: the sung words sweep through the active line.
         val currentWord = lineWords.indexOfLast { position >= it.startMs }
         val karaoke = buildAnnotatedString {
             lineWords.forEachIndexed { wi, w ->
                 withStyle(SpanStyle(
-                    color = if (wi <= currentWord) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (wi <= currentWord) 1f else 0.3f),
                     fontWeight = if (wi == currentWord) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold,
                 )) { append(w.text) }
                 if (wi < lineWords.lastIndex) append(" ")
             }
         }
-        Text(karaoke, style=lineStyle, textAlign=lineAlign, modifier=lineModifier)
+        Text(karaoke, style = lineStyle, modifier = lineModifier)
     } else {
-        Text(line.text.ifBlank { "♪" }, style=lineStyle, textAlign=lineAlign, color=ink, modifier=lineModifier)
+        Text(
+            line.text.ifBlank { "\u266a" },
+            style = lineStyle,
+            color = androidx.compose.ui.graphics.Color.White.copy(alpha = alpha),
+            modifier = lineModifier,
+        )
     }
 }
 
