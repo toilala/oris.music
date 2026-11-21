@@ -63,9 +63,6 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
             ToggleRow("Vibration", "A short tick on the keys and like button.", PlayerSettings.haptics) {
                 PlayerSettings.haptics = it; PlayerSettings.save()
             }
-            ToggleRow("Up next in the bottom bar", "Show the next song's name, or just 'Swipe up for more'.", PlayerSettings.upNext) {
-                PlayerSettings.upNext = it; PlayerSettings.save()
-            }
             TextButton(onClick = { PlayerSettings.reset() }) { Text("Reset player") }
             Spacer(Modifier.height(24.dp))
         }

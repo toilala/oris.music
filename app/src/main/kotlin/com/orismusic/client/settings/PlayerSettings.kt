@@ -21,7 +21,7 @@ enum class TapOpen(val label: String) { Fullscreen("Full player"), Miniplayer("M
 object PlayerSettings {
     private var store: android.content.SharedPreferences? = null
 
-    var keys by mutableStateOf(PlayKey.Solid)
+    var keys by mutableStateOf(PlayKey.Plain)
     var size by mutableStateOf(PlaySize.Regular)
     var icons by mutableStateOf(SkipIcons.Skip)
     var seek by mutableStateOf(SeekStyle.Wave)
@@ -32,7 +32,6 @@ object PlayerSettings {
     var morph by mutableStateOf(true)
     var titleMotion by mutableStateOf(true)
     var haptics by mutableStateOf(true)
-    var upNext by mutableStateOf(true)
     var tapOpen by mutableStateOf(TapOpen.Miniplayer)
 
     private inline fun <reified E : Enum<E>> android.content.SharedPreferences.enum(key: String, default: E): E =
@@ -42,7 +41,7 @@ object PlayerSettings {
         if (store != null) return
         val p = context.applicationContext.getSharedPreferences("player_look", Context.MODE_PRIVATE)
         store = p
-        keys = p.enum("keys", PlayKey.Solid)
+        keys = p.enum("keys", PlayKey.Plain)
         size = p.enum("size", PlaySize.Regular)
         icons = p.enum("icons", SkipIcons.Skip)
         seek = p.enum("seek", SeekStyle.Wave)
@@ -53,7 +52,6 @@ object PlayerSettings {
         morph = p.getBoolean("morph", true)
         titleMotion = p.getBoolean("title_motion", true)
         haptics = p.getBoolean("haptics", true)
-        upNext = p.getBoolean("up_next", true)
         tapOpen = p.enum("tap_open", TapOpen.Miniplayer)
     }
 
@@ -63,14 +61,14 @@ object PlayerSettings {
             ?.putString("seek", seek.name)?.putBoolean("remaining", remaining)
             ?.putString("lyric_size", lyricSize.name)?.putBoolean("lyrics_centered", lyricsCentered)?.putBoolean("lyrics_blur", lyricsBlur)
             ?.putBoolean("morph", morph)?.putBoolean("title_motion", titleMotion)
-            ?.putBoolean("haptics", haptics)?.putBoolean("up_next", upNext)
+            ?.putBoolean("haptics", haptics)
             ?.putString("tap_open", tapOpen.name)
             ?.apply()
     }
 
     fun reset() {
-        keys = PlayKey.Solid; size = PlaySize.Regular; icons = SkipIcons.Skip
-        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; upNext = true; tapOpen = TapOpen.Miniplayer
+        keys = PlayKey.Plain; size = PlaySize.Regular; icons = SkipIcons.Skip
+        seek = SeekStyle.Wave; remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false; lyricsBlur = true; morph = true; titleMotion = true; haptics = true; tapOpen = TapOpen.Miniplayer
         save()
     }
 }

@@ -63,4 +63,10 @@ time.sleep(1)
 # Wherever back left us, the task must still be alive and the player still renders.
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.debug.LyricsCheckActivity')
 wait_label('Lyrics', seconds=30)
+# The player's own lyrics view over the same real synced document.
+adb('shell', 'am', 'start', '-n', PKG+'/com.orismusic.client.debug.EmbeddedLyricsCheckActivity')
+wait_label('Yesterday', seconds=30)
+wait_text('All my troubles')
+time.sleep(2)
+screen('lyrics_player_view')
 print('PASS: real synced lyrics, source selection, source failure handling and close; no audio prepared', flush=True)

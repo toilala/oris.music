@@ -113,11 +113,10 @@ private fun SkipKey(icon: ImageVector, label: String, enabled: Boolean, directio
     val lean by animateFloatAsState(if (pressed) 7f * direction else 0f, spring(0.45f, 450f), label = "skip lean")
     Box(
         Modifier.size(box.dp).graphicsLayer { scaleX = scale; scaleY = scale; translationX = lean.dp.toPx() }
-            .clip(CircleShape).background(Color.White.copy(alpha = if (enabled) 0.13f else 0.05f))
             .clickable(interactionSource = press, indication = null, enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size((box * 0.5f).dp),
+        Icon(icon, contentDescription = label, modifier = Modifier.size((box * 0.62f).dp),
             tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f))
     }
 }

@@ -9,10 +9,12 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -95,7 +97,22 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
             .then(if (embedded) Modifier else Modifier
                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
                 .statusBarsPadding().navigationBarsPadding())) {
-            if (!embedded) Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            if (embedded) {
+                // Player's lyrics view: a drag handle, a small artwork header, then only the words.
+                Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 12.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)))
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    com.orismusic.client.ui.components.Artwork(artUrl, Modifier.size(44.dp), RoundedCornerShape(8.dp), null, px = 200)
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(artist, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+            } else Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onClose) { Text("Back to player") }
                 sourceMenu(sourceName)
             }
@@ -116,14 +133,16 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                 }
                 else -> {
                     val lyrics = document!!
-                    Text("${lyrics.source} · ${if (lyrics.timed) "Synced lyrics" else "Plain lyrics"}",
-                        Modifier.padding(horizontal=24.dp, vertical=8.dp), style=MaterialTheme.typography.labelMedium)
-                    lyrics.credits.forEach { credit ->
-                        TextButton(onClick = { uri.openUri(credit.url) }, contentPadding = PaddingValues(horizontal=24.dp, vertical=0.dp)) {
-                            Text(credit.label, style=MaterialTheme.typography.labelSmall)
+                    if (!embedded) {
+                        Text("${lyrics.source} · ${if (lyrics.timed) "Synced lyrics" else "Plain lyrics"}",
+                            Modifier.padding(horizontal=24.dp, vertical=8.dp), style=MaterialTheme.typography.labelMedium)
+                        lyrics.credits.forEach { credit ->
+                            TextButton(onClick = { uri.openUri(credit.url) }, contentPadding = PaddingValues(horizontal=24.dp, vertical=0.dp)) {
+                                Text(credit.label, style=MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
-                    LazyColumn(modifier = if (embedded) Modifier.weight(1f) else Modifier, state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = if (embedded) 60.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
+                    LazyColumn(modifier = if (embedded) Modifier.weight(1f) else Modifier, state=list, contentPadding=PaddingValues(start = 24.dp, end = 24.dp, top = if (embedded) 8.dp else 24.dp, bottom = if (embedded) 48.dp else 320.dp), verticalArrangement=Arrangement.spacedBy(22.dp)) {
                         itemsIndexed(lyrics.lines) { index, line ->
                             val selected = index == active
                             val distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active)
@@ -131,13 +150,13 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                                 when {
                                     !lyrics.timed -> MaterialTheme.colorScheme.onSurface
                                     selected -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = (0.55f - 0.1f * distance).coerceAtLeast(0.22f))
+                                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = (0.5f - 0.09f * distance).coerceAtLeast(0.18f))
                                 }, label = "lyric ink")
                             val emphasis by animateFloatAsState(if (selected) 1f else 0.9f,
                                 animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f), label = "lyric emphasis")
-                            val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(4) * 1.2f),
+                            val soften by animateFloatAsState(if (!com.orismusic.client.settings.PlayerSettings.lyricsBlur || !lyrics.timed || selected || distance == 1) 0f else (distance.coerceAtMost(5) * 1.4f),
                                 label = "lyric blur")
-                            Text(line.text.ifBlank { "\u266a" }, style=(when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
+                            Text(line.text.ifBlank { "♪" }, style=(when (com.orismusic.client.settings.PlayerSettings.lyricSize) {
                                     com.orismusic.client.settings.LyricSize.Compact -> MaterialTheme.typography.titleMedium
                                     com.orismusic.client.settings.LyricSize.Large -> if (embedded) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge
                                     else -> if (embedded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium
@@ -154,9 +173,6 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                         }
                     }
                 }
-            }
-            if (embedded) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                sourceMenu("Source: " + (document?.source ?: sourceName))
             }
         }
     }
