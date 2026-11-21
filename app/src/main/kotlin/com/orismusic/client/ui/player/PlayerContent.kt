@@ -77,8 +77,8 @@ import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.settings.PlayerSettings
 
 /**
- * The player below the cover: title over the cover's fade, a seek bar that flows, three big
- * controls, and one bar at the bottom with the lyrics icon and a swipe-up tray for everything else.
+ * The player below the cover: title over the cover's fade, then the seek bar, the big
+ * controls and the bottom bar spread evenly over the rest of the screen.
  */
 @Composable
 internal fun NowPlayingContent(
@@ -171,7 +171,10 @@ internal fun NowPlayingContent(
 
         MiniSyncedLyrics(connection, metadata)
 
-        Spacer(Modifier.height(10.dp))
+        // Share the rest of the screen evenly between the gaps, so the seek bar, the
+        // controls and the bottom bar spread over the full height instead of bunching
+        // up under the title with dead space at the bottom.
+        Spacer(Modifier.weight(1f))
         WaveSeekBar(
             player = connection.player,
             durationMs = duration.coerceAtLeast(0L),
@@ -179,16 +182,14 @@ internal fun NowPlayingContent(
             onSeek = { connection.seekTo(it) },
             accent = accent,
         )
-        Spacer(Modifier.height(6.dp))
-
-        Spacer(Modifier.weight(0.55f))
+        Spacer(Modifier.weight(1f))
         NowPlayingTransport(
             isPlaying = isPlaying, canPrevious = canSkipPrevious, canNext = canSkipNext, accent = accent,
             onPrevious = { connection.seekToPrevious() },
             onToggle = { if (isPlaying) connection.pause() else connection.play() },
             onNext = { connection.seekToNext() },
         )
-        Spacer(Modifier.weight(0.45f))
+        Spacer(Modifier.weight(1f))
 
         // A quiet peek at the next song; tapping it opens the queue.
         if (nextTitle != null && PlayerSettings.upNext) {
@@ -293,7 +294,7 @@ private fun MiniSyncedLyrics(connection: PlayerConnection, metadata: androidx.me
     val active = com.orismusic.client.lyrics.activeLyric(lines, position)
     if (active < 0) return
     Crossfade(targetState = active, animationSpec = tween(250), label = "mini lyric") { idx ->
-        Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 lines.getOrNull(idx)?.text.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f),

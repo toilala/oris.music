@@ -34,7 +34,7 @@ print('NOTIF: notification posted and service foreground while playing', flush=T
 # Visual proof of the media notification design: open the shade and capture it.
 adb('shell', 'cmd', 'statusbar', 'expand-notifications')
 time.sleep(2)
-from playback_check import screen
+from playback_check import screen, tap
 screen('notification_shade')
 adb('shell', 'cmd', 'statusbar', 'collapse')
 time.sleep(1)
@@ -81,6 +81,20 @@ assert shade_xml.strip(), 'could not dump the expanded shade UI'
 assert 'Runtime local tone' in shade_xml, 'steady-state shade does not render the track title'
 assert 'Oris test' in shade_xml, 'steady-state shade does not render the track artist'
 print('NOTIF: steady-state shade renders the track title and artist', flush=True)
+
+# Photograph the player screen with the tone playing: real title, artist, seek bar
+# and controls, so layout changes are judged on pixels, not intentions.
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_label('Home', seconds=60)
+tap('Library')
+tap('Queue')
+wait_label('Open player', seconds=30)
+tap('Open player')
+wait_label('Lyrics', seconds=90)
+time.sleep(1)
+screen('player_playing_layout')
+adb('shell', 'input', 'keyevent', '4')
+time.sleep(1)
 
 adb('shell', 'input', 'keyevent', '3')
 for i in range(6):
