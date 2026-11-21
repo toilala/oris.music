@@ -300,6 +300,7 @@ fun SearchScreen(
                         val suggestion = suggestions[i]
                         Row(
                             Modifier.fillMaxWidth()
+                                .entrance(i)
                                 .clickable { submit(suggestion) }
                                 .padding(horizontal = 20.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,

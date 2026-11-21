@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,11 +125,15 @@ fun OrisDock(
             repeat(count) { i ->
                 val active = i == sel && !none
                 val pop by animateFloatAsState(if (active) 1.14f else 1f, spring(0.38f, 520f), label = "pop")
+                // A finger on a tab dips the icon, so taps answer before the lens arrives.
+                val pressSrc = remember { MutableInteractionSource() }
+                val pressed by pressSrc.collectIsPressedAsState()
+                val pressScale by animateFloatAsState(if (pressed) 0.82f else 1f, spring(0.5f, 600f), label = "tab press")
                 val activeTint = if (effect == NavEffect.Dot) accent else onAccent
                 val tint by animateColorAsState(if (active) activeTint else scheme.onSurfaceVariant, label = "tint")
                 Column(
                     Modifier.width(tabW).height(tabH)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        .clickable(interactionSource = pressSrc, indication = null) {
                             if (NavSettings.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSelect(i)
                         },
@@ -137,7 +142,7 @@ fun OrisDock(
                 ) {
                     Icon(
                         icon(i), contentDescription = label(i), tint = tint,
-                        modifier = Modifier.size(NavSettings.size.icon.dp).graphicsLayer { scaleX = pop; scaleY = pop },
+                        modifier = Modifier.size(NavSettings.size.icon.dp).graphicsLayer { scaleX = pop * pressScale; scaleY = pop * pressScale },
                     )
                     if (showLabels) Text(label(i), color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
                 }

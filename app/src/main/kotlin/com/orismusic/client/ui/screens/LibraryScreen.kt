@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.orismusic.client.ui.components.SongRow
 import com.orismusic.client.ui.components.Artwork
 import com.orismusic.client.ui.components.pressClickable
+import com.orismusic.client.ui.components.entrance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -169,9 +170,9 @@ fun LibraryScreen(
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
-                    itemsIndexed(playlists, key = { _, p -> p.id }) { _, p ->
+                    itemsIndexed(playlists, key = { _, p -> p.id }) { i, p ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+                            modifier = Modifier.fillMaxWidth().entrance(i).padding(horizontal = 12.dp, vertical = 2.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .pressClickable({ openPlaylist = p.id }, 0.98f)
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -223,7 +224,7 @@ fun LibraryScreen(
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { play(songs, index) }
+                            modifier = Modifier.fillMaxWidth().entrance(index).clickable { play(songs, index) }
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -289,6 +290,7 @@ fun LibraryScreen(
             }
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                 itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                    Box(Modifier.entrance(index)) {
                     SavedSongRow(
                         song = song,
                         liked = liked.any { it.id == song.id },
@@ -297,6 +299,7 @@ fun LibraryScreen(
                         playlists = playlists.map { it.id to it.name },
                         onAddToPlaylist = { id -> playlistStore.add(id, song) },
                     )
+                    }
                 }
             }
         }

@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.orismusic.client.ui.components.entrance
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -203,7 +204,7 @@ fun QueueScreen(
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     if (currentIndex > 0) {
                         item(key = "h-prev") { Header("Previously played") }
-                        items(count = currentIndex, key = { "p$it" }) { QueueRow(it, dim = true) }
+                        items(count = currentIndex, key = { "p$it" }) { Box(Modifier.entrance(it)) { QueueRow(it, dim = true) } }
                     }
                     if (currentIndex in 0 until count) {
                         item(key = "h-now") { Header("Now playing") }
@@ -211,7 +212,7 @@ fun QueueScreen(
                     }
                     if (currentIndex + 1 < count) {
                         item(key = "h-next") { Header("Next in queue") }
-                        items(count = count - currentIndex - 1, key = { "n$it" }) { QueueRow(currentIndex + 1 + it, dim = false) }
+                        items(count = count - currentIndex - 1, key = { "n$it" }) { Box(Modifier.entrance(it)) { QueueRow(currentIndex + 1 + it, dim = false) } }
                     }
                 }
             }

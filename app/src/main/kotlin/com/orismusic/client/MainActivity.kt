@@ -269,16 +269,27 @@ class MainActivity : ComponentActivity() {
                             },
                         ) { innerPadding ->
                             val openDetail = detail
+                            // The last shown page, so the exit slide still has content to move.
+                            var lastDetail by remember { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
                             androidx.compose.runtime.CompositionLocalProvider(com.orismusic.client.ui.LocalBottomInset provides innerPadding.calculateBottomPadding()) {
-                            if (openDetail != null) {
+                            // Detail pages push in from the edge and slide back out, no hard cuts.
+                            if (openDetail != null) lastDetail = openDetail
+                            AnimatedVisibility(
+                                visible = openDetail != null,
+                                enter = androidx.compose.animation.slideInHorizontally(spring(1f, 300f)) { it / 6 } + fadeIn(androidx.compose.animation.core.tween(250)),
+                                exit = androidx.compose.animation.slideOutHorizontally(spring(1f, 300f)) { it / 6 } + fadeOut(androidx.compose.animation.core.tween(180)),
+                            ) {
+                                lastDetail?.let { d ->
                                 com.orismusic.client.ui.screens.DetailScreen(
-                                    target = openDetail,
+                                    target = d,
                                     connection = connection,
                                     onBack = { detail = detailBack; detailBack = null },
-                                    onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = openDetail; detail = it } } },
+                                    onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = d; detail = it } } },
                                     modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = innerPadding.calculateTopPadding()),
                                 )
-                            } else
+                                }
+                            }
+                            if (openDetail == null)
                             androidx.compose.animation.AnimatedContent(
                                 targetState = selectedTab,
                                 transitionSpec = {
@@ -340,16 +351,20 @@ class MainActivity : ComponentActivity() {
 
                         val playerDrag = remember { androidx.compose.animation.core.Animatable(0f) }
                         val dragScope = androidx.compose.runtime.rememberCoroutineScope()
+                        val dragDeltas = remember { FloatArray(4) }
+                        var dragDeltaIx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
                         androidx.compose.runtime.LaunchedEffect(showPlayer) { if (showPlayer) playerDrag.snapTo(0f) }
+                        // One critically damped spring both ways: the sheet leaves briskly and
+                        // settles without bouncing, the way the reference players move.
                         AnimatedVisibility(
                             visible = showPlayer && connection != null,
-                            enter = slideInVertically(animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f), initialOffsetY = { it * 2 / 3 }) +
+                            enter = slideInVertically(animationSpec = spring(dampingRatio = 1f, stiffness = 195f), initialOffsetY = { it * 2 / 3 }) +
                                 fadeIn(androidx.compose.animation.core.tween(220)) +
-                                androidx.compose.animation.scaleIn(spring(0.9f, 320f), initialScale = 0.9f,
+                                androidx.compose.animation.scaleIn(spring(1f, 195f), initialScale = 0.9f,
                                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
-                            exit = slideOutVertically(androidx.compose.animation.core.tween(260), targetOffsetY = { it * 2 / 3 }) +
+                            exit = slideOutVertically(animationSpec = spring(1f, 195f), targetOffsetY = { it * 2 / 3 }) +
                                 fadeOut(androidx.compose.animation.core.tween(220)) +
-                                androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(260), targetScale = 0.9f,
+                                androidx.compose.animation.scaleOut(spring(1f, 195f), targetScale = 0.9f,
                                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
                         ) {
                             connection?.let {
@@ -366,13 +381,19 @@ class MainActivity : ComponentActivity() {
                                             detectVerticalDragGestures(
                                                 onDragEnd = {
                                                     dragScope.launch {
-                                                        if (playerDrag.value > 220f) navigation = navigation.closePlayer()
-                                                        else playerDrag.animateTo(0f, spring(0.7f, 400f))
+                                                        // Carry the release's speed into the close so a flick keeps moving.
+                                                        val v = (dragDeltas.average() * 60).toFloat()
+                                                        if (playerDrag.value > 220f || v > 900f) {
+                                                            playerDrag.animateTo(size.height.toFloat(), spring(1f, 195f), initialVelocity = v.coerceIn(0f, 8000f))
+                                                            navigation = navigation.closePlayer()
+                                                        } else playerDrag.animateTo(0f, spring(1f, 400f), initialVelocity = v.coerceIn(-4000f, 4000f))
                                                     }
                                                 },
-                                                onDragCancel = { dragScope.launch { playerDrag.animateTo(0f) } },
+                                                onDragCancel = { dragScope.launch { playerDrag.animateTo(0f, spring(1f, 400f)) } },
                                                 onVerticalDrag = { change, amount ->
                                                     change.consume()
+                                                    dragDeltas[dragDeltaIx % 4] = amount
+                                                    dragDeltaIx++
                                                     dragScope.launch { playerDrag.snapTo((playerDrag.value + amount).coerceAtLeast(0f)) }
                                                 },
                                             )
