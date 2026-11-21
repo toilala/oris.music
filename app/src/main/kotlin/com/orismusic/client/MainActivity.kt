@@ -246,6 +246,7 @@ class MainActivity : ComponentActivity() {
                                 Column {
                                     connection?.let {
                                         MiniPlayer(
+                                            modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
                                             connection = it,
                                             onExpand = { navigation = navigation.openPlayer() },
                                             onOpenArtist = { id, name ->
