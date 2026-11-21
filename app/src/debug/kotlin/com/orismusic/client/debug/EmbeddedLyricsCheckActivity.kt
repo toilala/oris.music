@@ -16,7 +16,7 @@ import androidx.media3.common.MediaMetadata
 import com.orismusic.client.di.MusicDatabase
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
-import com.orismusic.client.ui.player.LyricsPane
+import com.orismusic.client.ui.player.LyricsMode
 import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -46,7 +46,7 @@ class EmbeddedLyricsCheckActivity : ComponentActivity() {
                                 )
                             )
                     ) {
-                        LyricsPane(connection, onClose = { finishAndRemoveTask() }, embedded = true)
+                        LyricsMode(connection, onClose = { finishAndRemoveTask() })
                     }
                 }
             }
