@@ -16,12 +16,13 @@ import androidx.media3.common.MediaMetadata
 import com.orismusic.client.di.MusicDatabase
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
-import com.orismusic.client.ui.player.LyricsMode
+import com.orismusic.client.ui.player.LyricsPane
 import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-/** The player's own lyrics view: metadata only, same real providers, over a plain dark backdrop. */
+/** The player's own embedded lyrics pane: metadata only, same real providers, dark backdrop.
+ * This is the exact composable the player screen renders, edge-fade layer included. */
 @AndroidEntryPoint
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class EmbeddedLyricsCheckActivity : ComponentActivity() {
@@ -46,7 +47,7 @@ class EmbeddedLyricsCheckActivity : ComponentActivity() {
                                 )
                             )
                     ) {
-                        LyricsMode(connection, onClose = { finishAndRemoveTask() })
+                        LyricsPane(connection, onClose = { finishAndRemoveTask() }, embedded = true)
                     }
                 }
             }

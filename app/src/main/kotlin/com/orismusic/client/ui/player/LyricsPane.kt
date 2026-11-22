@@ -154,9 +154,18 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                                 .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                                 .drawWithContent {
                                     drawContent()
-                                    val fade = 64.dp.toPx() / size.height
-                                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(0f to androidx.compose.ui.graphics.Color.Black, fade.coerceAtMost(0.5f) to androidx.compose.ui.graphics.Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-                                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient((1f - fade).coerceAtLeast(0.5f) to androidx.compose.ui.graphics.Color.Transparent, 1f to androidx.compose.ui.graphics.Color.Black), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                                    // One gradient: clear at both ends, solid through the middle. Two separate
+                                    // full-size fades would multiply each other and erase the whole list.
+                                    val fade = (64.dp.toPx() / size.height).coerceAtMost(0.5f)
+                                    drawRect(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            0f to androidx.compose.ui.graphics.Color.Transparent,
+                                            fade to androidx.compose.ui.graphics.Color.Black,
+                                            (1f - fade) to androidx.compose.ui.graphics.Color.Black,
+                                            1f to androidx.compose.ui.graphics.Color.Transparent,
+                                        ),
+                                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                    )
                                 } else Modifier),
                         state=list,
                         contentPadding=PaddingValues(top = if (embedded) 8.dp else 24.dp, bottom = if (embedded) 48.dp else 320.dp),

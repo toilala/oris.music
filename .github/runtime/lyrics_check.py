@@ -58,6 +58,14 @@ screen('lyrics_source_choices_reordered')
 # legitimately moves the task to the background (launcher). Either is a clean close.
 adb('shell', 'input', 'keyevent', '4')
 time.sleep(1)
+
+# The player's own embedded lyrics pane (edge-fade layer included) with real provider
+# lyrics. The text wait proves fetch + composition only; the fade layer erases pixels
+# without touching semantics, so lyrics_embedded_player.png must be eyeballed.
+adb('shell', 'am', 'start', '-n', PKG+'/com.orismusic.client.debug.EmbeddedLyricsCheckActivity')
+wait_text('troubles seemed so far away')
+time.sleep(1)
+screen('lyrics_embedded_player')
 adb('shell', 'input', 'keyevent', '4')
 time.sleep(1)
 # Wherever back left us, the task must still be alive and the player still renders.
