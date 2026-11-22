@@ -4,5 +4,6 @@
         <activity android:name="com.orismusic.client.debug.LocalPlaybackCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.LyricsCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.EmbeddedLyricsCheckActivity" android:exported="true" />
+        <activity android:name="com.orismusic.client.debug.HomePicksCheckActivity" android:exported="true" />
     </application>
 </manifest>

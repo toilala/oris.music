@@ -170,7 +170,9 @@ fun HomeScreen(
             .orEmpty().distinctBy { it.id }.take(5)
     }
 
-    val quickPicks = (feed as? HomeFeedState.Ready)?.page?.let { page -> remember(page) { chooseQuickPicks(page) } }
+    val quickPicks by produceState<Pair<List<SongItem>, String>?>(null, feed, refreshTick) {
+        value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it) }
+    }
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
             if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll)

@@ -140,7 +140,7 @@ if __name__ == '__main__':
     print('PASS: idle player, nested Back, tab history, Home system exit; no playback network request', flush=True)
     # Run both checks even if one fails, so a lifecycle regression cannot hide lyric evidence.
     failures = []
-    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py']:
+    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py']:
         result = subprocess.run(['python3', '.github/runtime/'+check])
         if result.returncode: failures.append(check)
     if failures: raise AssertionError('Runtime checks failed: '+', '.join(failures))

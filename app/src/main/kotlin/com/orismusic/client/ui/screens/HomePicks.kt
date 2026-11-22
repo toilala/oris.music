@@ -72,6 +72,20 @@ fun chooseQuickPicks(page: HomePage): Pair<List<SongItem>, String>? {
     return picks to chosen.title
 }
 
+/** Anonymous feeds can carry only playlists. Use actual songs from one of those
+ * recommendations rather than making Quick picks disappear for new listeners. */
+suspend fun loadQuickPicks(page: HomePage): Pair<List<SongItem>, String>? {
+    chooseQuickPicks(page)?.let { return it }
+    val playlists = page.sections.flatMap { it.items.filterIsInstance<PlaylistItem>() }
+        .distinctBy { it.id }.take(3)
+    for (playlist in playlists) {
+        val songs = YouTube.playlist(playlist.id).getOrNull()?.songs.orEmpty()
+        val picks = MusicCandidates.select(songs).distinctBy { it.id }.take(16)
+        if (picks.size >= ROWS_PER_PAGE) return picks to ""
+    }
+    return null
+}
+
 private fun mmss(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
 /** Quick picks: pages of song rows with a Play all pill, straight from the home feed. */
