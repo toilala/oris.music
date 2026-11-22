@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 enum class PlayerBackgroundStyle(val label: String) { Gradient("Artwork gradient"), Blur("Blurred artwork"), Solid("Solid black") }
-enum class PlayButtonStyle(val label: String) { Wavy("Wavy blob"), Squircle("Squircle") }
+enum class PlayButtonStyle(val label: String) { Orbit("Orbit ring"), Disc("Plain disc") }
 enum class PlayerSeekBar(val label: String) { Slim("Slim line"), Wave("Wave") }
 enum class LyricSize(val label: String) { Compact("Small"), Regular("Regular"), Large("Large") }
 enum class SwipeSensitivity(val label: String) { Low("Low"), Regular("Regular"), High("High") }
@@ -23,7 +23,7 @@ object PlayerSettings {
     private var store: android.content.SharedPreferences? = null
 
     var backgroundStyle by mutableStateOf(PlayerBackgroundStyle.Gradient)
-    var playButton by mutableStateOf(PlayButtonStyle.Wavy)
+    var playButton by mutableStateOf(PlayButtonStyle.Orbit)
     var seekBar by mutableStateOf(PlayerSeekBar.Slim)
     var remaining by mutableStateOf(false)
     var lyricSize by mutableStateOf(LyricSize.Regular)
@@ -42,7 +42,7 @@ object PlayerSettings {
         val p = context.applicationContext.getSharedPreferences("player_look", Context.MODE_PRIVATE)
         store = p
         backgroundStyle = p.enum("background_style", PlayerBackgroundStyle.Gradient)
-        playButton = p.enum("play_button", PlayButtonStyle.Wavy)
+        playButton = p.enum("play_button", PlayButtonStyle.Orbit)
         seekBar = p.enum("seek_bar", PlayerSeekBar.Slim)
         remaining = p.getBoolean("remaining", false)
         lyricSize = p.enum("lyric_size", LyricSize.Regular)
@@ -70,7 +70,7 @@ object PlayerSettings {
     }
 
     fun reset() {
-        backgroundStyle = PlayerBackgroundStyle.Gradient; playButton = PlayButtonStyle.Wavy; seekBar = PlayerSeekBar.Slim
+        backgroundStyle = PlayerBackgroundStyle.Gradient; playButton = PlayButtonStyle.Orbit; seekBar = PlayerSeekBar.Slim
         remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false
         lyricsTapSeek = true; lyricsAutoScroll = true; swipeSensitivity = SwipeSensitivity.Regular
         haptics = true; tapOpen = TapOpen.Miniplayer

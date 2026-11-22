@@ -157,6 +157,9 @@ fun HomeScreen(
     val shelves by produceState<List<ArtistShelf>>(emptyList(), taste.artists, refreshTick) {
         value = if (taste.artists.isEmpty()) emptyList() else loadArtistShelves(taste.artists.take(6))
     }
+    val community by produceState<List<com.music.innertube.models.PlaylistItem>>(emptyList(), taste.artists, refreshTick) {
+        value = if (taste.artists.isEmpty()) emptyList() else loadCommunityPlaylists(taste.artists)
+    }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
@@ -167,6 +170,7 @@ fun HomeScreen(
             .orEmpty().distinctBy { it.id }.take(5)
     }
 
+    val quickPicks = (feed as? HomeFeedState.Ready)?.page?.let { page -> remember(page) { chooseQuickPicks(page) } }
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
             if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll)
@@ -225,7 +229,13 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        is HomeFeedState.Ready -> if (HomeSettings.youtube) feedItems(state.page, newAlbums, playerConnection, onOpen, scope)
+                        is HomeFeedState.Ready -> if (HomeSettings.youtube) {
+                            quickPicks?.let { (picks, _) ->
+                                item(key = "quick-picks") { QuickPicksSection(picks, playerConnection, scope) }
+                            }
+                            if (community.isNotEmpty()) item(key = "community-playlists") { CommunityPlaylistsSection(community, onOpen) }
+                            feedItems(state.page, newAlbums, playerConnection, onOpen, scope, quickPicks?.second)
+                        }
                     }
                 }
             }
@@ -445,11 +455,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
     playerConnection: PlayerConnection?,
     onOpen: (DetailTarget) -> Unit,
     scope: kotlinx.coroutines.CoroutineScope,
+    skipTitle: String? = null,
 ) {
     if (newAlbums.isNotEmpty()) item(key = "hero") { HeroPager(newAlbums, onOpen) }
     itemsIndexed(
         // The feed often has its own "New releases" row; the hero above already covers it.
-        items = page.sections.filter { it.items.isNotEmpty() && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
+        // The shelf Quick picks shows as a list is not repeated as cards.
+        items = page.sections.filter { it.items.isNotEmpty() && it.title != skipTitle && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
         key = { i, it -> "$i-${it.title}" },
     ) { sectionIndex, section ->
         val lively = HomeSettings.motion == com.orismusic.client.settings.HomeMotion.Lively

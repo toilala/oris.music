@@ -274,13 +274,13 @@ fun NowPlayingScreen(
                             onClick = { lyricsOpen = false },
                             icon = Icons.Rounded.Lyrics,
                             contentDescription = "Close lyrics",
-                            shape = ClusterStartShape,
+                            shape = PlayerChipShape,
                         )
                         ClusterButton(
                             onClick = { offsetDialog = true },
                             icon = Icons.Rounded.MoreVert,
                             contentDescription = "Lyrics options",
-                            shape = ClusterEndShape,
+                            shape = PlayerChipShape,
                         )
                     } else {
                         ClusterButton(
@@ -295,7 +295,7 @@ fun NowPlayingScreen(
                             },
                             icon = Icons.Rounded.Share,
                             contentDescription = "Share",
-                            shape = ClusterStartShape,
+                            shape = PlayerChipShape,
                         )
                         Box {
                             var playlistMenu by remember { mutableStateOf(false) }
@@ -306,7 +306,7 @@ fun NowPlayingScreen(
                                 onClick = { playlistMenu = true },
                                 icon = Icons.Rounded.PlaylistAdd,
                                 contentDescription = "Add to playlist",
-                                shape = ClusterMiddleShape,
+                                shape = PlayerChipShape,
                             )
                             DropdownMenu(playlistMenu, { playlistMenu = false }) {
                                 if (playlists.isEmpty()) DropdownMenuItem({ Text("Make a playlist in Library first") }, { playlistMenu = false })
@@ -323,7 +323,7 @@ fun NowPlayingScreen(
                             onClick = { saved?.let { library.toggleLike(it) } },
                             icon = Icons.Rounded.PlaylistAdd, // placeholder replaced by HeartBurstIcon content below
                             contentDescription = if (isLiked) "Unlike" else "Like",
-                            shape = ClusterEndShape,
+                            shape = PlayerChipShape,
                             active = isLiked,
                             content = {
                                 HeartBurstIcon(isLiked, if (isLiked) PlayerIconButtonColor else PlayerTextButtonColor, Modifier.size(22.dp))
@@ -394,16 +394,17 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SkipSquircle(
+                GhostSkipButton(
                     onClick = { connection.seekToPrevious() },
                     enabled = canSkipPrevious,
                     icon = Icons.Rounded.SkipPrevious,
                     contentDescription = "Previous",
+                    direction = -1,
                 )
                 Spacer(Modifier.width(16.dp))
                 val ended = playbackState == Player.STATE_ENDED
-                PlayPauseBlob(
-                    wavy = PlayerSettings.playButton == PlayButtonStyle.Wavy,
+                OrbitPlayButton(
+                    orbit = PlayerSettings.playButton == PlayButtonStyle.Orbit,
                     playing = isPlaying,
                     onClick = {
                         if (ended) {
@@ -415,11 +416,12 @@ fun NowPlayingScreen(
                     contentDescription = if (ended) "Replay" else if (isPlaying) "Pause" else "Play",
                 )
                 Spacer(Modifier.width(16.dp))
-                SkipSquircle(
+                GhostSkipButton(
                     onClick = { connection.seekToNext() },
                     enabled = canSkipNext,
                     icon = Icons.Rounded.SkipNext,
                     contentDescription = "Next",
+                    direction = 1,
                 )
             }
 
@@ -431,11 +433,11 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ClusterButton(onClick = onQueue, icon = Icons.Rounded.QueueMusic, contentDescription = "Queue", shape = ClusterStartShape)
+                ClusterButton(onClick = onQueue, icon = Icons.Rounded.QueueMusic, contentDescription = "Queue", shape = PlayerChipShape)
                 Box {
                     var timerMenu by remember { mutableStateOf(false) }
                     val timerEnd by SleepTimer.endsAt.collectAsState()
-                    ClusterButton(onClick = { timerMenu = true }, icon = Icons.Rounded.Timer, contentDescription = "Sleep timer", shape = ClusterMiddleShape, active = timerEnd != null || stopAfterSongId != null)
+                    ClusterButton(onClick = { timerMenu = true }, icon = Icons.Rounded.Timer, contentDescription = "Sleep timer", shape = PlayerChipShape, active = timerEnd != null || stopAfterSongId != null)
                     DropdownMenu(timerMenu, { timerMenu = false }) {
                         if (timerEnd != null || stopAfterSongId != null) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); stopAfterSongId = null; timerMenu = false })
                         listOf(15, 30, 45, 60).forEach { minutes ->
@@ -448,10 +450,10 @@ fun NowPlayingScreen(
                     onClick = { lyricsOpen = !lyricsOpen },
                     icon = Icons.Rounded.Lyrics,
                     contentDescription = "Lyrics",
-                    shape = ClusterMiddleShape,
+                    shape = PlayerChipShape,
                     active = lyricsOpen,
                 )
-                ClusterButton(onClick = { connection.toggleShuffle() }, icon = Icons.Rounded.Shuffle, contentDescription = "Shuffle", shape = ClusterMiddleShape, active = shuffle)
+                ClusterButton(onClick = { connection.toggleShuffle() }, icon = Icons.Rounded.Shuffle, contentDescription = "Shuffle", shape = PlayerChipShape, active = shuffle)
                 ClusterButton(
                     onClick = { connection.toggleRepeatMode() },
                     icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
@@ -460,11 +462,11 @@ fun NowPlayingScreen(
                         Player.REPEAT_MODE_ALL -> "Repeat all"
                         else -> "Repeat"
                     },
-                    shape = ClusterEndShape,
+                    shape = PlayerChipShape,
                     active = repeatMode != Player.REPEAT_MODE_OFF,
                 )
                 Spacer(Modifier.weight(1f))
-                ClusterButton(onClick = { trayOpen = true }, icon = Icons.Rounded.MoreVert, contentDescription = "More", shape = CircleShape)
+                ClusterButton(onClick = { trayOpen = true }, icon = Icons.Rounded.MoreVert, contentDescription = "More", shape = PlayerChipShape)
             }
         }
     }

@@ -220,10 +220,10 @@ fun MiniPlayer(
                 Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(20.dp), tint = onSurface)
             }
             Spacer(Modifier.width(12.dp))
-            // Mini wavy play button, matching the full player's blob.
-            val indent by animateFloatAsState(if (isPlaying) 0.08f else 0f, tween(300, easing = LinearEasing), label = "mini blob indent")
-            val spin = rememberInfiniteTransition(label = "mini blob spin")
-            val degrees by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(8000, easing = LinearEasing)), label = "mini blob rotation")
+            // Mini orbit play button, matching the full player's disc and satellite dot.
+            val ringAlpha by animateFloatAsState(if (isPlaying) 1f else 0f, tween(300, easing = LinearEasing), label = "mini orbit ring")
+            val spin = rememberInfiniteTransition(label = "mini orbit spin")
+            val degrees by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing)), label = "mini orbit degrees")
             val ended = playbackState == Player.STATE_ENDED
             Box(
                 contentAlignment = Alignment.Center,
@@ -234,13 +234,28 @@ fun MiniPlayer(
                     } else connection.togglePlayPause()
                 },
             ) {
-                Box(
-                    Modifier.matchParentSize().graphicsLayer {
-                        rotationZ = if (isPlaying) degrees else 0f
-                        clip = true
-                        shape = if (isPlaying) WavyShape(9, indent, degrees) else CircleShape
-                    }.background(primary),
-                )
+                Box(Modifier.size(38.dp).clip(CircleShape).background(primary))
+                if (ringAlpha > 0.01f) {
+                    androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+                        val radius = size.minDimension / 2f - 1.5.dp.toPx()
+                        val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                        drawCircle(
+                            onSurface.copy(alpha = 0.35f * ringAlpha),
+                            radius = radius,
+                            center = center,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx()),
+                        )
+                        val rad = Math.toRadians(degrees.toDouble())
+                        drawCircle(
+                            primary.copy(alpha = ringAlpha),
+                            radius = 2.4.dp.toPx(),
+                            center = androidx.compose.ui.geometry.Offset(
+                                (center.x + radius * kotlin.math.cos(rad)).toFloat(),
+                                (center.y + radius * kotlin.math.sin(rad)).toFloat(),
+                            ),
+                        )
+                    }
+                }
                 Crossfade(isPlaying || ended, label = "mini play") { active ->
                     Icon(
                         imageVector = if (ended) Icons.Rounded.Replay else if (active) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
