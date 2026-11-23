@@ -151,6 +151,7 @@ for page in ['settings','player','lyrics','home','appearance','artwork']:
 print('PASS: compact settings and live previews', flush=True)
 
 # Saved Offbeat choice through the actual full player, not only a preview.
+adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Library', seconds=60)
 tap('Library')

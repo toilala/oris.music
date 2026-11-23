@@ -102,7 +102,7 @@ private fun HomePreview() {
         color = androidx.compose.ui.graphics.Color(0xFF151312), modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy((HomeSettings.density.gap / 2).dp)) {
-            if (HomeSettings.hero) {
+            if (HomeSettings.hero && !HomeSettings.minimal) {
                 val deck = HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck
                 androidx.compose.foundation.layout.Box(
                     Modifier.fillMaxWidth().height(if (deck) 70.dp else 54.dp)
@@ -111,7 +111,7 @@ private fun HomePreview() {
                     contentAlignment = Alignment.Center,
                 ) { Text(if (deck) "Deck" else "Banner", style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f)) }
             }
-            Text("Recently played", style = MaterialTheme.typography.titleSmall)
+            Text(if (HomeSettings.minimal) "Continue listening" else "Recently played", style = MaterialTheme.typography.titleSmall)
             val scatter = HomeSettings.shelfStyle == com.orismusic.client.settings.ShelfStyle.Scatter
             Row(horizontalArrangement = Arrangement.spacedBy(if (scatter) (-8).dp else 10.dp)) {
                 colors.take(4).forEachIndexed { i, c ->
