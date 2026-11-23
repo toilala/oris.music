@@ -25,7 +25,7 @@ enum class HomeMotion(val label: String) { Calm("Calm"), Lively("Lively") }
 
 /** Home sections that can be hidden or moved. The YouTube shelves always come last. */
 enum class HomeSection(val id: String, val title: String) {
-    Jump("jump", "Jump back in"),
+    Jump("jump", "Continue listening"),
     Recent("recent", "Recently played"),
     Most("most", "Most played"),
     Because("because", "Because you listen to"),
@@ -41,6 +41,7 @@ enum class HomeSection(val id: String, val title: String) {
 object HomeSettings {
     private var store: android.content.SharedPreferences? = null
 
+    var minimal by mutableStateOf(true)
     var hero by mutableStateOf(true)
     var youtube by mutableStateOf(true)
     var heroStyle by mutableStateOf(HeroStyle.Deck)
@@ -61,6 +62,7 @@ object HomeSettings {
         if (store != null) return
         val p = context.applicationContext.getSharedPreferences("home", Context.MODE_PRIVATE)
         store = p
+        minimal = p.getBoolean("minimal", true)
         hero = p.getBoolean("hero", true)
         youtube = p.getBoolean("youtube", true)
         heroStyle = p.enum("hero_style", HeroStyle.Deck)
@@ -94,6 +96,7 @@ object HomeSettings {
 
     fun save() {
         store?.edit()
+            ?.putBoolean("minimal", minimal)
             ?.putBoolean("hero", hero)
             ?.putBoolean("youtube", youtube)
             ?.putString("hero_style", heroStyle.name)
@@ -110,6 +113,7 @@ object HomeSettings {
     }
 
     fun reset() {
+        minimal = true
         shelfStyle = ShelfStyle.Scatter; hero = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
         coverSize = HomeCoverSize.Medium; jumpStyle = JumpStyle.Tiles; motion = HomeMotion.Lively; becauseCount = 3
         order.clear(); order.addAll(HomeSection.entries); hidden.clear()

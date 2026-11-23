@@ -61,6 +61,7 @@ fun AppearanceSettingsPage(onBack: () -> Unit) {
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SurfacePreview()
             GroupLabel("Colours")
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 ToggleRow(
@@ -173,4 +174,21 @@ fun AppearanceSettingsPage(onBack: () -> Unit) {
 @Composable
 private fun GroupLabel(text: String) {
     Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+}
+
+@Composable
+private fun SurfacePreview() {
+    androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                Text("♪", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.headlineSmall)
+            }
+            Column {
+                Text("Made for your music", style = MaterialTheme.typography.titleSmall)
+                Text("Live colour preview", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
 }

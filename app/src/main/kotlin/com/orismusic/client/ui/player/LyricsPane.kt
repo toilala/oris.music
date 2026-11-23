@@ -209,25 +209,9 @@ private fun LyricRow(
     val alpha by animateFloatAsState(targetAlpha, tween(300), label = "line alpha")
     val scale by animateFloatAsState(if (selected) 1f else 0.85f, tween(400), label = "line scale")
     val settings = com.orismusic.client.settings.PlayerSettings
-    val sizeSp = when (settings.lyricSize) {
-        com.orismusic.client.settings.LyricSize.Compact -> 20
-        com.orismusic.client.settings.LyricSize.Regular -> 24
-        com.orismusic.client.settings.LyricSize.Large -> 28
-    }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val view = androidx.compose.ui.platform.LocalView.current
-    val lineStyle = androidx.compose.ui.text.TextStyle(
-        fontSize = sizeSp.sp,
-        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-        lineHeight = (sizeSp * 1.3f).sp,
-        letterSpacing = (-0.5).sp,
-        textAlign = if (settings.lyricsCentered) TextAlign.Center else TextAlign.Start,
-        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
-        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
-            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
-        ),
-    )
+    val lineStyle = lyricReadingStyle()
     val lineModifier = Modifier
         .fillMaxWidth()
         .graphicsLayer {
@@ -405,4 +389,27 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
             }
         }
     }
+}
+
+/** Shared by the real lyrics pane and settings preview. */
+@Composable
+fun lyricReadingStyle(): androidx.compose.ui.text.TextStyle {
+    val settings = com.orismusic.client.settings.PlayerSettings
+    val sizeSp = when(settings.lyricSize) {
+        com.orismusic.client.settings.LyricSize.Compact -> 20
+        com.orismusic.client.settings.LyricSize.Regular -> 24
+        com.orismusic.client.settings.LyricSize.Large -> 28
+    }
+    return androidx.compose.ui.text.TextStyle(
+        fontSize = sizeSp.sp,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        lineHeight = (sizeSp * 1.3f).sp,
+        letterSpacing = (-0.5).sp,
+        textAlign = if (settings.lyricsCentered) TextAlign.Center else TextAlign.Start,
+        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+        ),
+    )
 }

@@ -52,14 +52,14 @@ fun SettingsScreen(
     ) { padding ->
         Column(
             Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             SettingsFolder.entries.filter { it != SettingsFolder.None }.forEach { folder ->
                 SettingsLink(folder.title, folder.detail) { openPage = folder }
             }
             Spacer(Modifier.height(4.dp))
-            SectionTitle("Your data")
             val context = LocalContext.current
+            SettingsFold("Storage and history") {
             val libraryStore = remember(context) { com.orismusic.client.library.LibraryStore.get(context) }
             val historyCount by libraryStore.history.collectAsState()
             var cleared by remember { mutableStateOf(false) }
@@ -80,7 +80,8 @@ fun SettingsScreen(
             Text(if (imagesCleared) "Image cache cleared." else "Covers are cached so they load faster. Clearing is safe.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
-            SectionTitle("About")
+            }
+            SettingsFold("About Oris") {
             val versionName = remember(context) {
                 runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "dev"
             }
@@ -117,31 +118,34 @@ fun SettingsScreen(
                     }
                 }) { Text("Buy me a momo") }
             }
+            }
         }
     }
 }
 
 private enum class SettingsFolder(val title: String, val detail: String) {
     None("", ""),
-    Appearance("Appearance", "Colours, accent, player background, screen, app icon"),
+    Appearance("Appearance", "Colours, backgrounds and app icon"),
     Navigation("Navigation", "Bottom bar: effect, style, accent, size, hiding"),
-    Player("Player", "Tap behaviour, keys, seek bar, lyrics look, motion"),
-    Home("Home", "Sections, order, hero, shelf look and density"),
+    Player("Player", "Artwork, controls and gestures"),
+    Home("Home", "A quieter feed, your way"),
     Playback("Playback", "Background play, silence, Bluetooth, speed, sleep timer"),
-    Lyrics("Lyrics", "Sources and their priority order"),
+    Lyrics("Lyrics", "Look, reading and sources"),
 }
 
 @Composable
 private fun SettingsLink(title: String, detail: String, onClick: () -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 enum class PlayerBackgroundStyle(val label: String) { Gradient("Artwork gradient"), Blur("Blurred artwork"), Solid("Solid black") }
+enum class ArtworkStyle(val label: String) { Classic("Classic"), Soft("Soft square"), Disc("Record"), Halo("Halo"), Arch("Arch"), Tilt("Offbeat"), Ticket("Ticket"), Float("Floating") }
 enum class PlayButtonStyle(val label: String) { Orbit("Orbit ring"), Disc("Plain disc"), Pebble("Soft pebble"), Bloom("Bloom"), Ripple("Quiet ripple") }
 enum class PlayerSeekBar(val label: String) { Slim("Slim line"), Wave("Wave") }
 enum class LyricSize(val label: String) { Compact("Small"), Regular("Regular"), Large("Large") }
@@ -22,6 +23,7 @@ enum class TapOpen(val label: String) { Fullscreen("Full player"), Miniplayer("M
 object PlayerSettings {
     private var store: android.content.SharedPreferences? = null
 
+    var artworkStyle by mutableStateOf(ArtworkStyle.Classic)
     var backgroundStyle by mutableStateOf(PlayerBackgroundStyle.Gradient)
     var playButton by mutableStateOf(PlayButtonStyle.Orbit)
     var seekBar by mutableStateOf(PlayerSeekBar.Slim)
@@ -41,6 +43,7 @@ object PlayerSettings {
         if (store != null) return
         val p = context.applicationContext.getSharedPreferences("player_look", Context.MODE_PRIVATE)
         store = p
+        artworkStyle = p.enum("artwork_style", ArtworkStyle.Classic)
         backgroundStyle = p.enum("background_style", PlayerBackgroundStyle.Gradient)
         playButton = p.enum("play_button", PlayButtonStyle.Orbit)
         seekBar = p.enum("seek_bar", PlayerSeekBar.Slim)
@@ -57,6 +60,7 @@ object PlayerSettings {
 
     fun save() {
         store?.edit()
+            ?.putString("artwork_style", artworkStyle.name)
             ?.putString("background_style", backgroundStyle.name)
             ?.putString("play_button", playButton.name)
             ?.putString("seek_bar", seekBar.name)
@@ -70,6 +74,7 @@ object PlayerSettings {
     }
 
     fun reset() {
+        artworkStyle = ArtworkStyle.Classic
         backgroundStyle = PlayerBackgroundStyle.Gradient; playButton = PlayButtonStyle.Orbit; seekBar = PlayerSeekBar.Slim
         remaining = false; lyricSize = LyricSize.Regular; lyricsCentered = false
         lyricsTapSeek = true; lyricsAutoScroll = true; swipeSensitivity = SwipeSensitivity.Regular

@@ -1,6 +1,8 @@
 package com.orismusic.client.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,27 +84,54 @@ fun NavigationSettings(onBack: () -> Unit) {
 
 @Composable
 internal fun ToggleRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(end = 16.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = checked, onCheckedChange = onChange)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun <T> ChoiceRow(title: String, options: List<T>, selected: T, label: (T) -> String, onPick: (T) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { o ->
-                FilterChip(selected = o == selected, onClick = { onPick(o) }, label = { Text(label(o)) })
-            }
+    var open by remember { androidx.compose.runtime.mutableStateOf(false) }
+    Surface(onClick = { open = true }, color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Text(label(selected), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 12.dp).widthIn(max = 150.dp), maxLines = 2)
+            Text(" ›", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+    if (open) androidx.compose.material3.AlertDialog(onDismissRequest = { open = false }, title = { Text(title) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+            options.forEach { value ->
+                Row(Modifier.fillMaxWidth().clickable { onPick(value); open = false }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.RadioButton(selected = value == selected, onClick = { onPick(value); open = false })
+                    Text(label(value), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        } }, confirmButton = { TextButton(onClick = { open = false }) { Text("Done") } })
+}
+
+@Composable
+internal fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp))
+        content()
+    }
+}
+
+@Composable
+internal fun SettingsFold(title: String, content: @Composable () -> Unit) {
+    var open by remember { androidx.compose.runtime.mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TextButton(onClick = { open = !open }) { Text(title + if (open) "  −" else "  +") }
+        if (open) content()
     }
 }

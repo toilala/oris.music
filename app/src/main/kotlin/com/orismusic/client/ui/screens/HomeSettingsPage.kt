@@ -49,6 +49,11 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             HomePreview()
+            ToggleRow("Minimal Home", "Continue listening, Quick picks and one discovery shelf. Turn off for your full feed.", HomeSettings.minimal) {
+                HomeSettings.minimal = it; HomeSettings.save()
+            }
+            SettingsFold("Sections and layout") {
+            Text("These extra sections appear when Minimal Home is off.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             ToggleRow("Top banner", "The big artwork banner at the top. Off gives a plain header.", HomeSettings.hero) {
                 HomeSettings.hero = it; HomeSettings.save()
             }
@@ -68,6 +73,7 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             ChoiceRow("Jump back in layout", JumpStyle.entries, HomeSettings.jumpStyle, { it.label }) { HomeSettings.jumpStyle = it; HomeSettings.save() }
             ChoiceRow("Artist shelves", listOf(1, 2, 3, 4, 5), HomeSettings.becauseCount, { "$it" }) { HomeSettings.becauseCount = it; HomeSettings.save() }
             TextButton(onClick = { HomeSettings.reset() }) { Text("Reset Home") }
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
