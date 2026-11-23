@@ -84,7 +84,7 @@ fun NavigationSettings(onBack: () -> Unit) {
 
 @Composable
 internal fun ToggleRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall,
@@ -131,7 +131,10 @@ internal fun SettingsGroup(title: String, content: @Composable () -> Unit) {
 internal fun SettingsFold(title: String, content: @Composable () -> Unit) {
     var open by remember { androidx.compose.runtime.mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        TextButton(onClick = { open = !open }) { Text(title + if (open) "  −" else "  +") }
+        TextButton(onClick = { open = !open }) {
+            Text(title)
+            Text(if (open) "  −" else "  +")
+        }
         if (open) content()
     }
 }
