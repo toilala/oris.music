@@ -214,7 +214,22 @@ tasks.matching { it.name == "assembleFossDebug" }.configureEach {
     dependsOn("testFossDebugUnitTest")
 }
 
-// Robolectric fetches the local Android runtime separately from Gradle dependencies.
+// Resolve the test Android runtime through Gradle once instead of a second network
+// downloader inside each test JVM. Include the API 28 sandbox and resource SDK.
+val localAndroidRuntime by configurations.creating
+val localCompileRuntime by configurations.creating
+
+dependencies {
+    localAndroidRuntime("org.robolectric:android-all-instrumented:9-robolectric-4913185-2-i7")
+    localCompileRuntime("org.robolectric:android-all-instrumented:15-robolectric-12650502-i7")
+}
+val prepareLocalAndroidRuntime by tasks.registering(Copy::class) {
+    from(localAndroidRuntime, localCompileRuntime)
+    into(layout.buildDirectory.dir("robolectric"))
+}
 tasks.withType<Test>().configureEach {
-    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+    dependsOn(prepareLocalAndroidRuntime)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric").get().asFile.absolutePath)
+    testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 }
