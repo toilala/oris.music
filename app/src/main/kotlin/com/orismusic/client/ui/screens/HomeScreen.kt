@@ -389,8 +389,7 @@ private fun HomeHeader(scroll: () -> Int) {
             easing = androidx.compose.animation.core.FastOutSlowInEasing))
     }
     Row(
-        Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 22.dp)
-            .graphicsLayer { alpha = reveal.value },
+        Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {

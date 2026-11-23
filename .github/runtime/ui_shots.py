@@ -6,13 +6,14 @@ import time
 import subprocess
 
 # Capture the cold entrance, not only the settled UI. The video must be inspected.
-record = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '8', '/sdcard/home-entry.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+record = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '16', '/sdcard/home-entry.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
 time.sleep(3)
 screen('shot_home')
-record.communicate(timeout=15)
+wait_label('Oris')
+record.communicate(timeout=25)
 adb('pull', '/sdcard/home-entry.mp4', 'runtime-evidence/home-entry.mp4')
 tap('Library')
 wait_label('Liked (0)')
@@ -110,3 +111,6 @@ screen('control_styles_paused')
 tap('Soft pebble', bottom=False)
 time.sleep(1)
 screen('control_styles_playing')
+style_record = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '6', '/sdcard/control-motion.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+style_record.communicate(timeout=15)
+adb('pull', '/sdcard/control-motion.mp4', 'runtime-evidence/control-motion.mp4')
