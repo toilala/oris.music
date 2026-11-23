@@ -163,7 +163,7 @@ fun HomeScreen(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
-    val heroOn = HomeSettings.hero
+    val heroOn = HomeSettings.hero && !HomeSettings.minimal
     val heroSongs = remember(feed, heroOn) {
         if (!heroOn) emptyList() else (feed as? HomeFeedState.Ready)?.page?.sections
             ?.flatMap { MusicCandidates.select(it.items.filterIsInstance<SongItem>()) }
@@ -238,7 +238,7 @@ fun HomeScreen(
                             quickPicks?.let { (picks, _) ->
                                 item(key = "quick-picks") { QuickPicksSection(picks, playerConnection, scope) }
                             }
-                            if (community.isNotEmpty()) item(key = "community-playlists") { CommunityPlaylistsSection(community, onOpen) }
+                            if (community.isNotEmpty() && !HomeSettings.minimal) item(key = "community-playlists") { CommunityPlaylistsSection(community, onOpen) }
                             feedItems(state.page, newAlbums, playerConnection, onOpen, scope, quickPicks?.second)
                         }
                     }
@@ -442,11 +442,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
     scope: kotlinx.coroutines.CoroutineScope,
     skipTitle: String? = null,
 ) {
-    if (newAlbums.isNotEmpty()) item(key = "hero") { HeroPager(newAlbums, onOpen) }
+    if (newAlbums.isNotEmpty() && !HomeSettings.minimal) item(key = "hero") { HeroPager(newAlbums, onOpen) }
     itemsIndexed(
         // The feed often has its own "New releases" row; the hero above already covers it.
         // The shelf Quick picks shows as a list is not repeated as cards.
-        items = page.sections.filter { it.items.isNotEmpty() && it.title != skipTitle && !(newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) },
+        items = page.sections.filter { it.items.isNotEmpty() && it.title != skipTitle && !(!HomeSettings.minimal && newAlbums.isNotEmpty() && it.title.trim().equals("New releases", ignoreCase = true)) }.take(if (HomeSettings.minimal) 1 else Int.MAX_VALUE),
         key = { i, it -> "$i-${it.title}" },
     ) { sectionIndex, section ->
         val lively = HomeSettings.motion == com.orismusic.client.settings.HomeMotion.Lively

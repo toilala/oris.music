@@ -488,7 +488,6 @@ private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose
                     scaleX = s; scaleY = s
                     alpha = lerp(0.3f, 1f, t)
                 }
-                .clip(RoundedCornerShape(6.dp))
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
@@ -502,13 +501,8 @@ private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose
                     )
                 },
         ) {
-            Artwork(
-                item?.mediaMetadata?.artworkUri?.toString(),
-                Modifier.fillMaxSize(),
-                RoundedCornerShape(6.dp),
-                item?.mediaMetadata?.title?.toString(),
-                px = 1000,
-            )
+            StyledArtwork(item?.mediaMetadata?.artworkUri?.toString(),
+                item?.mediaMetadata?.title?.toString(), Modifier.fillMaxSize())
         }
     }
 }

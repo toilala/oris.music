@@ -307,5 +307,5 @@ fun LazyListScope.listeningShelves(
         }
     }
     }
-    HomeSettings.order.toList().forEach { sec -> if (HomeSettings.visible(sec)) blocks[sec]?.invoke(this) }
+    HomeSettings.order.toList().forEach { sec -> if (HomeSettings.visible(sec) && (!HomeSettings.minimal || sec == HomeSection.Jump)) blocks[sec]?.invoke(this) }
 }
