@@ -188,11 +188,14 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
                     item(key = "header") {
-                        if (heroSongs.isNotEmpty()) { if (HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck) HomeDeck(heroSongs, playerConnection, scroll) else HomeHero(heroSongs, playerConnection, scroll) }
-                        else if (heroOn && feed is HomeFeedState.Loading) Box(Modifier.fillMaxWidth().height(380.dp))
-                        else Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
+                        Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)
+                    if (heroSongs.isNotEmpty()) item(key = "discovery-hero") {
+                        if (HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck)
+                            HomeDeck(heroSongs, playerConnection, scroll)
+                        else HomeHero(heroSongs, playerConnection, scroll)
+                    }
                     when (val state = feed) {
                         HomeFeedState.Loading -> item(key = "loading") {
                             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -241,7 +244,7 @@ fun HomeScreen(
                     }
                 }
             }
-            PinnedMark(listState, Modifier.align(Alignment.TopStart))
+
         }
     }
 }
@@ -370,7 +373,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
     }
 }
 
-/** Logo, name and a time-aware greeting. Lifts and fades as the page scrolls. */
+/** Fixed-size first frame: feed loading never changes the header's position. */
 @Composable
 private fun HomeHeader(scroll: () -> Int) {
     val hour = remember { java.time.LocalTime.now().hour }
@@ -378,52 +381,33 @@ private fun HomeHeader(scroll: () -> Int) {
         in 5..11 -> "Good morning"
         in 12..16 -> "Good afternoon"
         in 17..21 -> "Good evening"
-        else -> "Still up?"
+        else -> "Your late-night soundtrack"
     }
-    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "spin")
-    val angle by spin.animateFloat(
-        0f, 360f,
-        androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing),
-        ), label = "angle",
-    )
     val reveal = remember { androidx.compose.animation.core.Animatable(0f) }
-    val reveal2 = remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        launch { reveal.animateTo(1f, androidx.compose.animation.core.spring(0.7f, 120f)) }
-        kotlinx.coroutines.delay(140)
-        reveal2.animateTo(1f, androidx.compose.animation.core.spring(0.75f, 100f))
+        reveal.animateTo(1f, androidx.compose.animation.core.tween(650,
+            easing = androidx.compose.animation.core.FastOutSlowInEasing))
     }
-    Column(
-        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 10.dp).graphicsLayer {
-            translationY = scroll() * 0.35f
-            alpha = (1f - scroll() / 420f).coerceIn(0f, 1f)
-        },
+    Row(
+        Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 22.dp)
+            .graphicsLayer { alpha = reveal.value },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(
-            Modifier.graphicsLayer { alpha = reveal.value; translationY = (1f - reveal.value) * -30f },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(Modifier.size(30.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("Oris", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+        Box(Modifier.size(52.dp).graphicsLayer {
+            val progress = reveal.value
+            scaleX = 0.92f + 0.08f * progress
+            scaleY = scaleX
+            rotationZ = -18f * (1f - progress)
+        }, contentAlignment = Alignment.Center) {
+            OrisLogo(Modifier.size(46.dp), tint = MaterialTheme.colorScheme.primary)
         }
-        Text(
-            greeting,
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 18.dp).graphicsLayer {
-                alpha = reveal2.value; translationY = (1f - reveal2.value) * 50f
-            },
-        )
-        Text(
-            "What are we listening to?",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp).graphicsLayer {
-                alpha = reveal2.value; translationY = (1f - reveal2.value) * 70f
-            },
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("Oris", style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface)
+            Text(greeting, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

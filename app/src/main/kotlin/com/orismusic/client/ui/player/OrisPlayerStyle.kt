@@ -84,11 +84,12 @@ internal fun OrbitPlayButton(
     icon: ImageVector,
     contentDescription: String,
     orbit: Boolean = true,
+    style: com.orismusic.client.settings.PlayButtonStyle = com.orismusic.client.settings.PlayButtonStyle.Orbit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "play press")
-    val ringAlpha by animateFloatAsState(if (orbit && playing) 1f else 0f, tween(350), label = "orbit ring")
+    val ringAlpha by animateFloatAsState(if (orbit && style == com.orismusic.client.settings.PlayButtonStyle.Orbit && playing) 1f else 0f, tween(350), label = "orbit ring")
     val spin = rememberInfiniteTransition(label = "orbit spin")
     val degrees by spin.animateFloat(
         0f, 360f,
@@ -102,7 +103,35 @@ internal fun OrbitPlayButton(
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         // Disc.
-        Box(Modifier.size(76.dp).clip(CircleShape).background(PlayerTextButtonColor))
+        val phase by spin.animateFloat(0f, 1f,
+            infiniteRepeatable(tween(4200, easing = LinearEasing)), label = "shape breath")
+        val active by animateFloatAsState(if (playing) 1f else 0f, tween(500), label = "shape active")
+        Canvas(Modifier.size(76.dp)) {
+            val c = Offset(size.width / 2f, size.height / 2f)
+            val radius = size.minDimension / 2f
+            when (style) {
+                com.orismusic.client.settings.PlayButtonStyle.Pebble,
+                com.orismusic.client.settings.PlayButtonStyle.Bloom -> {
+                    val bloom = style == com.orismusic.client.settings.PlayButtonStyle.Bloom
+                    val path = androidx.compose.ui.graphics.Path()
+                    for (step in 0..160) {
+                        val theta = step / 160.0 * Math.PI * 2
+                        val breath = sin(phase * Math.PI * 2).toFloat() * active
+                        val rr = radius * if (bloom) (0.91f + 0.065f * cos(theta * 6 + breath * 0.35).toFloat())
+                            else (0.93f + 0.04f * sin(theta * 3 + 0.6 + breath * 0.4).toFloat())
+                        val x = c.x + rr * cos(theta).toFloat()
+                        val y = c.y + rr * sin(theta).toFloat()
+                        if (step == 0) path.moveTo(x,y) else path.lineTo(x,y)
+                    }
+                    path.close(); drawPath(path, PlayerTextButtonColor)
+                }
+                else -> drawCircle(PlayerTextButtonColor, radius = radius * if (style == com.orismusic.client.settings.PlayButtonStyle.Ripple) 0.85f else 1f)
+            }
+            if (style == com.orismusic.client.settings.PlayButtonStyle.Ripple) {
+                val pulse = (sin(phase * Math.PI * 2).toFloat() * 0.5f + 0.5f) * active
+                drawCircle(PlayerTextButtonColor.copy(alpha = 0.3f + 0.2f * pulse), radius * (0.94f + 0.04f * pulse), style = Stroke(1.dp.toPx()))
+            }
+        }
         // Orbit: a hairline ring with one satellite dot, drawn only while playing.
         if (ringAlpha > 0.01f) {
             Canvas(Modifier.fillMaxSize()) {

@@ -3,12 +3,17 @@
 from playback_check import adb, tap, wait_label, screen, PKG
 import re
 import time
+import subprocess
 
+# Capture the cold entrance, not only the settled UI. The video must be inspected.
+record = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '8', '/sdcard/home-entry.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
 time.sleep(3)
 screen('shot_home')
+record.communicate(timeout=15)
+adb('pull', '/sdcard/home-entry.mp4', 'runtime-evidence/home-entry.mp4')
 tap('Library')
 wait_label('Liked (0)')
 screen('shot_library')
@@ -89,4 +94,19 @@ tap('Open player')
 wait_label('Lyrics', seconds=90)
 time.sleep(1)
 screen('shot_player_idle')
+tap('More')
+wait_label('Shuffle')
+wait_label('Share')
+wait_label('Sleep')
+screen('player_more')
+tap('Sleep')
+wait_label('Stop when this song ends')
+screen('player_sleep_menu')
 print('PASS: ui screenshots', flush=True)
+
+adb('shell', 'am', 'start', '-n', PKG+'/com.orismusic.client.debug.ControlStylesCheckActivity')
+wait_label('Player styles')
+screen('control_styles_paused')
+tap('Soft pebble', bottom=False)
+time.sleep(1)
+screen('control_styles_playing')

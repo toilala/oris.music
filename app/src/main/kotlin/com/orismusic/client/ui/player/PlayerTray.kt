@@ -64,6 +64,9 @@ internal fun PlayerTray(
     connection: PlayerConnection,
     onQueue: () -> Unit,
     onDismiss: () -> Unit,
+    stopAfterSongActive: Boolean = false,
+    onStopAfterSong: () -> Unit = {},
+    onCancelStopAfterSong: () -> Unit = {},
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
@@ -128,11 +131,12 @@ internal fun PlayerTray(
                 var timerMenu by remember { mutableStateOf(false) }
                 val timerEnd by SleepTimer.endsAt.collectAsState()
                 Box(Modifier.weight(1f)) {
-                    ActionTile(Icons.Rounded.Timer, "Sleep", timerEnd != null, 56.dp, Modifier.fillMaxWidth()) { timerMenu = true }
+                    ActionTile(Icons.Rounded.Timer, "Sleep", timerEnd != null || stopAfterSongActive, 56.dp, Modifier.fillMaxWidth()) { timerMenu = true }
                     DropdownMenu(timerMenu, { timerMenu = false }) {
-                        if (timerEnd != null) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); timerMenu = false })
+                        if (timerEnd != null || stopAfterSongActive) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); onCancelStopAfterSong(); timerMenu = false })
+                        DropdownMenuItem({ Text("Stop when this song ends") }, { onStopAfterSong(); timerMenu = false })
                         listOf(15, 30, 45, 60).forEach { minutes ->
-                            DropdownMenuItem({ Text("Stop after $minutes min") }, { SleepTimer.start(minutes) { connection.pause() }; timerMenu = false })
+                            DropdownMenuItem({ Text("Stop after $minutes min") }, { onCancelStopAfterSong(); SleepTimer.start(minutes) { connection.pause() }; timerMenu = false })
                         }
                     }
                 }

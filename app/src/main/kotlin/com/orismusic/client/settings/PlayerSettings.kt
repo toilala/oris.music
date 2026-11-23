@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 enum class PlayerBackgroundStyle(val label: String) { Gradient("Artwork gradient"), Blur("Blurred artwork"), Solid("Solid black") }
-enum class PlayButtonStyle(val label: String) { Orbit("Orbit ring"), Disc("Plain disc") }
+enum class PlayButtonStyle(val label: String) { Orbit("Orbit ring"), Disc("Plain disc"), Pebble("Soft pebble"), Bloom("Bloom"), Ripple("Quiet ripple") }
 enum class PlayerSeekBar(val label: String) { Slim("Slim line"), Wave("Wave") }
 enum class LyricSize(val label: String) { Compact("Small"), Regular("Regular"), Large("Large") }
 enum class SwipeSensitivity(val label: String) { Low("Low"), Regular("Regular"), High("High") }

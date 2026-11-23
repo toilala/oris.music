@@ -152,6 +152,45 @@
             </intent-filter>
         </service>
 
+        <activity-alias
+            android:name=".icon.Wobble"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_wobble"
+            android:roundIcon="@mipmap/ic_v_wobble"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Sprout"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_sprout"
+            android:roundIcon="@mipmap/ic_v_sprout"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".icon.Ribbon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_v_ribbon"
+            android:roundIcon="@mipmap/ic_v_ribbon"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>

@@ -119,8 +119,8 @@ fun LazyListScope.listeningShelves(
     val lively = HomeSettings.motion == com.orismusic.client.settings.HomeMotion.Lively
     blocks[HomeSection.Jump] = {
     if (history.isNotEmpty()) item(key = "jump") {
-        Column(if (lively) Modifier.entrance(0) else Modifier) {
-            SectionHeader(title = "Jump back in")
+        Column {
+            SectionHeader(title = "Continue listening")
             val tiles = history.take(4)
             if (HomeSettings.jumpStyle == JumpStyle.Strip) LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(tiles, key = { "jb-${it.id}" }) { s ->
@@ -134,14 +134,14 @@ fun LazyListScope.listeningShelves(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEach { s ->
                             Row(
-                                Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                                    .background(Color.White.copy(alpha = 0.07f))
+                                Modifier.weight(1f).clip(RoundedCornerShape(18.dp))
+                                    .background(Color.White.copy(alpha = 0.045f))
                                     .pressClickable({ playHistory(connection, "Jump back in", tiles, s) }, 0.97f),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Artwork(s.thumbnail, Modifier.size(54.dp), RoundedCornerShape(0.dp), s.title)
+                                Artwork(s.thumbnail, Modifier.padding(8.dp).size(44.dp), RoundedCornerShape(12.dp), s.title)
                                 Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 10.dp))
+                                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 10.dp))
                             }
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))

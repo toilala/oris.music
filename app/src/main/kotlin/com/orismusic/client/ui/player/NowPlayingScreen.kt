@@ -283,38 +283,6 @@ fun NowPlayingScreen(
                             shape = PlayerChipShape,
                         )
                     } else {
-                        ClusterButton(
-                            onClick = {
-                                if (mediaId.isNotBlank()) runCatching {
-                                    val text = (title + " https://music.youtube.com/watch?v=" + mediaId).trim()
-                                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
-                                    }
-                                    context.startActivity(android.content.Intent.createChooser(send, "Share song").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                                }
-                            },
-                            icon = Icons.Rounded.Share,
-                            contentDescription = "Share",
-                            shape = PlayerChipShape,
-                        )
-                        Box {
-                            var playlistMenu by remember { mutableStateOf(false) }
-                            val store = remember { PlaylistStore.get(context) }
-                            val playlists by store.playlists.collectAsState()
-                            val song = remember(metadata, index) { connection.currentSavedSong() }
-                            ClusterButton(
-                                onClick = { playlistMenu = true },
-                                icon = Icons.Rounded.PlaylistAdd,
-                                contentDescription = "Add to playlist",
-                                shape = PlayerChipShape,
-                            )
-                            DropdownMenu(playlistMenu, { playlistMenu = false }) {
-                                if (playlists.isEmpty()) DropdownMenuItem({ Text("Make a playlist in Library first") }, { playlistMenu = false })
-                                playlists.forEach { p ->
-                                    DropdownMenuItem({ Text(p.name) }, { song?.let { store.add(p.id, it) }; playlistMenu = false })
-                                }
-                            }
-                        }
                         val library = remember { LibraryStore.get(context) }
                         val liked by library.liked.collectAsState()
                         val saved = remember(metadata, index) { connection.currentSavedSong() }
@@ -404,6 +372,7 @@ fun NowPlayingScreen(
                 Spacer(Modifier.width(16.dp))
                 val ended = playbackState == Player.STATE_ENDED
                 OrbitPlayButton(
+                    style = PlayerSettings.playButton,
                     orbit = PlayerSettings.playButton == PlayButtonStyle.Orbit,
                     playing = isPlaying,
                     onClick = {
@@ -427,25 +396,13 @@ fun NowPlayingScreen(
 
             Spacer(Modifier.height(30.dp))
 
-            // Bottom bar: queue, sleep timer, lyrics, shuffle, repeat, more.
+            // Essentials only. Secondary actions live in More.
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 12.dp).navigationBarsPadding(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ClusterButton(onClick = onQueue, icon = Icons.Rounded.QueueMusic, contentDescription = "Queue", shape = PlayerChipShape)
-                Box {
-                    var timerMenu by remember { mutableStateOf(false) }
-                    val timerEnd by SleepTimer.endsAt.collectAsState()
-                    ClusterButton(onClick = { timerMenu = true }, icon = Icons.Rounded.Timer, contentDescription = "Sleep timer", shape = PlayerChipShape, active = timerEnd != null || stopAfterSongId != null)
-                    DropdownMenu(timerMenu, { timerMenu = false }) {
-                        if (timerEnd != null || stopAfterSongId != null) DropdownMenuItem({ Text("Turn off timer") }, { SleepTimer.cancel(); stopAfterSongId = null; timerMenu = false })
-                        listOf(15, 30, 45, 60).forEach { minutes ->
-                            DropdownMenuItem({ Text("Stop after $minutes min") }, { SleepTimer.start(minutes) { connection.pause() }; timerMenu = false })
-                        }
-                        DropdownMenuItem({ Text("Stop when this song ends") }, { SleepTimer.cancel(); stopAfterSongId = mediaId; timerMenu = false })
-                    }
-                }
                 ClusterButton(
                     onClick = { lyricsOpen = !lyricsOpen },
                     icon = Icons.Rounded.Lyrics,
@@ -453,26 +410,15 @@ fun NowPlayingScreen(
                     shape = PlayerChipShape,
                     active = lyricsOpen,
                 )
-                ClusterButton(onClick = { connection.toggleShuffle() }, icon = Icons.Rounded.Shuffle, contentDescription = "Shuffle", shape = PlayerChipShape, active = shuffle)
-                ClusterButton(
-                    onClick = { connection.toggleRepeatMode() },
-                    icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                    contentDescription = when (repeatMode) {
-                        Player.REPEAT_MODE_ONE -> "Repeat one"
-                        Player.REPEAT_MODE_ALL -> "Repeat all"
-                        else -> "Repeat"
-                    },
-                    shape = PlayerChipShape,
-                    active = repeatMode != Player.REPEAT_MODE_OFF,
-                )
-                Spacer(Modifier.weight(1f))
                 ClusterButton(onClick = { trayOpen = true }, icon = Icons.Rounded.MoreVert, contentDescription = "More", shape = PlayerChipShape)
             }
         }
     }
 
     if (trayOpen) {
-        PlayerTray(connection, onQueue = { trayOpen = false; onQueue() }, onDismiss = { trayOpen = false })
+        PlayerTray(connection, stopAfterSongActive = stopAfterSongId != null,
+            onStopAfterSong = { SleepTimer.cancel(); stopAfterSongId = mediaId },
+            onCancelStopAfterSong = { stopAfterSongId = null }, onQueue = { trayOpen = false; onQueue() }, onDismiss = { trayOpen = false })
     }
     if (offsetDialog) {
         androidx.compose.material3.AlertDialog(

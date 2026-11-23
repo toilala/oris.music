@@ -17,6 +17,9 @@ object AppIcons {
         Variant("ink", "Ink (hand drawn)", "Ink", R.drawable.ic_v_ink_fg),
         Variant("chalk", "Chalk (hand drawn)", "Chalk", R.drawable.ic_v_chalk_fg),
         Variant("dusk", "Dusk", "Dusk", R.drawable.ic_v_dusk_fg),
+        Variant("wobble", "Wobble", "Wobble", R.drawable.ic_v_wobble_fg),
+        Variant("sprout", "Sprout", "Sprout", R.drawable.ic_v_sprout_fg),
+        Variant("ribbon", "Ribbon", "Ribbon", R.drawable.ic_v_ribbon_fg),
         Variant("sage", "Sage", "Sage", R.drawable.ic_v_sage_fg),
     )
 
