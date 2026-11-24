@@ -7,9 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -21,8 +20,9 @@ import com.orismusic.client.ui.theme.OrisTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-/** The player's own embedded lyrics pane: metadata only, same real providers, dark backdrop.
- * This is the exact composable the player screen renders, edge-fade layer included. */
+/** The player's own embedded lyrics pane: metadata only, same real providers.
+ * This is the exact composable the player screen renders, edge-fade layer included.
+ * The backdrop follows the active theme so light and dark captures judge real contrast. */
 @AndroidEntryPoint
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class EmbeddedLyricsCheckActivity : ComponentActivity() {
@@ -41,11 +41,7 @@ class EmbeddedLyricsCheckActivity : ComponentActivity() {
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF2A2430), Color(0xFF121016))
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.background)
                     ) {
                         LyricsPane(connection, onClose = { finishAndRemoveTask() }, embedded = true)
                     }
