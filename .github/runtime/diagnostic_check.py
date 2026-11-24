@@ -30,7 +30,10 @@ adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
 import glob
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
-adb('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS')
+try:
+    adb('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS')
+except Exception:
+    pass  # POST_NOTIFICATIONS only exists on API 33+
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Quick picks', seconds=120)
 time.sleep(5)
