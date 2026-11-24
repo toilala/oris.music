@@ -27,6 +27,20 @@ def tap_node(n):
 
 
 
+import atexit
+
+
+@atexit.register
+def _atexit_logcat():
+    # Evidence on failure too: whatever happens later, the device log lands in the artifact.
+    try:
+        import os
+        os.makedirs('runtime-evidence', exist_ok=True)
+        open('runtime-evidence/diag-logcat.txt', 'wb').write(adb('shell', 'logcat', '-d'))
+    except Exception:
+        pass
+
+
 def mark(name):
     # Marker written into logcat itself: later analysis can split events by phase
     # even though the in-app diagnostic history carries no timestamps.
@@ -35,6 +49,39 @@ def mark(name):
     except Exception:
         pass
     print('phase', name, flush=True)
+
+
+EXPECTED_MARKERS = ('phase=after-cut', 'phase=cut-verified', 'OrisDiag', 'resolve r')
+
+
+def logcat_capture():
+    # Dump the device log now and record what evidence it actually contains.
+    # Returns (raw bytes, missing expected markers); an empty dump or missing
+    # markers means the capture is incomplete and no product verdict is safe.
+    try:
+        log = adb('shell', 'logcat', '-d') or b''
+    except Exception:
+        log = b''
+    try:
+        import os
+        os.makedirs('runtime-evidence', exist_ok=True)
+        open('runtime-evidence/diag-logcat.txt', 'wb').write(log)
+        missing = [m for m in EXPECTED_MARKERS if m.encode() not in log]
+        open('runtime-evidence/logcat-capture.txt', 'w').write(
+            'bytes=%d missing=%s' % (len(log), ','.join(missing) if missing else 'none'))
+    except Exception:
+        pass
+    missing = [m for m in EXPECTED_MARKERS if m.encode() not in log]
+    return log, missing
+
+
+def net_connected():
+    # OS-level active-network state. Evidence of radio state only, never of
+    # endpoint reachability or of the app process's resolver.
+    try:
+        return b'state: CONNECTED' in adb('shell', 'dumpsys', 'connectivity')
+    except Exception:
+        return True  # unreadable state must not look like a successful cut
 
 
 def net(mode):
@@ -140,7 +187,16 @@ def wait_failure(seconds=150):
                 return n
         time.sleep(2)
     screen('diag_no_failure')
-    raise AssertionError('failure banner never appeared')
+    # No product verdict until capture completeness and resolve initiation are
+    # established; the 150s window is a test ceiling, not accepted silence.
+    log, missing = logcat_capture()
+    if not log or missing:
+        raise AssertionError(
+            'INCONCLUSIVE: no failure banner within %ss; capture incomplete (%s) - suspected silent stall'
+            % (seconds, ('missing markers: ' + ', '.join(missing)) if missing else 'empty logcat'))
+    raise AssertionError(
+        'SILENT STALL: resolve initiated but the player gave no failure feedback within %ss of a verified cut'
+        % seconds)
 
 
 adb('wait-for-device')
@@ -165,6 +221,15 @@ except Exception:
 mark('before-cut')
 net('disable')
 mark('after-cut')
+# The cut is only real once the OS reports no connected network; svc can return 0
+# while the radio state lags. This is OS-state evidence, not endpoint proof:
+# reachability is only ever judged by the app's own resolve behaviour.
+end = time.monotonic() + 45
+while net_connected():
+    if time.monotonic() > end:
+        raise AssertionError('network cut ineffective: OS still reports a connected network')
+    time.sleep(3)
+mark('cut-verified')
 time.sleep(3)
 
 # Tap the first quick-pick cell (structural pick, title recorded for verification).
@@ -217,14 +282,10 @@ screen('diag_dialog')
 net('enable')
 mark('after-enable')
 end = time.monotonic() + 90
-while True:
-    try:
-        adb('shell', 'ping', '-c', '1', '-W', '2', 'www.youtube.com')
-        break
-    except Exception:
-        if time.monotonic() > end:
-            raise AssertionError('connectivity never returned after net enable')
-        time.sleep(3)
+while not net_connected():
+    if time.monotonic() > end:
+        raise AssertionError('OS never reported a connected network after net enable')
+    time.sleep(3)
 mark('connectivity-verified')
 from playback_check import tap
 tap('Close')
@@ -284,8 +345,10 @@ for _ in range(8):
 time.sleep(2)
 screen('diag_home_end_tray')
 
-logcat = adb('shell', 'logcat', '-d')
-open('runtime-evidence/diag-logcat.txt', 'wb').write(logcat)
+logcat, missing = logcat_capture()
+if not logcat or missing:
+    print('capture-warning: evidence incomplete -',
+          ('missing markers: ' + ', '.join(missing)) if missing else 'empty logcat', flush=True)
 assert b'FATAL EXCEPTION' not in logcat, 'app crashed during diagnostic check'
 still_open()
 print('VISUAL: PASS - banner, dialog, compact layout and home end rendered and captured', flush=True)

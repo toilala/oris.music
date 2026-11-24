@@ -3,10 +3,14 @@ package com.orismusic.client.utils
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
 
 /** A small on-device diagnostic, never cookies, tokens, stream URLs or account data. */
 object PlaybackDiagnostic {
     private const val HISTORY = 20
+    private val resolveSeq = java.util.concurrent.atomic.AtomicInteger(0)
+    private val latestAttempt = HashMap<String, Int>()
+    private const val LOG_TAG = "OrisDiag"
 
     private val current = MutableStateFlow("Tap a song to test anonymous playback.")
     val message = current.asStateFlow()
@@ -20,6 +24,9 @@ object PlaybackDiagnostic {
 
     fun report(text: String) {
         val clean = sanitize(text)
+        // Mirror into logcat so CI evidence carries the same timeline as the dialog.
+        // Only the sanitized text is ever logged: no URLs, cookies or account data.
+        Timber.tag(LOG_TAG).i(clean)
         current.value = clean
         synchronized(ring) {
             ring.addLast(clean)
@@ -30,12 +37,32 @@ object PlaybackDiagnostic {
 
     fun reportFailure(text: String) {
         report(text)
+        Timber.tag(LOG_TAG).w("failure active: %s", sanitize(text))
         _activeFailure.value = sanitize(text)
     }
 
     /** Cleared only when the player itself reports real playback, never on a tap or prepare. */
-    fun reportStarted() {
+    fun reportStarted(mediaId: String? = null) {
+        val attempt = mediaId?.let { synchronized(latestAttempt) { latestAttempt[it] } }
+        Timber.tag(LOG_TAG).i(
+            "playback started: %s%s",
+            mediaId ?: "unknown",
+            attempt?.let { " (resolve r$it)" } ?: "",
+        )
         _activeFailure.value = null
+    }
+
+    /** Start of one resolve attempt. The sequence tags its result and any playback it yields,
+     *  so retries of the same song stay distinguishable. */
+    fun beginResolveAttempt(videoId: String): Int {
+        val n = resolveSeq.incrementAndGet()
+        synchronized(latestAttempt) { latestAttempt[videoId] = n }
+        Timber.tag(LOG_TAG).i("resolve r%d start: %s", n, videoId)
+        return n
+    }
+
+    fun endResolveAttempt(videoId: String, attempt: Int, outcome: String) {
+        Timber.tag(LOG_TAG).i("resolve r%d %s: %s", attempt, sanitize(outcome), videoId)
     }
 
     private fun sanitize(text: String): String = sanitizeDiagnostic(text)

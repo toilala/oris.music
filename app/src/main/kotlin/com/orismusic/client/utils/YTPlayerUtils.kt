@@ -149,22 +149,30 @@ object YTPlayerUtils {
         quiet: Boolean,
     ): PlaybackData = withContext(IO) {
         if (!quiet) PlaybackDiagnostic.report("Resolving selected song anonymously...")
-        Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps)")
+        val attempt = PlaybackDiagnostic.beginResolveAttempt(videoId)
+        Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps, attempt=r$attempt)")
         try {
             directAnonymous(videoId, maxKbps)?.let {
+                PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok VISIONOS-direct")
                 if (!quiet) PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
                 return@withContext it
             }
         } catch (refused: GuestAccessRefused) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "refused")
             if (!quiet) PlaybackDiagnostic.reportFailure(refused.message.orEmpty())
             throw refused
         }
         val extracted = try {
             InnerTubeXResolver.extract(videoId = videoId, maxKbps = maxKbps)
-                ?: throw IOException("No playable stream found for $videoId")
+                ?: run {
+                    PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no playable stream")
+                    throw IOException("No playable stream found for $videoId")
+                }
         } catch (cancelled: CancellationException) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "cancelled")
             throw cancelled
         } catch (failure: StreamResolveException) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: ${failure.reason}")
             if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. ${failure.reason}")
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
@@ -176,6 +184,7 @@ object YTPlayerUtils {
             // network/extraction failure, not an unexpected runtime exception.
             throw IOException("Cannot resolve $videoId: ${failure.reason}", failure)
         }
+        PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok ${extracted.clientName}")
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")
         if (!quiet) PlaybackDiagnostic.report("Stream resolved through ${extracted.clientName}. Listen and check that playback time advances.")
         PlaybackData(

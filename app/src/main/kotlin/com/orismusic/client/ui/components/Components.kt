@@ -13,6 +13,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import android.provider.Settings
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
@@ -61,13 +63,24 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import kotlinx.coroutines.delay
 
+/** True when the user asked the OS for no animations (animator duration scale 0). */
+@Composable
+fun rememberReducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        Settings.System.getFloat(
+            context.contentResolver, Settings.System.ANIMATOR_DURATION_SCALE, 1f,
+        ) == 0f
+    }
+}
+
 /** Springy press feedback: the element shrinks slightly while a finger is down. */
 fun Modifier.pressClickable(onClick: () -> Unit, pressedScale: Float = 0.96f): Modifier = composed {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (rememberReducedMotion()) snap() else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
         label = "press",
     )
     this
@@ -86,7 +99,7 @@ fun Modifier.pressCombinedClickable(
     val pressed by source.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (rememberReducedMotion()) snap() else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
         label = "press",
     )
     this

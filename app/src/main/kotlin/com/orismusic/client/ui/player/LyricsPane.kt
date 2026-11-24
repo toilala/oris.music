@@ -118,7 +118,19 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
                 .statusBarsPadding().navigationBarsPadding())) {
             if (embedded) {
-                // Player's lyrics view: only the words. The player screen draws the header.
+                // Player's lyrics view: reading first, with a compact song header in the
+                // player's own type voice so the words never float without context.
+                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
+                        color = PlayerTextButtonColor,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    if (artist.isNotBlank()) {
+                        Text(artist, style = MaterialTheme.typography.bodyMedium,
+                            color = PlayerTextButtonColor.copy(alpha = 0.7f), maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
             } else Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onClose) { Text("Back to player") }
                 sourceMenu(sourceName)

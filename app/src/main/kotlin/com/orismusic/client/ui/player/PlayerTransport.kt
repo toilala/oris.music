@@ -6,6 +6,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -104,8 +105,9 @@ internal fun NowPlayingTransport(
 private fun SkipKey(icon: ImageVector, label: String, enabled: Boolean, direction: Int, box: Int, onClick: () -> Unit) {
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.84f else 1f, spring(0.5f, 500f), label = "skip scale")
-    val lean by animateFloatAsState(if (pressed) 7f * direction else 0f, spring(0.45f, 450f), label = "skip lean")
+    val reduced = com.orismusic.client.ui.components.rememberReducedMotion()
+    val scale by animateFloatAsState(if (pressed) 0.84f else 1f, if (reduced) snap() else spring(0.5f, 500f), label = "skip scale")
+    val lean by animateFloatAsState(if (pressed) 7f * direction else 0f, if (reduced) snap() else spring(0.45f, 450f), label = "skip lean")
     Box(
         Modifier.size(box.dp).graphicsLayer { scaleX = scale; scaleY = scale; translationX = lean.dp.toPx() }
             .clickable(interactionSource = press, indication = null, enabled = enabled, onClick = onClick),
@@ -120,10 +122,11 @@ private fun SkipKey(icon: ImageVector, label: String, enabled: Boolean, directio
 private fun PlayKeyButton(isPlaying: Boolean, accent: Color, box: Int, onClick: () -> Unit) {
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(0.5f, 500f), label = "play scale")
+    val reduced = com.orismusic.client.ui.components.rememberReducedMotion()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, if (reduced) snap() else spring(0.5f, 500f), label = "play scale")
     val corner by animateDpAsState(
         if (isPlaying) (box * 0.3f).dp else (box / 2f).dp,
-        spring(Spring.DampingRatioLowBouncy, 260f), label = "play corner",
+        if (reduced) snap() else spring(Spring.DampingRatioLowBouncy, 260f), label = "play corner",
     )
     val shape = RoundedCornerShape(corner)
     val container = Modifier.background(accent, shape)
@@ -133,7 +136,7 @@ private fun PlayKeyButton(isPlaying: Boolean, accent: Color, box: Int, onClick: 
             .clickable(interactionSource = press, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Crossfade(isPlaying, animationSpec = tween(180), label = "play icon") { playing ->
+        Crossfade(isPlaying, animationSpec = if (reduced) snap() else tween(180), label = "play icon") { playing ->
             Icon(
                 if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (playing) "Pause" else "Play", tint = tint,
