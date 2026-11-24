@@ -26,6 +26,20 @@ def tap_node(n):
     tap_bounds(bounds(n))
 
 
+
+def net(mode):
+    # adb root restarts adbd and the device can briefly read as offline; retry.
+    for _ in range(5):
+        try:
+            adb('wait-for-device')
+            adb('shell', 'svc', 'wifi', mode)
+            adb('shell', 'svc', 'data', mode)
+            return
+        except Exception:
+            time.sleep(3)
+    raise AssertionError('network ' + mode + ' failed')
+
+
 def nav_top(root):
     # Bottom nav buttons sit in the lowest clickable band of the screen.
     tops = [bounds(n)[1] for n in root.iter('node')
@@ -138,8 +152,7 @@ try:
     time.sleep(2)
 except Exception:
     pass
-adb('shell', 'svc', 'wifi', 'disable')
-adb('shell', 'svc', 'data', 'disable')
+net('disable')
 time.sleep(3)
 
 # Tap the first quick-pick cell (structural pick, title recorded for verification).
@@ -188,8 +201,7 @@ time.sleep(1)
 screen('diag_dialog')
 
 # Back online and healthy.
-adb('shell', 'svc', 'wifi', 'enable')
-adb('shell', 'svc', 'data', 'enable')
+net('enable')
 from playback_check import tap
 tap('Close')
 
