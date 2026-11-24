@@ -155,10 +155,31 @@ tap_node(cells[0][2])
 tray = wait_tray(titles)
 screen('diag_tray')
 if tray != 'OPEN':
-    # Tap the tray's title area (left of the transport buttons) to open NowPlaying.
-    tap_bounds(bounds(tray), fx=0.3, fy=0.5)
+    # Expand per the pill's own gesture: vertical drag up ends in onExpand
+    # (MiniPlayer detectDragGestures, y < -90). Drags are not consumed by the
+    # nested artist/button clickables, so this cannot navigate away.
+    b = bounds(tray)
+    x = int(b[0] + (b[2] - b[0]) * 0.35)
+    y1 = int(b[1] + (b[3] - b[1]) * 0.6)
+    adb('shell', 'input', 'swipe', str(x), str(y1), str(x), str(y1 - 350), '150')
+    time.sleep(2)
+    if not any((n.get('content-desc') or '') == 'Lyrics' for n in tree().iter('node')):
+        # Fallback: tap the artwork (content-desc == song title, not clickable);
+        # the tap bubbles up to the pill's pressClickable(onExpand).
+        root = tree()
+        tray2 = tray_node(root)
+        if tray2 is not None:
+            texts = subtree_texts(tray2)
+            art = next((n for n in tray2.iter('node')
+                        if texts and (n.get('content-desc') or '') == texts[0]
+                        and n.get('clickable') != 'true'), None)
+            if art is not None:
+                tap_node(art)
 
-wait_label('Lyrics', seconds=60)   # full player opened
+wait_label('Lyrics', seconds=60)   # full player opened (content-desc on the lyrics button)
+# Capture the expanded player's UI tree for structural verification.
+adb('shell', 'uiautomator', 'dump', '/sdcard/oris-player.xml')
+open('runtime-evidence/diag_player_tree.xml', 'wb').write(adb('shell', 'cat', '/sdcard/oris-player.xml'))
 banner = wait_failure()
 screen('diag_banner')
 tap_node(banner)                    # banner tap opens the history dialog
