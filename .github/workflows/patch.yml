@@ -43,8 +43,16 @@ jobs:
               p.write_bytes(base64.b64decode(f['b64']))
               print('wrote', p, p.stat().st_size, 'bytes')
           PY
-      - name: Build FOSS debug APK (verification gate)
-        run: ./gradlew :app:assembleFossDebug --console=plain --warning-mode summary
+      - name: Build FOSS debug APK and run unit tests (verification gate)
+        run: ./gradlew :app:assembleFossDebug :app:testFossDebugUnitTest --console=plain --warning-mode summary
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/testFossDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Commit and push the verified patch
         run: |
           git config user.name toilala
