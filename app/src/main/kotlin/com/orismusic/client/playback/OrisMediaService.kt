@@ -962,6 +962,18 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
      *  quietly play something the user did not tap. */
     private var pinnedMediaId: String? = null
 
+    private fun describeCauses(error: PlaybackException): String {
+        val parts = mutableListOf<String>()
+        var cause: Throwable? = error.cause
+        var depth = 0
+        while (cause != null && depth < 6) {
+            parts += "${cause::class.simpleName}: ${cause.message.orEmpty().take(120)}"
+            cause = cause.cause
+            depth++
+        }
+        return if (parts.isEmpty()) error.message.orEmpty().take(160) else parts.joinToString(" <- ")
+    }
+
     /** A stream that fails to load used to leave the player idle, so the user had to tap play again. Retry, then skip. */
     private fun handlePlaybackError(error: PlaybackException) {
         val id = player.currentMediaItem?.mediaId
@@ -971,7 +983,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         val pinned = id != null && id == pinnedMediaId
         val maxRetries = if (pinned) 6 else 3
         if (errorRetries == 1) {
-            com.orismusic.client.utils.PlaybackDiagnostic.report("Stream error on ${id ?: "unknown"}; retrying.")
+            com.orismusic.client.utils.PlaybackDiagnostic.reportFailure(
+                "Stream error (${error.errorCodeName}) on ${id ?: "unknown"}: ${describeCauses(error)} Retrying.",
+            )
             // Drop the cached stream so the retry resolves a fresh one.
             if (id != null) YTPlayerUtils.evict(id)
         }
@@ -1013,6 +1027,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         refreshMediaNotification()
+        if (isPlaying) com.orismusic.client.utils.PlaybackDiagnostic.reportStarted()
         if (!isPlaying) {
             positionPersistJob?.cancel()
             positionPersistJob = null

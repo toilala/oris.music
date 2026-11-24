@@ -47,7 +47,7 @@ object YTPlayerUtils {
             val status = response.playabilityStatus.status
             val reason = response.playabilityStatus.reason.orEmpty()
                 .replace(Regex("[\\r\\n]+"), " ").take(240)
-            PlaybackDiagnostic.report("VISIONOS: $status. $reason")
+            PlaybackDiagnostic.reportFailure("YouTube refused the guest request ($status). $reason")
             Timber.tag(TAG).w("Direct client refusal: status=$status reason=$reason")
             if (status == "LOGIN_REQUIRED" && reason.contains("bot", ignoreCase = true)) {
                 throw GuestAccessRefused("YouTube asked this connection to confirm it is not a bot. Automatic retries stopped. This does not mean all songs require sign-in.")
@@ -156,7 +156,7 @@ object YTPlayerUtils {
                 return@withContext it
             }
         } catch (refused: GuestAccessRefused) {
-            if (!quiet) PlaybackDiagnostic.report(refused.message.orEmpty())
+            if (!quiet) PlaybackDiagnostic.reportFailure(refused.message.orEmpty())
             throw refused
         }
         val extracted = try {
@@ -165,7 +165,7 @@ object YTPlayerUtils {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: StreamResolveException) {
-            if (!quiet) PlaybackDiagnostic.report(PlaybackDiagnostic.message.value + "\nFallback: ${failure.reason}. No playable stream was returned.")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. ${failure.reason}")
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
                 Timber.tag(TAG).w(
