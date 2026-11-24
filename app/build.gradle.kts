@@ -228,6 +228,10 @@ val prepareLocalAndroidRuntime by tasks.registering(Copy::class) {
     into(layout.buildDirectory.dir("robolectric"))
 }
 tasks.withType<Test>().configureEach {
+    // innertubex ships Java 21 (65.0) bytecode; unit tests must run on a 21 launcher.
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
     dependsOn(prepareLocalAndroidRuntime)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric").get().asFile.absolutePath)

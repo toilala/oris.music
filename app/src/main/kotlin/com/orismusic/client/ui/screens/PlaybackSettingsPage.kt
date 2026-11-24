@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -171,10 +172,66 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     }
                 }
             }
+            val eq by com.orismusic.client.playback.EqualizerController.state.collectAsState()
+            if (!eq.available) {
+                Column {
+                    Text("Equalizer", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Unavailable right now. It attaches to the player while music plays, when the device and current output support one.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                ToggleRow(
+                    "Equalizer",
+                    if (eq.enabled) "On: shaping the sound of the current output."
+                    else "Off: sound passes through unchanged.",
+                    eq.enabled,
+                ) { com.orismusic.client.playback.EqualizerController.setEnabled(it) }
+                if (eq.enabled) {
+                    Column {
+                        Text("Presets", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            com.orismusic.client.playback.EqualizerController.presets.forEach { (name, shape) ->
+                                FilterChip(
+                                    selected = false,
+                                    onClick = { com.orismusic.client.playback.EqualizerController.applyPreset(shape) },
+                                    label = { Text(name) },
+                                )
+                            }
+                        }
+                    }
+                    eq.levels.forEachIndexed { band, level ->
+                        Column {
+                            Text(
+                                eqBandLabel(eq.centerHz.getOrNull(band) ?: 0),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            androidx.compose.material3.Slider(
+                                value = level.toFloat(),
+                                onValueChange = { com.orismusic.client.playback.EqualizerController.setLevel(band, it.toInt()) },
+                                valueRange = eq.minLevel.toFloat()..eq.maxLevel.toFloat(),
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
 }
+
+private fun eqBandLabel(centerHz: Int): String =
+    if (centerHz < 1000) "$centerHz Hz"
+    else if (centerHz % 1000 == 0) "${centerHz / 1000} kHz"
+    else "${centerHz / 1000f} kHz"
 
 /** Best-effort path to the phone's battery allowlist: the standard battery-optimization
  *  exemption first, then the list page when a build refuses the direct request. */

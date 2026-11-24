@@ -101,12 +101,13 @@ object YTPlayerUtils {
     }
 
     /** Fresh resolutions, kept briefly so retries and the next song cost no network. */
-    private val resolved = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, PlaybackData>>()
+    internal val resolved = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, PlaybackData>>()
     private const val RESOLVED_TTL_MS = 10 * 60 * 1000L
 
     /** Hard bound on one resolve attempt, so failure feedback reaches the user in seconds
      *  even when the OS still shows a network but packets go nowhere. */
-    private const val RESOLVE_TIMEOUT_MS = 30_000L
+    // Var (not const) so unit tests can shrink it; production leaves the default.
+    internal var resolveTimeoutMs = 30_000L
 
     /** Forget a resolved stream, for example after it failed to play. */
     fun evict(videoId: String) {
@@ -148,6 +149,17 @@ object YTPlayerUtils {
         data
     }
 
+    // Test seams. Production never overrides these; unit tests use them to drive
+    // failure paths deterministically without a network.
+    internal var networkOnline: (android.content.Context) -> Boolean = { ctx ->
+        val cm = ctx.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val active = cm.activeNetwork
+        active != null &&
+            cm.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }
+    internal var resolveStage: suspend (String, Int, Boolean, Int) -> PlaybackData =
+        { v, k, q, a -> resolveInner(v, k, q, a) }
+
     private suspend fun resolveFresh(
         videoId: String,
         maxKbps: Int,
@@ -159,21 +171,17 @@ object YTPlayerUtils {
         Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps, attempt=r$attempt)")
         // Fail fast when the OS reports no network at all. OS state can only prove
         // absence, never reachability, so this only short-circuits doomed attempts.
-        val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        val active = cm.activeNetwork
-        val online = active != null &&
-            cm.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-        if (!online) {
+        if (!networkOnline(context)) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no network (OS)")
             if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. NETWORK")
             throw IOException("Cannot resolve $videoId: no network")
         }
         try {
-            return@withContext withTimeout(RESOLVE_TIMEOUT_MS) {
-                resolveInner(videoId, maxKbps, quiet, attempt)
+            return@withContext withTimeout(resolveTimeoutMs) {
+                resolveStage(videoId, maxKbps, quiet, attempt)
             }
         } catch (timeout: TimeoutCancellationException) {
-            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: timed out after ${RESOLVE_TIMEOUT_MS / 1000}s")
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: timed out after ${resolveTimeoutMs / 1000}s")
             if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. TIMED OUT")
             throw IOException("Cannot resolve $videoId: timed out", timeout)
         }
