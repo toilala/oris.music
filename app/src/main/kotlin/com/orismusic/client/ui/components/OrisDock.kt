@@ -97,7 +97,7 @@ fun OrisDock(
         modifier.fillMaxWidth(),
     ) {
         val tabW = maxWidth / count
-        val lensInset = (10 - NavSettings.width.extra / 4).dp
+        val lensInset = (16 - NavSettings.width.extra / 4).dp
         val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
         val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
     Box(
@@ -119,9 +119,9 @@ fun OrisDock(
             Box(
                 Modifier
                     .graphicsLayer { alpha = if (none) 0f else 1f }
-                    .offset(x = left + lensInset, y = 5.dp)
+                    .offset(x = left + lensInset, y = 7.dp)
                     .width((end - left - lensInset * 2).coerceAtLeast(20.dp))
-                    .height(tabH - 10.dp)
+                    .height(tabH - 14.dp)
                     .clip(lensShape)
                     .background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.78f)), Offset.Zero, Offset(300f, 100f)))
                     .border(1.dp, Color.White.copy(alpha = 0.14f), lensShape),
