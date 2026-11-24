@@ -51,6 +51,7 @@ import com.orismusic.client.playback.queues.MusicRadioQueue
 import com.orismusic.client.ui.components.Artwork
 import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.pressClickable
+import com.orismusic.client.ui.components.pressCombinedClickable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -58,6 +59,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 private const val ROWS_PER_PAGE = 4
+private const val PICKS_PER_PAGE = 8
 
 /** The home feed's own song shelf to show as the Quick picks list: the shelf the feed
  * labels for quick listening when it carries one, else its strongest song shelf.
@@ -88,7 +90,7 @@ suspend fun loadQuickPicks(page: HomePage): Pair<List<SongItem>, String>? {
 
 private fun mmss(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
-/** Quick picks: pages of song rows with a Play all pill, straight from the home feed. */
+/** Quick picks: pages of artwork chips with a Play all pill, straight from the home feed. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun QuickPicksSection(
@@ -124,29 +126,35 @@ fun QuickPicksSection(
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val pageCount = (songs.size + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE
+            val pageCount = (songs.size + PICKS_PER_PAGE - 1) / PICKS_PER_PAGE
             val pager = rememberPagerState(pageCount = { pageCount })
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(maxWidth - 40.dp),
                 contentPadding = PaddingValues(start = 20.dp),
-                pageSpacing = 8.dp,
-                modifier = Modifier.padding(top = 6.dp),
+                pageSpacing = 10.dp,
+                modifier = Modifier.padding(top = 8.dp),
             ) { page ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    songs.drop(page * ROWS_PER_PAGE).take(ROWS_PER_PAGE).forEachIndexed { row, song ->
-                        QuickPickRow(
-                            song = song,
-                            onClick = { playFrom(page * ROWS_PER_PAGE + row) },
-                            onPlayNext = connection?.let { c -> { c.playNext(song.toMediaItem()) } },
-                            onAddToQueue = connection?.let { c -> { c.addToQueue(song.toMediaItem()) } },
-                            onStartRadio = connection?.let { c ->
-                                {
-                                    scope.launch { c.playQueue(MusicRadioQueue("Quick picks", songs, song.id)) }
-                                    com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
-                                }
-                            },
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    songs.drop(page * PICKS_PER_PAGE).take(PICKS_PER_PAGE).chunked(2).forEachIndexed { row, pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pair.forEachIndexed { col, song ->
+                                QuickPickChip(
+                                    song = song,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { playFrom(page * PICKS_PER_PAGE + row * 2 + col) },
+                                    onPlayNext = connection?.let { c -> { c.playNext(song.toMediaItem()) } },
+                                    onAddToQueue = connection?.let { c -> { c.addToQueue(song.toMediaItem()) } },
+                                    onStartRadio = connection?.let { c ->
+                                        {
+                                            scope.launch { c.playQueue(MusicRadioQueue("Quick picks", songs, song.id)) }
+                                            com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
+                                        }
+                                    },
+                                )
+                            }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -154,45 +162,45 @@ fun QuickPicksSection(
     }
 }
 
-/** One quick pick: art, title, artist and length, and a real menu. */
+/** One quick pick: an artwork chip. Tap plays it; a long press opens its menu. */
 @Composable
-private fun QuickPickRow(
+private fun QuickPickChip(
     song: SongItem,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onPlayNext: (() -> Unit)?,
     onAddToQueue: (() -> Unit)?,
     onStartRadio: (() -> Unit)?,
 ) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .pressClickable(onClick, 0.98f)
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Artwork(song.thumbnail, Modifier.size(52.dp), RoundedCornerShape(10.dp), song.title, px = 160)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(song.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = buildString {
-                append(song.artists.joinToString { it.name })
-                song.duration?.let { append(" \u00b7 ").append(mmss(it)) }
+    Box(modifier) {
+        var menu by remember { mutableStateOf(false) }
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .pressCombinedClickable(
+                    onClick,
+                    onLongClick = { if (onPlayNext != null || onAddToQueue != null || onStartRadio != null) menu = true },
+                    pressedScale = 0.97f,
+                )
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Artwork(song.thumbnail, Modifier.size(48.dp), RoundedCornerShape(12.dp), song.title, px = 160)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(song.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val sub = buildString {
+                    append(song.artists.joinToString { it.name })
+                    song.duration?.let { append(" \u00b7 ").append(mmss(it)) }
+                }
+                Text(sub, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(sub, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (onPlayNext != null) {
-            Box {
-                var menu by remember { mutableStateOf(false) }
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Rounded.MoreVert, contentDescription = "More for ${song.title}",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                }
-                DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem(text = { Text("Play next") }, onClick = { onPlayNext(); menu = false })
-                    if (onAddToQueue != null) DropdownMenuItem(text = { Text("Add to queue") }, onClick = { onAddToQueue(); menu = false })
-                    if (onStartRadio != null) DropdownMenuItem(text = { Text("Start radio") }, onClick = { onStartRadio(); menu = false })
-                }
-            }
+        DropdownMenu(menu, { menu = false }) {
+            if (onPlayNext != null) DropdownMenuItem(text = { Text("Play next") }, onClick = { onPlayNext(); menu = false })
+            if (onAddToQueue != null) DropdownMenuItem(text = { Text("Add to queue") }, onClick = { onAddToQueue(); menu = false })
+            if (onStartRadio != null) DropdownMenuItem(text = { Text("Start radio") }, onClick = { onStartRadio(); menu = false })
         }
     }
 }

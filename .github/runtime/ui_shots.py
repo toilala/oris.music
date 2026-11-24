@@ -6,6 +6,12 @@ import time
 import subprocess
 
 # Capture the cold entrance, not only the settled UI. The video must be inspected.
+# Pin the dark theme for the main pass; a light pass follows at the end.
+dark_xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
+            '<string name="theme">Dark</string></map>')
+adb('shell', 'am', 'force-stop', PKG)
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/appearance.xml'"],
+               input=dark_xml.encode(), check=True)
 record = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '16', '/sdcard/home-entry.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
@@ -161,3 +167,38 @@ tap('Open player')
 wait_label('Lyrics', seconds=60)
 time.sleep(2)
 screen('player_artwork_offbeat')
+
+# Light theme pass: the same journey over the paper theme. The player stays the dark room.
+light_xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
+             '<string name="theme">Light</string></map>')
+adb('shell', 'am', 'force-stop', PKG)
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/appearance.xml'"],
+               input=light_xml.encode(), check=True)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_label('Oris', seconds=60)
+time.sleep(2)
+screen('light_home')
+tap('Library')
+wait_label('Liked (5)')
+screen('light_library')
+tap('Search')
+wait_label('Songs, albums, artists')
+screen('light_search')
+tap('Library')
+tap('Settings', bottom=False)
+wait_label('Appearance')
+screen('light_settings')
+tap('Appearance', bottom=False)
+wait_label('App theme')
+screen('light_appearance')
+adb('shell', 'am', 'force-stop', PKG)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_label('Library', seconds=60)
+tap('Library')
+tap('Queue')
+wait_label('Back from queue')
+tap('Open player')
+wait_label('Lyrics', seconds=60)
+time.sleep(1)
+screen('light_player')
+print('PASS: light theme', flush=True)

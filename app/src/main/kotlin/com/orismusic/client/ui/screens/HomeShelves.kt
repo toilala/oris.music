@@ -31,7 +31,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.innertube.YouTube
@@ -119,7 +118,7 @@ fun LazyListScope.listeningShelves(
     val lively = HomeSettings.motion == com.orismusic.client.settings.HomeMotion.Lively
     blocks[HomeSection.Jump] = {
     if (history.isNotEmpty()) item(key = "jump") {
-        Column {
+        Column(Modifier.entrance(1)) {
             SectionHeader(title = "Continue listening")
             val tiles = history.take(4)
             if (HomeSettings.jumpStyle == JumpStyle.Strip) LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -135,11 +134,11 @@ fun LazyListScope.listeningShelves(
                         pair.forEach { s ->
                             Row(
                                 Modifier.weight(1f).clip(RoundedCornerShape(18.dp))
-                                    .background(Color.White.copy(alpha = 0.045f))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
                                     .pressClickable({ playHistory(connection, "Jump back in", tiles, s) }, 0.97f),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Artwork(s.thumbnail, Modifier.padding(8.dp).size(44.dp), RoundedCornerShape(12.dp), s.title)
+                                Artwork(s.thumbnail, Modifier.padding(8.dp).size(52.dp), RoundedCornerShape(14.dp), s.title)
                                 Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 2,
                                     overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 10.dp))
                             }
@@ -191,7 +190,7 @@ fun LazyListScope.listeningShelves(
             SectionHeader(title = "Most played", subtitle = "Counted on this phone")
             Column(
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
                     .padding(vertical = 6.dp),
             ) {
                 top.forEachIndexed { i, (s, n) ->

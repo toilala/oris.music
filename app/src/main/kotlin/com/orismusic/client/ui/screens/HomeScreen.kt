@@ -175,7 +175,8 @@ fun HomeScreen(
     }
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
-            if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll)
+            val auroraTint = com.orismusic.client.ui.components.rememberArtworkColor(history.firstOrNull()?.thumbnail)
+            if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { refreshing = true; refreshTick++ },
@@ -236,7 +237,7 @@ fun HomeScreen(
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {
                             quickPicks?.let { (picks, _) ->
-                                item(key = "quick-picks") { QuickPicksSection(picks, playerConnection, scope) }
+                                item(key = "quick-picks") { Column(Modifier.entrance(2)) { QuickPicksSection(picks, playerConnection, scope) } }
                             }
                             if (community.isNotEmpty() && !HomeSettings.minimal) item(key = "community-playlists") { CommunityPlaylistsSection(community, onOpen) }
                             feedItems(state.page, newAlbums, playerConnection, onOpen, scope, quickPicks?.second)
@@ -251,7 +252,7 @@ fun HomeScreen(
 
 /** Slow drifting colour behind the header. It scrolls away at half speed. */
 @Composable
-private fun Aurora(modifier: Modifier, scroll: () -> Int) {
+private fun Aurora(modifier: Modifier, scroll: () -> Int, tint: androidx.compose.ui.graphics.Color? = null) {
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "aurora")
     val a by t.animateFloat(
         0f, 1f,
@@ -267,7 +268,12 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int) {
             androidx.compose.animation.core.RepeatMode.Reverse,
         ), label = "b",
     )
-    val warm = MaterialTheme.colorScheme.tertiary
+    val warmTarget = if (tint != null)
+        androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.tertiary, tint, 0.45f)
+    else MaterialTheme.colorScheme.tertiary
+    val warm by androidx.compose.animation.animateColorAsState(
+        warmTarget, androidx.compose.animation.core.tween(900), label = "aurora warm",
+    )
     val cool = MaterialTheme.colorScheme.primary
     androidx.compose.foundation.Canvas(
         modifier.fillMaxWidth().height(460.dp).graphicsLayer {
@@ -402,10 +408,13 @@ private fun HomeHeader(scroll: () -> Int) {
             OrisLogo(Modifier.size(46.dp), tint = MaterialTheme.colorScheme.primary)
         }
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("Oris", style = MaterialTheme.typography.headlineMedium,
+            Text(greeting, style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface)
-            Text(greeting, style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")) },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

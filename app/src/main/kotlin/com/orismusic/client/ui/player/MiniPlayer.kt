@@ -107,6 +107,22 @@ fun MiniPlayer(
     val onSurface = MaterialTheme.colorScheme.onSurface
     val outline = MaterialTheme.colorScheme.outline
 
+    // The pill wears the song: its body and progress ring lean into the artwork's colour,
+    // a little richer while the music is actually playing.
+    val artworkTint = com.orismusic.client.ui.components.rememberArtworkColor(artwork)
+    val pillColor by androidx.compose.animation.animateColorAsState(
+        targetValue = artworkTint?.let {
+            androidx.compose.ui.graphics.lerp(
+                MaterialTheme.colorScheme.surfaceContainerHigh, it, if (isPlaying) 0.40f else 0.26f,
+            )
+        } ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = tween(700), label = "mini pill colour",
+    )
+    val ringColor by androidx.compose.animation.animateColorAsState(
+        targetValue = artworkTint?.let { androidx.compose.ui.graphics.lerp(primary, it, 0.65f) } ?: primary,
+        animationSpec = tween(700), label = "mini ring colour",
+    )
+
     val pillShape = RoundedCornerShape(50)
     Box(
         modifier = modifier
@@ -142,7 +158,7 @@ fun MiniPlayer(
             }
             .height(64.dp)
             .clip(pillShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(pillColor)
             .border(1.dp, outline.copy(alpha = 0.3f), pillShape)
             .pressClickable(onExpand, 0.985f),
     ) {
@@ -164,7 +180,7 @@ fun MiniPlayer(
                     val diameter = size.minDimension
                     val topLeft = Offset((size.width - diameter) / 2, (size.height - diameter) / 2)
                     drawArc(outline.copy(alpha = 0.2f), 0f, 360f, false, topLeft, Size(diameter, diameter), style = stroke)
-                    drawArc(primary, -90f, 360f * progress, false, topLeft, Size(diameter, diameter), style = stroke)
+                    drawArc(ringColor, -90f, 360f * progress, false, topLeft, Size(diameter, diameter), style = stroke)
                 },
             ) {
                 Box(

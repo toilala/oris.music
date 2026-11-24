@@ -142,14 +142,14 @@ fun DetailScreen(
 
     val tint by androidx.compose.animation.animateColorAsState(
         targetValue = com.orismusic.client.ui.components.rememberArtworkColor(target.thumbnail)
-            ?: androidx.compose.ui.graphics.Color(0xFF202020),
+            ?: MaterialTheme.colorScheme.surfaceContainerHigh,
         animationSpec = androidx.compose.animation.core.tween(600),
         label = "detail tint",
     )
     Column(
         modifier = modifier
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                listOf(tint.copy(alpha = 0.65f), androidx.compose.ui.graphics.Color.Black), endY = 1400f))
+                listOf(tint.copy(alpha = 0.65f), MaterialTheme.colorScheme.background), endY = 1400f))
             ,
     ) {
         IconButton(onClick = onBack) {
