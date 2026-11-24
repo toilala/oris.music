@@ -54,10 +54,10 @@ class HomePicksCheckActivity : ComponentActivity() {
                     }
                     val scope = rememberCoroutineScope()
                     androidx.compose.material3.Surface(
-                        color = Color(0xFF0B0B0B),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.background,
                         contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                     ) {
-                    Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0B))
+                    Column(Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background)
                         .verticalScroll(rememberScrollState()).padding(top = 28.dp, bottom = 24.dp)) {
                         if (songs.isEmpty()) Text("Loading picks")
                         else QuickPicksSection(songs, connection, scope)

@@ -334,9 +334,22 @@ internal fun rememberPlayerGradientColors(url: String?): List<Color>? {
             hsv[2] = (hsv[2] * 0.9f).coerceIn(0.4f, 0.85f)
             val primary = Color(android.graphics.Color.HSVToColor(hsv))
             // Dark mode glows from the artwork down into the background; light mode washes
-            // the artwork colour through the paper so ink controls stay readable.
-            if (dark) listOf(primary, primary.copy(alpha = 0.6f), base)
-            else listOf(lerp(primary, base, 0.52f), lerp(primary, base, 0.74f).copy(alpha = 0.6f), base)
+            // the artwork colour through the paper. Both clamp the wash into the band where
+            // the player's controls stay readable: bright art dims in dark, dark art lifts
+            // in light, so ink never lands on a near-black wash or white on a pale one.
+            val lo = if (dark) 0f else 0.66f
+            val hi = if (dark) 0.40f else 1f
+            val baseL = base.luminance()
+            fun Color.contrastBand(): Color {
+                val l = luminance()
+                return when {
+                    l < lo -> lerp(this, base, ((lo - l) / (baseL - l)).coerceIn(0f, 1f))
+                    l > hi -> lerp(this, base, ((l - hi) / (l - baseL)).coerceIn(0f, 1f))
+                    else -> this
+                }
+            }
+            if (dark) listOf(primary.contrastBand(), primary.contrastBand().copy(alpha = 0.6f), base)
+            else listOf(lerp(primary, base, 0.45f).contrastBand(), lerp(primary, base, 0.7f).contrastBand().copy(alpha = 0.6f), base)
         }
     }
     return colors
