@@ -189,9 +189,19 @@ class MainActivity : ComponentActivity() {
                 }
                 val connection = connectionState.value
                 val hideBar = com.orismusic.client.settings.AppearanceSettings.hideStatusBar
+                // Clock and nav icons follow the app theme: dark glyphs on the paper theme.
+                val appDark = when (com.orismusic.client.settings.AppearanceSettings.themeMode) {
+                    com.orismusic.client.settings.ThemeMode.Light -> false
+                    com.orismusic.client.settings.ThemeMode.Dark -> true
+                    com.orismusic.client.settings.ThemeMode.System ->
+                        (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                            android.content.res.Configuration.UI_MODE_NIGHT_YES
+                }
                 androidx.compose.runtime.SideEffect {
                     val bars = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                     bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    bars.isAppearanceLightStatusBars = !appDark
+                    bars.isAppearanceLightNavigationBars = !appDark
                     if (hideBar) bars.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                     else bars.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 }

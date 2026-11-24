@@ -17,6 +17,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -70,6 +71,25 @@ fun Modifier.pressClickable(onClick: () -> Unit, pressedScale: Float = 0.96f): M
     this
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .clickable(interactionSource = source, indication = null, onClick = onClick)
+}
+
+/** Springy press feedback with a long-press action, for chips that hide their menu. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun Modifier.pressCombinedClickable(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    pressedScale: Float = 0.96f,
+): Modifier = composed {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        label = "press",
+    )
+    this
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .combinedClickable(interactionSource = source, indication = null, onClick = onClick, onLongClick = onLongClick)
 }
 
 /** Moving highlight for loading placeholders. */

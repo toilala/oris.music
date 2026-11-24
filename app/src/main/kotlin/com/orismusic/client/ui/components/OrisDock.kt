@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -71,13 +72,15 @@ fun OrisDock(
     val scheme = MaterialTheme.colorScheme
     val (accent, onAccent) = when (NavSettings.accent) {
         NavAccent.Warm -> scheme.tertiary to scheme.onTertiary
-        NavAccent.Light -> Color(0xFFEDE6E0) to Color(0xFF1B1816)
+        NavAccent.Light -> if (scheme.background.luminance() < 0.5f)
+            Color(0xFFEDE6E0) to Color(0xFF1B1816) else Color(0xFF2A2521) to Color(0xFFFAF6F0)
         NavAccent.Primary -> scheme.primary to scheme.onPrimary
     }
+    val dark = scheme.background.luminance() < 0.5f
     val body = when (NavSettings.style) {
-        NavStyle.Glass -> Color(0xFF1B1816).copy(alpha = 0.82f)
-        NavStyle.Solid -> Color(0xFF1B1816)
-        NavStyle.Clear -> Color(0xFF1B1816).copy(alpha = 0.45f)
+        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.82f else 0.92f)
+        NavStyle.Solid -> scheme.surfaceContainerHigh
+        NavStyle.Clear -> scheme.surfaceContainerHigh.copy(alpha = 0.45f)
     }
     val none = selected < 0
     val sel = selected.coerceAtLeast(0)
@@ -94,7 +97,11 @@ fun OrisDock(
             .clip(shape)
             .background(body)
             .border(
-                BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f)))),
+                BorderStroke(
+                    1.dp,
+                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f)))
+                    else Brush.verticalGradient(listOf(scheme.surfaceContainerLowest.copy(alpha = 0.9f), scheme.outlineVariant.copy(alpha = 0.5f))),
+                ),
                 shape,
             )
             .padding(5.dp),

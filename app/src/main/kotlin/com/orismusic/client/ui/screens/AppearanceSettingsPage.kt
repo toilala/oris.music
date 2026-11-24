@@ -62,6 +62,11 @@ fun AppearanceSettingsPage(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             SurfacePreview()
+            GroupLabel("Theme")
+            ChoiceRow("App theme", com.orismusic.client.settings.ThemeMode.entries.toList(), look.themeMode, { it.label }) {
+                look.themeMode = it; look.save()
+            }
+            Spacer(Modifier.height(6.dp))
             GroupLabel("Colours")
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 ToggleRow(
