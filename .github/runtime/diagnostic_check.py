@@ -1,11 +1,110 @@
 #!/usr/bin/env python3
-"""Real playback-failure UI check: cut networking, tap a quick pick, capture the
-failure banner and the diagnostic history dialog with real pixels."""
+"""Real playback-failure UI check: cut networking, tap a quick pick, expand the
+mini player, capture the failure banner and the diagnostic history dialog with
+real pixels."""
 import re
 import time
 from playback_check import adb, screen, tree, wait_label, still_open, PKG
 
 FAIL_FRAGMENTS = ['refused', 'stream error', 'playable stream', 'unable', 'resolve']
+
+
+def bounds(n):
+    return list(map(int, re.findall(r'\d+', n.get('bounds'))))
+
+
+def subtree_texts(n):
+    return [(d.get('text') or '') for d in n.iter('node') if (d.get('text') or '').strip()]
+
+
+def tap_bounds(b, fx=0.5, fy=0.5):
+    adb('shell', 'input', 'tap', str(int(b[0] + (b[2] - b[0]) * fx)), str(int(b[1] + (b[3] - b[1]) * fy)))
+    time.sleep(2)
+
+
+def tap_node(n):
+    tap_bounds(bounds(n))
+
+
+def nav_top(root):
+    # Bottom nav buttons sit in the lowest clickable band of the screen.
+    tops = [bounds(n)[1] for n in root.iter('node')
+            if n.get('clickable') == 'true' and bounds(n)[1] > 2000]
+    return min(tops) if tops else 2400
+
+
+def quick_pick_cells(root):
+    # Cells strictly between the 'Quick picks' header and the next section
+    # header, excluding the 'Play all' pill on the header row.
+    nodes = list(root.iter('node'))
+    header = next((n for n in nodes if (n.get('text') or '') == 'Quick picks'), None)
+    assert header is not None, 'Quick picks header missing'
+    hy = bounds(header)[1]
+    below = [n for n in nodes if n.get('clickable') == 'true' and bounds(n)[1] > hy + 100]
+    next_header_y = None
+    for n in nodes:
+        t = (n.get('text') or '')
+        if t and t != 'Quick picks' and 'playlists' in t.lower():
+            y = bounds(n)[1]
+            if y > hy:
+                next_header_y = y if next_header_y is None else min(next_header_y, y)
+    cells = []
+    for n in below:
+        b = bounds(n)
+        if next_header_y is not None and b[1] >= next_header_y:
+            continue
+        texts = subtree_texts(n)
+        if not texts:
+            continue  # 'Play all' pill and icon-only controls carry no cell title
+        cells.append((b[1], b[0], n, texts[0]))
+    cells.sort()
+    return cells
+
+
+def tray_node(root):
+    # Mini player: the wide clickable band directly above the bottom nav bar.
+    nt = nav_top(root)
+    cands = []
+    for n in root.iter('node'):
+        if n.get('clickable') != 'true':
+            continue
+        b = bounds(n)
+        if nt - 400 <= b[3] <= nt and (b[2] - b[0]) > 540 and subtree_texts(n):
+            cands.append((b[3], n))
+    cands.sort(reverse=True)
+    return cands[0][1] if cands else None
+
+
+def wait_tray(expected_titles, seconds=90):
+    end = time.monotonic() + seconds
+    last_title = None
+    stable = 0
+    while time.monotonic() < end:
+        root = tree()
+        if any((n.get('text') or '') == 'Lyrics' for n in root.iter('node')):
+            print('full player opened directly', flush=True)
+            return 'OPEN'
+        tray = tray_node(root)
+        if tray is not None:
+            texts = subtree_texts(tray)
+            title = texts[0] if texts else ''
+            if title == last_title:
+                stable += 1
+            else:
+                stable = 0
+                last_title = title
+            if stable >= 1:
+                norm = title.strip().lower()[:12]
+                if any(norm and (norm in t.strip().lower() or t.strip().lower()[:12] in norm)
+                       for t in expected_titles):
+                    print(f'tray engaged with quick-pick song: {title!r}', flush=True)
+                    return tray
+                screen('diag_tray_mismatch')
+                raise AssertionError(
+                    f'tray shows {title!r}, not one of the quick-pick titles {expected_titles!r}')
+        time.sleep(2)
+    screen('failure')
+    raise AssertionError('mini player tray never appeared')
 
 
 def wait_failure(seconds=150):
@@ -18,12 +117,6 @@ def wait_failure(seconds=150):
         time.sleep(2)
     screen('diag_no_failure')
     raise AssertionError('failure banner never appeared')
-
-
-def tap_node(n):
-    b = list(map(int, re.findall(r'\d+', n.get('bounds'))))
-    adb('shell', 'input', 'tap', str((b[0] + b[2]) // 2), str((b[1] + b[3]) // 2))
-    time.sleep(2)
 
 
 adb('wait-for-device')
@@ -49,23 +142,23 @@ adb('shell', 'svc', 'wifi', 'disable')
 adb('shell', 'svc', 'data', 'disable')
 time.sleep(3)
 
-# Tap the first quick-pick chip (same structural pick as home_picks_check).
+# Tap the first quick-pick cell (structural pick, title recorded for verification).
 root = tree()
-header = next((n for n in root.iter('node') if (n.get('text') or '') == 'Quick picks'), None)
-assert header is not None, 'Quick picks header missing'
-hy = int(re.findall(r'\d+', header.get('bounds'))[1])
-cands = []
-for n in root.iter('node'):
-    if n.get('clickable') != 'true':
-        continue
-    b = list(map(int, re.findall(r'\d+', n.get('bounds'))))
-    if b[1] > hy + 100:
-        cands.append((b[1], b[0], n))
-cands.sort()
-assert cands, 'no quick pick chip found'
-tap_node(cands[0][2])
+cells = quick_pick_cells(root)
+assert cells, 'no quick pick cell found'
+tapped_title = cells[0][3]
+titles = [c[3] for c in cells]
+print(f'tapping quick pick: {tapped_title!r}', flush=True)
+tap_node(cells[0][2])
 
-wait_label('Lyrics', seconds=60)   # player opened
+# Wait for the mini player engaged with a quick-pick song, then expand it.
+tray = wait_tray(titles)
+screen('diag_tray')
+if tray != 'OPEN':
+    # Tap the tray's title area (left of the transport buttons) to open NowPlaying.
+    tap_bounds(bounds(tray), fx=0.3, fy=0.5)
+
+wait_label('Lyrics', seconds=60)   # full player opened
 banner = wait_failure()
 screen('diag_banner')
 tap_node(banner)                    # banner tap opens the history dialog
