@@ -199,13 +199,15 @@ private fun LyricRow(
     embedded: Boolean,
     onSeek: (Long) -> Unit,
 ) {
+    // Neighbouring lines fade back but stay readable: a lyric you cannot make out
+    // is worse than no fade at all, especially paused at the start.
     val targetAlpha = when {
         !timed -> 1f
         selected -> 1f
-        distance <= 2 -> 0.2f
-        distance == 3 -> 0.15f
-        distance == 4 -> 0.1f
-        else -> 0.08f
+        distance <= 2 -> 0.55f
+        distance == 3 -> 0.45f
+        distance == 4 -> 0.35f
+        else -> 0.28f
     }
     val alpha by animateFloatAsState(targetAlpha, tween(300), label = "line alpha")
     val scale by animateFloatAsState(if (selected) 1f else 0.85f, tween(400), label = "line scale")
@@ -236,7 +238,7 @@ private fun LyricRow(
         val karaoke = buildAnnotatedString {
             lineWords.forEachIndexed { wi, w ->
                 withStyle(SpanStyle(
-                    color = wordInk.copy(alpha = if (wi <= currentWord) 1f else 0.3f),
+                    color = wordInk.copy(alpha = if (wi <= currentWord) 1f else 0.55f),
                     fontWeight = if (wi == currentWord) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold,
                 )) { append(w.text) }
                 if (wi < lineWords.lastIndex) append(" ")
