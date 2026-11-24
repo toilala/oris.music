@@ -91,6 +91,8 @@ import com.orismusic.client.settings.PlayerSettings
 import com.orismusic.client.settings.SwipeSensitivity
 import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.DiagnosticFailureBanner
+import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 import com.orismusic.client.utils.formatTime
 import kotlin.math.abs
 import kotlin.math.min
@@ -221,6 +223,10 @@ fun NowPlayingScreen(
                 )
             }
             Spacer(Modifier.height(4.dp))
+
+            var failureDialog by remember { mutableStateOf(false) }
+            DiagnosticFailureBanner { failureDialog = true }
+            if (failureDialog) DiagnosticHistoryDialog { failureDialog = false }
 
             // Top area: artwork carousel, or the lyrics list in its place.
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +54,7 @@ import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 
 /**
  * Everything that is not play, skip or lyrics lives here, behind one swipe up.
@@ -150,6 +152,10 @@ internal fun PlayerTray(
                         context.startActivity(android.content.Intent.createChooser(send, "Share song").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
                 }
+                var diagnosticOpen by remember { mutableStateOf(false) }
+                val failureActive by com.orismusic.client.utils.PlaybackDiagnostic.activeFailure.collectAsState()
+                ActionTile(Icons.Rounded.Info, if (failureActive != null) "Issue found" else "Diagnostics", failureActive != null, 56.dp, Modifier.weight(1f)) { diagnosticOpen = true }
+                if (diagnosticOpen) DiagnosticHistoryDialog { diagnosticOpen = false }
             }
         }
     }

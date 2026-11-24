@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.SkeletonCard
 import com.orismusic.client.ui.components.entrance
@@ -59,9 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.collectAsState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import com.orismusic.client.utils.PlaybackDiagnostic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -127,13 +126,7 @@ fun HomeScreen(
     bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
-    val diagnostic = PlaybackDiagnostic.message.collectAsState().value
-    if (showDiagnostic) AlertDialog(
-        onDismissRequest = { showDiagnostic = false },
-        title = { Text("Playback diagnostic") },
-        text = { Text(diagnostic) },
-        confirmButton = { TextButton(onClick = { showDiagnostic = false }) { Text("Close") } },
-    )
+    if (showDiagnostic) DiagnosticHistoryDialog { showDiagnostic = false }
     var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var refreshing by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1400); refreshing = false } }
