@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Screenshots of the library, playlists and settings screens. Never plays audio."""
-from playback_check import adb, tap, wait_label, screen, PKG
+from playback_check import adb, tap, wait_label, screen, tree, PKG
+
+def wait_greeting(seconds=60):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        root = tree()
+        for node in root.iter('node'):
+            t = node.get('text') or ''
+            if t.startswith('Good ') or t.startswith('Your late-night'):
+                return node
+        time.sleep(1)
+    screen('failure')
+    raise AssertionError('UI never showed the home greeting')
+
 import re
 import time
 import subprocess
@@ -16,10 +29,10 @@ record = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '16',
 adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
-wait_label('Oris', seconds=60)
+wait_greeting()
 time.sleep(2)
 screen('shot_home')
-wait_label('Oris')
+wait_greeting()
 record.communicate(timeout=25)
 adb('pull', '/sdcard/home-entry.mp4', 'runtime-evidence/home-entry.mp4')
 tap('Library')
@@ -49,7 +62,7 @@ xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
 adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
-wait_label('Oris', seconds=60)
+wait_greeting()
 time.sleep(2)
 screen('shot_home')
 tap('Library')
@@ -76,7 +89,7 @@ subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && c
                input=xml.encode(), check=True)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
-wait_label('Oris', seconds=60)
+wait_greeting()
 time.sleep(2)
 screen('shot_home_jump')
 time.sleep(12)
@@ -175,7 +188,7 @@ adb('shell', 'am', 'force-stop', PKG)
 subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/appearance.xml'"],
                input=light_xml.encode(), check=True)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
-wait_label('Oris', seconds=60)
+wait_greeting()
 time.sleep(2)
 screen('light_home')
 tap('Library')
