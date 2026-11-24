@@ -1,6 +1,15 @@
 name: Emulator playback runtime check
 on:
   workflow_dispatch:
+    inputs:
+      check:
+        description: Runtime check to run
+        required: true
+        default: playback
+        type: choice
+        options:
+          - playback
+          - diagnostics
 permissions:
   contents: read
 jobs:
@@ -43,7 +52,11 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
-            python3 .github/runtime/playback_check.py
+            if [ "${{ inputs.check }}" = "diagnostics" ]; then
+              python3 .github/runtime/diagnostic_check.py
+            else
+              python3 .github/runtime/playback_check.py
+            fi
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
