@@ -98,6 +98,7 @@ fun MiniPlayer(
     val position by connection.currentPosition.collectAsState()
     val duration by connection.duration.collectAsState()
     val error by connection.error.collectAsState()
+    val diagFailure by com.orismusic.client.utils.PlaybackDiagnostic.activeFailure.collectAsState()
     val artwork = metadata.artworkUri?.toString()
 
     val primary = MaterialTheme.colorScheme.primary
@@ -210,7 +211,10 @@ fun MiniPlayer(
                 )
                 androidx.compose.animation.AnimatedVisibility(visible = error != null) {
                     Text(
-                        "Playback error - skipping may fix it",
+                        // Same human voice as the player banner, first sentence only:
+                        // the pill has room for the problem, the banner carries the advice.
+                        diagFailure?.let { com.orismusic.client.utils.diagnosticSummary(it).substringBefore('.') + '.' }
+                            ?: "Playback error - skipping may fix it",
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 10.sp,
                         maxLines = 1,

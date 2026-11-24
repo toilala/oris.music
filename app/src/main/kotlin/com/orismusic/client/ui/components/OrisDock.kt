@@ -80,7 +80,7 @@ fun OrisDock(
     }
     val dark = scheme.background.luminance() < 0.5f
     val body = when (NavSettings.style) {
-        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.9f else 0.96f)
+        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.82f else 0.94f)
         NavStyle.Solid -> scheme.surfaceContainerHigh
         NavStyle.Clear -> scheme.surfaceContainerHigh.copy(alpha = 0.45f)
     }
@@ -108,7 +108,7 @@ fun OrisDock(
             .border(
                 BorderStroke(
                     1.dp,
-                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f)))
+                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)))
                     else Brush.verticalGradient(listOf(scheme.surfaceContainerLowest.copy(alpha = 0.9f), scheme.outlineVariant.copy(alpha = 0.5f))),
                 ),
                 shape,
