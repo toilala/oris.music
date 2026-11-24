@@ -181,6 +181,32 @@ wait_label('Lyrics', seconds=60)
 time.sleep(2)
 screen('player_artwork_offbeat')
 
+# Motion pass: the player journey as one continuous take, so transition cohesion
+# (open, lyrics sheet, back to the mini player, reopen) is judged on frames, not stills.
+adb('shell', 'am', 'force-stop', PKG)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_label('Library', seconds=60)
+tap('Library')
+tap('Queue')
+wait_label('Back from queue')
+journey = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '32', '/sdcard/player-journey.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+tap('Open player')
+wait_label('Lyrics', seconds=60)
+time.sleep(1)
+tap('Lyrics')
+wait_label('Close lyrics', seconds=30)
+time.sleep(2)
+tap('Close lyrics')
+time.sleep(2)
+adb('shell', 'input', 'keyevent', '4')
+time.sleep(2)
+tap('Open player')
+wait_label('Lyrics', seconds=30)
+time.sleep(1)
+journey.communicate(timeout=45)
+adb('pull', '/sdcard/player-journey.mp4', 'runtime-evidence/player-journey.mp4')
+print('PASS: player journey motion', flush=True)
+
 # Light theme pass: the same journey over the paper theme, player and lyrics included.
 light_xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
              '<string name="theme">Light</string></map>')
