@@ -34,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -67,8 +66,11 @@ fun OrisDock(
 ) {
     val showLabels = NavSettings.labels
     val effect = NavSettings.effect
-    val tabH = (if (showLabels) 58 else 54).dp + NavSettings.size.extra.dp
-    val shape = RoundedCornerShape(28.dp)
+    val tabH = (if (showLabels) 54 else 50).dp + NavSettings.size.extra.dp
+    // Anchored bar: flush to the screen edges with only the top corners eased, so it
+    // reads as the floor of the page instead of a second floating pill.
+    val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+    val lensShape = RoundedCornerShape(14.dp)
     val scheme = MaterialTheme.colorScheme
     val (accent, onAccent) = when (NavSettings.accent) {
         NavAccent.Warm -> scheme.tertiary to scheme.onTertiary
@@ -78,7 +80,7 @@ fun OrisDock(
     }
     val dark = scheme.background.luminance() < 0.5f
     val body = when (NavSettings.style) {
-        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.82f else 0.92f)
+        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.9f else 0.96f)
         NavStyle.Solid -> scheme.surfaceContainerHigh
         NavStyle.Clear -> scheme.surfaceContainerHigh.copy(alpha = 0.45f)
     }
@@ -92,9 +94,9 @@ fun OrisDock(
     // A grounded slab, not a second floating pill: the mini player floats, the dock anchors.
     // Tabs share the full width; the width setting shapes how wide the lens sits in its tab.
     androidx.compose.foundation.layout.BoxWithConstraints(
-        modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        modifier.fillMaxWidth(),
     ) {
-        val tabW = (maxWidth - 10.dp) / count
+        val tabW = maxWidth / count
         val lensInset = (10 - NavSettings.width.extra / 4).dp
         val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
         val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
@@ -106,29 +108,23 @@ fun OrisDock(
             .border(
                 BorderStroke(
                     1.dp,
-                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f)))
+                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f)))
                     else Brush.verticalGradient(listOf(scheme.surfaceContainerLowest.copy(alpha = 0.9f), scheme.outlineVariant.copy(alpha = 0.5f))),
                 ),
                 shape,
             )
-            .padding(5.dp),
+            .padding(4.dp),
     ) {
         if (effect != NavEffect.Dot) {
             Box(
                 Modifier
                     .graphicsLayer { alpha = if (none) 0f else 1f }
-                    .offset(x = left + lensInset)
+                    .offset(x = left + lensInset, y = 5.dp)
                     .width((end - left - lensInset * 2).coerceAtLeast(20.dp))
-                    .height(tabH)
-                    .drawBehind {
-                        drawCircle(
-                            Brush.radialGradient(listOf(accent.copy(alpha = 0.40f), Color.Transparent), center = center, radius = size.width * 0.9f),
-                            radius = size.width * 0.9f, center = center,
-                        )
-                    }
-                    .clip(shape)
+                    .height(tabH - 10.dp)
+                    .clip(lensShape)
                     .background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.78f)), Offset.Zero, Offset(300f, 100f)))
-                    .border(1.dp, Color.White.copy(alpha = 0.28f), shape),
+                    .border(1.dp, Color.White.copy(alpha = 0.14f), lensShape),
             )
         } else if (!none) {
             Box(
@@ -138,7 +134,7 @@ fun OrisDock(
         Row {
             repeat(count) { i ->
                 val active = i == sel && !none
-                val pop by animateFloatAsState(if (active) 1.14f else 1f, spring(0.38f, 520f), label = "pop")
+                val pop by animateFloatAsState(if (active) 1.08f else 1f, spring(0.38f, 520f), label = "pop")
                 // A finger on a tab dips the icon, so taps answer before the lens arrives.
                 val pressSrc = remember { MutableInteractionSource() }
                 val pressed by pressSrc.collectIsPressedAsState()

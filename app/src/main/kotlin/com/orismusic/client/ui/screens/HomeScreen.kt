@@ -417,7 +417,8 @@ private fun HomeHeader(scroll: () -> Int) {
             Text(greeting, style = MaterialTheme.typography.headlineSmall,
                 fontFamily = com.orismusic.client.ui.theme.DisplaySerif,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurface)
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

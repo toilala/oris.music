@@ -26,7 +26,7 @@ object NavSettings {
     var accent by mutableStateOf(NavAccent.Warm)
     var size by mutableStateOf(NavSize.Medium)
     var width by mutableStateOf(NavWidth.Compact)
-    var lift by mutableStateOf(NavLift.Normal)
+    var lift by mutableStateOf(NavLift.Snug)
     var hideOnScroll by mutableStateOf(false)
     var haptics by mutableStateOf(false)
 
@@ -45,7 +45,7 @@ object NavSettings {
         accent = prefs.enum("accent", NavAccent.Warm)
         size = prefs.enum("size", NavSize.Medium)
         width = prefs.enum("width", NavWidth.Compact)
-        lift = prefs.enum("lift", NavLift.Normal)
+        lift = prefs.enum("lift", NavLift.Snug)
         hideOnScroll = prefs.getBoolean("hide_on_scroll", false)
         haptics = prefs.getBoolean("haptics", false)
     }
@@ -66,7 +66,7 @@ object NavSettings {
 
     fun reset() {
         labels = false; style = NavStyle.Glass; effect = NavEffect.Stretch; accent = NavAccent.Warm
-        size = NavSize.Medium; width = NavWidth.Compact; lift = NavLift.Normal
+        size = NavSize.Medium; width = NavWidth.Compact; lift = NavLift.Snug
         hideOnScroll = false; haptics = false
         save()
     }

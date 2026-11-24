@@ -212,7 +212,8 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, subtitle: String
                 .background(MaterialTheme.colorScheme.tertiary))
             Spacer(Modifier.width(9.dp))
             Text(title, style = MaterialTheme.typography.titleLarge,
-                fontFamily = com.orismusic.client.ui.theme.DisplaySerif)
+                fontFamily = com.orismusic.client.ui.theme.DisplaySerif,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (subtitle != null) {
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
