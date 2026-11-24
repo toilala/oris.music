@@ -128,19 +128,25 @@ fun LazyListScope.listeningShelves(
                         Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
-            } else Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            } else Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 tiles.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         pair.forEach { s ->
+                            // Artwork-led rows, no container: the covers carry this shelf.
                             Row(
                                 Modifier.weight(1f).clip(RoundedCornerShape(18.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                                    .pressClickable({ playHistory(connection, "Jump back in", tiles, s) }, 0.97f),
+                                    .pressClickable({ playHistory(connection, "Jump back in", tiles, s) }, 0.97f)
+                                    .padding(horizontal = 6.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Artwork(s.thumbnail, Modifier.padding(8.dp).size(52.dp), RoundedCornerShape(14.dp), s.title)
-                                Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 10.dp))
+                                Artwork(s.thumbnail, Modifier.size(56.dp), RoundedCornerShape(16.dp), s.title)
+                                Column(Modifier.padding(start = 12.dp, end = 6.dp)) {
+                                    Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis)
+                                    Text(s.artist, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))

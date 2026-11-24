@@ -110,7 +110,13 @@ fun QuickPicksSection(
             Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Quick picks", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary))
+                Spacer(Modifier.width(9.dp))
+                Text("Quick picks", style = MaterialTheme.typography.titleLarge,
+                    fontFamily = com.orismusic.client.ui.theme.DisplaySerif)
+            }
             Row(
                 Modifier.clip(RoundedCornerShape(50))
                     .background(MaterialTheme.colorScheme.tertiary)
@@ -176,13 +182,12 @@ private fun QuickPickChip(
         var menu by remember { mutableStateOf(false) }
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .pressCombinedClickable(
                     onClick,
                     onLongClick = { if (onPlayNext != null || onAddToQueue != null || onStartRadio != null) menu = true },
                     pressedScale = 0.97f,
                 )
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Artwork(song.thumbnail, Modifier.size(48.dp), RoundedCornerShape(12.dp), song.title, px = 160)

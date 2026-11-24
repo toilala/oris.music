@@ -21,6 +21,9 @@ object LookFont {
 // read through a state, so text set in it follows a look's font turning on or off
 val InterFontFamily: FontFamily get() = LookFont.family ?: Inter
 
+/** Oris's editorial voice: serif for moments that speak (greetings, section titles), Inter for reading. */
+val DisplaySerif: FontFamily = FontFamily.Serif
+
 private val GlobalFontWeight = FontWeight.SemiBold
 private val GlobalLetterSpacing = (-0.05).em
 

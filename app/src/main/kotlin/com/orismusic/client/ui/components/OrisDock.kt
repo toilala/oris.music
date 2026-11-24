@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -66,9 +67,8 @@ fun OrisDock(
 ) {
     val showLabels = NavSettings.labels
     val effect = NavSettings.effect
-    val tabW = (if (showLabels) 78 else 54).dp + NavSettings.width.extra.dp
     val tabH = (if (showLabels) 58 else 54).dp + NavSettings.size.extra.dp
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(28.dp)
     val scheme = MaterialTheme.colorScheme
     val (accent, onAccent) = when (NavSettings.accent) {
         NavAccent.Warm -> scheme.tertiary to scheme.onTertiary
@@ -88,12 +88,19 @@ fun OrisDock(
     val right = sel >= previous
     LaunchedEffect(sel) { previous = sel }
     val stretch = effect == NavEffect.Stretch
-    val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
-    val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
     val haptic = LocalHapticFeedback.current
+    // A grounded slab, not a second floating pill: the mini player floats, the dock anchors.
+    // Tabs share the full width; the width setting shapes how wide the lens sits in its tab.
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier.fillMaxWidth().padding(horizontal = 12.dp),
+    ) {
+        val tabW = (maxWidth - 10.dp) / count
+        val lensInset = (10 - NavSettings.width.extra / 4).dp
+        val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
+        val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
     Box(
-        modifier
-            .then(if (NavSettings.style == NavStyle.Clear) Modifier else Modifier.shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black))
+        Modifier
+            .fillMaxWidth()
             .clip(shape)
             .background(body)
             .border(
@@ -110,8 +117,8 @@ fun OrisDock(
             Box(
                 Modifier
                     .graphicsLayer { alpha = if (none) 0f else 1f }
-                    .offset(x = left)
-                    .width((end - left).coerceAtLeast(20.dp))
+                    .offset(x = left + lensInset)
+                    .width((end - left - lensInset * 2).coerceAtLeast(20.dp))
                     .height(tabH)
                     .drawBehind {
                         drawCircle(
@@ -156,4 +163,5 @@ fun OrisDock(
             }
         }
     }
+}
 }

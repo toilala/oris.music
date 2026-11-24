@@ -395,26 +395,29 @@ private fun HomeHeader(scroll: () -> Int) {
             easing = androidx.compose.animation.core.FastOutSlowInEasing))
     }
     Row(
-        Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 22.dp),
+        Modifier.fillMaxWidth().height(88.dp).padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(Modifier.size(52.dp).graphicsLayer {
+        Box(Modifier.size(44.dp).graphicsLayer {
             val progress = reveal.value
             scaleX = 0.92f + 0.08f * progress
             scaleY = scaleX
             rotationZ = -18f * (1f - progress)
         }, contentAlignment = Alignment.Center) {
-            OrisLogo(Modifier.size(46.dp), tint = MaterialTheme.colorScheme.primary)
+            OrisLogo(Modifier.size(38.dp), tint = MaterialTheme.colorScheme.primary)
         }
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(greeting, style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")) },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")).uppercase() },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                letterSpacing = androidx.compose.ui.unit.TextUnit(1.8f, androidx.compose.ui.unit.TextUnitType.Sp),
             )
+            Text(greeting, style = MaterialTheme.typography.headlineSmall,
+                fontFamily = com.orismusic.client.ui.theme.DisplaySerif,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

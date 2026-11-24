@@ -24,12 +24,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -164,6 +166,32 @@ fun Artwork(
             androidx.compose.animation.core.RepeatMode.Reverse), label = "cover pulse alpha")
         androidx.compose.ui.graphics.lerp(base, MaterialTheme.colorScheme.surfaceContainerHigh, a)
     }
+    // A cover that is missing or fails to load gets a considered stand-in, not a hole:
+    // a quiet two-tone wash seeded from the title, with a single note at its centre.
+    if (url.isNullOrBlank() || failed) {
+        val seed = kotlin.math.abs((contentDescription ?: url ?: "oris").hashCode())
+        val hues = listOf(
+            MaterialTheme.colorScheme.tertiary,
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.secondary,
+        )
+        val hue = hues[seed % hues.size]
+        val depth = 0.16f + (seed / 11 % 18) / 100f
+        val low = androidx.compose.ui.graphics.lerp(base, hue, depth)
+        val high = androidx.compose.ui.graphics.lerp(base, hue, depth + 0.2f)
+        Box(
+            modifier.clip(shape).background(Brush.linearGradient(listOf(low, high))),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(
+                androidx.compose.material.icons.Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.30f),
+                modifier = Modifier.fillMaxSize(0.42f),
+            )
+        }
+        return
+    }
     AsyncImage(
         model = request,
         contentDescription = contentDescription,
@@ -174,13 +202,22 @@ fun Artwork(
     )
 }
 
+
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier, subtitle: String? = null) {
-    Column(modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
+    Column(modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+        // The Oris signature: a small satellite dot ahead of a serif title.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .background(MaterialTheme.colorScheme.tertiary))
+            Spacer(Modifier.width(9.dp))
+            Text(title, style = MaterialTheme.typography.titleLarge,
+                fontFamily = com.orismusic.client.ui.theme.DisplaySerif)
+        }
         if (subtitle != null) {
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 15.dp))
         }
     }
 }
