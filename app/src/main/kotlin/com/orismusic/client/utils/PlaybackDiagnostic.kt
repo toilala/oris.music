@@ -74,10 +74,33 @@ fun diagnosticSummary(raw: String): String {
     return when {
         "network" in t || "unable to resolve host" in t || "eai_" in t || "cannot resolve" in t ->
             "No connection. Check your network and try again."
+        "timed out" in t -> "Taking too long. Check your connection and try again."
         "refused" in t -> "The music service refused this request. Try again shortly."
         "no playable stream" in t -> "This song can't play right now. Try another one."
         else -> "This song couldn't play. Try again."
     }
+}
+
+/** Very short failure label for the mini player pill, where even a first sentence clips. */
+fun diagnosticShort(raw: String): String {
+    val t = raw.lowercase()
+    return when {
+        "network" in t || "unable to resolve host" in t || "eai_" in t || "cannot resolve" in t -> "No connection"
+        "timed out" in t -> "Taking too long"
+        "refused" in t -> "Playback refused"
+        "no playable stream" in t -> "Can't play this song"
+        else -> "Couldn't play"
+    }
+}
+
+/** True when any cause in the chain is a known guest refusal (bot check). */
+fun hasGuestRefusal(error: Throwable?): Boolean {
+    var cause = error
+    repeat(12) {
+        if (cause is GuestAccessRefused) return true
+        cause = cause?.cause
+    }
+    return false
 }
 
 class GuestAccessRefused(message: String) : IOException(message)

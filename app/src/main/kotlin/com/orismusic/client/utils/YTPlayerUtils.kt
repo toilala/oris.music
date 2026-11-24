@@ -22,6 +22,8 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.CancellationException
 import com.metrolist.innertubex.extraction.StreamResolveException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import timber.log.Timber
 
 object YTPlayerUtils {
@@ -102,6 +104,10 @@ object YTPlayerUtils {
     private val resolved = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, PlaybackData>>()
     private const val RESOLVED_TTL_MS = 10 * 60 * 1000L
 
+    /** Hard bound on one resolve attempt, so failure feedback reaches the user in seconds
+     *  even when the OS still shows a network but packets go nowhere. */
+    private const val RESOLVE_TIMEOUT_MS = 30_000L
+
     /** Forget a resolved stream, for example after it failed to play. */
     fun evict(videoId: String) {
         resolved.keys.removeIf { it.startsWith("$videoId|") }
@@ -151,11 +157,39 @@ object YTPlayerUtils {
         if (!quiet) PlaybackDiagnostic.report("Resolving selected song anonymously...")
         val attempt = PlaybackDiagnostic.beginResolveAttempt(videoId)
         Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps, attempt=r$attempt)")
+        // Fail fast when the OS reports no network at all. OS state can only prove
+        // absence, never reachability, so this only short-circuits doomed attempts.
+        val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val active = cm.activeNetwork
+        val online = active != null &&
+            cm.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        if (!online) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no network (OS)")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. NETWORK")
+            throw IOException("Cannot resolve $videoId: no network")
+        }
+        try {
+            return@withContext withTimeout(RESOLVE_TIMEOUT_MS) {
+                resolveInner(videoId, maxKbps, quiet, attempt)
+            }
+        } catch (timeout: TimeoutCancellationException) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: timed out after ${RESOLVE_TIMEOUT_MS / 1000}s")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. TIMED OUT")
+            throw IOException("Cannot resolve $videoId: timed out", timeout)
+        }
+    }
+
+    private suspend fun resolveInner(
+        videoId: String,
+        maxKbps: Int,
+        quiet: Boolean,
+        attempt: Int,
+    ): PlaybackData {
         try {
             directAnonymous(videoId, maxKbps)?.let {
                 PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok VISIONOS-direct")
                 if (!quiet) PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
-                return@withContext it
+                return it
             }
         } catch (refused: GuestAccessRefused) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "refused")
@@ -169,7 +203,9 @@ object YTPlayerUtils {
                     throw IOException("No playable stream found for $videoId")
                 }
         } catch (cancelled: CancellationException) {
-            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "cancelled")
+            if (cancelled !is TimeoutCancellationException) {
+                PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "cancelled")
+            }
             throw cancelled
         } catch (failure: StreamResolveException) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: ${failure.reason}")
@@ -187,7 +223,7 @@ object YTPlayerUtils {
         PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok ${extracted.clientName}")
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")
         if (!quiet) PlaybackDiagnostic.report("Stream resolved through ${extracted.clientName}. Listen and check that playback time advances.")
-        PlaybackData(
+        return PlaybackData(
             streamUrl = extracted.url,
             cacheKey = videoId,
             mimeType = extracted.mimeType.substringBefore(';').ifBlank { "audio/mp4" },

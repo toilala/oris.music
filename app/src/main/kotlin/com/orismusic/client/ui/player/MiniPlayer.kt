@@ -211,10 +211,9 @@ fun MiniPlayer(
                 )
                 androidx.compose.animation.AnimatedVisibility(visible = error != null) {
                     Text(
-                        // Same human voice as the player banner, first sentence only:
-                        // the pill has room for the problem, the banner carries the advice.
-                        diagFailure?.let { com.orismusic.client.utils.diagnosticSummary(it).substringBefore('.') + '.' }
-                            ?: "Playback error - skipping may fix it",
+                        // A genuinely short label: the pill clips even a first sentence.
+                        diagFailure?.let { com.orismusic.client.utils.diagnosticShort(it) }
+                            ?: "Playback error",
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 10.sp,
                         maxLines = 1,

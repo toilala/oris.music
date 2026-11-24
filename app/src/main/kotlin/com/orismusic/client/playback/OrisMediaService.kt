@@ -718,11 +718,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory())
                 .setLoadErrorHandlingPolicy(object : DefaultLoadErrorHandlingPolicy() {
                     override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                        var cause: Throwable? = info.exception
-                        repeat(12) {
-                            if (cause is GuestAccessRefused) return C.TIME_UNSET
-                            cause = cause?.cause
-                        }
+                        if (com.orismusic.client.utils.hasGuestRefusal(info.exception)) return C.TIME_UNSET
                         return super.getRetryDelayMsFor(info)
                     }
                 }))
@@ -977,6 +973,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     /** A stream that fails to load used to leave the player idle, so the user had to tap play again. Retry, then skip. */
     private fun handlePlaybackError(error: PlaybackException) {
         val id = player.currentMediaItem?.mediaId
+        if (com.orismusic.client.utils.hasGuestRefusal(error)) {
+            // Known refusal (bot check): the loader already declines retries, and automatic
+            // re-prepares would storm the same refusal. resolveFresh has already surfaced
+            // the human message; only a user action starts a new attempt.
+            return
+        }
         if (id != errorMediaId) { errorMediaId = id; errorRetries = 0 }
         errorRetries++
         val keepPlaying = player.playWhenReady
