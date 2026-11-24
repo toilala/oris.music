@@ -51,12 +51,7 @@ jobs:
           ram-size: 3072M
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            if [ "${{ inputs.check }}" = "diagnostics" ]; then
-              python3 .github/runtime/diagnostic_check.py
-            else
-              python3 .github/runtime/playback_check.py
-            fi
+          script: python3 .github/runtime/${{ inputs.check == 'diagnostics' && 'diagnostic_check.py' || 'playback_check.py' }}
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
