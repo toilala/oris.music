@@ -1,6 +1,7 @@
 package com.orismusic.client.ui.components
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -18,25 +19,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.orismusic.client.utils.PlaybackDiagnostic
+import com.orismusic.client.utils.diagnosticSummary
 
 @Composable
-fun DiagnosticFailureBanner(onClick: () -> Unit) {
+fun DiagnosticFailureBanner(onClick: () -> Unit, onRetry: (() -> Unit)? = null) {
     val activeFailure by PlaybackDiagnostic.activeFailure.collectAsState()
-    if (activeFailure != null) {
-        Surface(
-            onClick = onClick,
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.errorContainer,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-        ) {
+    val failure = activeFailure ?: return
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+    ) {
+        // The surface stays human-readable; the raw exception chain lives in the diagnostic history.
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
             Text(
-                activeFailure.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
+                diagnosticSummary(failure),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                modifier = Modifier.padding(top = 6.dp),
             )
+            Row {
+                if (onRetry != null) {
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                }
+                TextButton(onClick = onClick) { Text("Details") }
+            }
         }
     }
 }
@@ -50,8 +60,21 @@ fun DiagnosticHistoryDialog(onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (history.isEmpty()) Text("Tap a song to test anonymous playback.")
-                history.forEach { entry ->
-                    Text(entry, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
+                // Retry loops flood the log with repeats; show each distinct event once,
+                // newest first, with its count so the evidence is preserved.
+                val order = mutableListOf<String>()
+                val counts = mutableMapOf<String, Int>()
+                for (entry in history.asReversed()) {
+                    if (entry !in counts) order += entry
+                    counts[entry] = (counts[entry] ?: 0) + 1
+                }
+                order.forEach { entry ->
+                    val count = counts.getValue(entry)
+                    Text(
+                        if (count > 1) "$entry (x$count)" else entry,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                 }
             }
         },

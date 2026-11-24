@@ -6,7 +6,7 @@ import re
 import time
 from playback_check import adb, screen, tree, wait_label, still_open, PKG
 
-FAIL_FRAGMENTS = ['refused', 'stream error', 'playable stream', 'unable', 'resolve']
+FAIL_FRAGMENTS = ['no connection', 'check your network', "can't play", "couldn't play", 'refused this request']
 
 
 def bounds(n):

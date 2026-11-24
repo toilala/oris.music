@@ -41,4 +41,16 @@ object PlaybackDiagnostic {
     private fun sanitize(text: String): String = sanitizeDiagnostic(text)
 }
 
+/** One-line human version of a raw failure for the player surface. The raw chain stays in the diagnostic history. */
+fun diagnosticSummary(raw: String): String {
+    val t = raw.lowercase()
+    return when {
+        "network" in t || "unable to resolve host" in t || "eai_" in t || "cannot resolve" in t ->
+            "No connection. Check your network and try again."
+        "refused" in t -> "The music service refused this request. Try again shortly."
+        "no playable stream" in t -> "This song can't play right now. Try another one."
+        else -> "This song couldn't play. Try again."
+    }
+}
+
 class GuestAccessRefused(message: String) : IOException(message)

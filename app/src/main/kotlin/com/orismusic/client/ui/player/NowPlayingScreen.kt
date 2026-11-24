@@ -225,7 +225,13 @@ fun NowPlayingScreen(
             Spacer(Modifier.height(4.dp))
 
             var failureDialog by remember { mutableStateOf(false) }
-            DiagnosticFailureBanner { failureDialog = true }
+            DiagnosticFailureBanner(
+                onClick = { failureDialog = true },
+                onRetry = {
+                    connection.player.prepare()
+                    connection.player.playWhenReady = true
+                },
+            )
             if (failureDialog) DiagnosticHistoryDialog { failureDialog = false }
 
             // Top area: artwork carousel, or the lyrics list in its place.
