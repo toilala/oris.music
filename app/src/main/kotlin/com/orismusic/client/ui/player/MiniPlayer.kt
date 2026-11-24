@@ -21,7 +21,6 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,11 +78,9 @@ import kotlin.math.abs
 fun MiniPlayer(
     connection: PlayerConnection,
     onExpand: () -> Unit,
-    onOpenArtist: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value ?: return
-    val artistId = metadata.extras?.getString("artist_id")
     val scope = rememberCoroutineScope()
     val offX = remember { Animatable(0f) }
     val offY = remember { Animatable(0f) }
@@ -208,12 +205,7 @@ fun MiniPlayer(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp)
-                        .then(
-                            if (artistId != null) Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() }, indication = null,
-                            ) { onOpenArtist(artistId, metadata.artist?.toString().orEmpty()) } else Modifier
-                        ),
+                        .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
                 )
                 androidx.compose.animation.AnimatedVisibility(visible = error != null) {
                     Text(

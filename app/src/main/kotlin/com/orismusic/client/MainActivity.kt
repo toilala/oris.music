@@ -259,13 +259,6 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
                                             connection = it,
                                             onExpand = { navigation = navigation.openPlayer() },
-                                            onOpenArtist = { id, name ->
-                                                openScope.launch {
-                                                    com.orismusic.client.ui.screens.openOrPlay(
-                                                        com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
-                                                    ) { detail = it; detailBack = null }
-                                                }
-                                            },
                                         )
                                     }
                                     FloatingNav(

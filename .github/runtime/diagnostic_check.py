@@ -240,10 +240,31 @@ while time.monotonic() < end:
         break
     time.sleep(3)
 screen('diag_retry_recovery')
-assert cleared, 'Retry did not recover playback: failure banner still visible'
+# A failed retry never stops evidence collection, but the run must still end red:
+# visual results and functional recovery are recorded distinctly.
+if not cleared:
+    tap('Details')
+    wait_label('Playback diagnostic', seconds=15)
+    time.sleep(1)
+    screen('diag_retry_details')
+    tap('Close')
+    time.sleep(1)
+
+# Home list end with the tray present: clearance evidence for the dock stack.
+tap('Collapse player')
+time.sleep(2)
+for _ in range(8):
+    adb('shell', 'input', 'swipe', '540', '1800', '540', '500', '250')
+    time.sleep(1)
+time.sleep(2)
+screen('diag_home_end_tray')
 
 logcat = adb('shell', 'logcat', '-d')
 open('runtime-evidence/diag-logcat.txt', 'wb').write(logcat)
 assert b'FATAL EXCEPTION' not in logcat, 'app crashed during diagnostic check'
 still_open()
-print('PASS: banner, dialog, compact layout and retry recovery rendered and captured', flush=True)
+print('VISUAL: PASS - banner, dialog, compact layout and home end rendered and captured', flush=True)
+if cleared:
+    print('FUNCTIONAL RECOVERY: PASS - Retry restarted playback and the banner cleared', flush=True)
+else:
+    raise AssertionError('FUNCTIONAL RECOVERY: FAIL - Retry did not restart playback; raw chain is in diag_retry_details.png')
