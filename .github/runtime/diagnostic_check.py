@@ -27,6 +27,16 @@ def tap_node(n):
 
 
 
+def mark(name):
+    # Marker written into logcat itself: later analysis can split events by phase
+    # even though the in-app diagnostic history carries no timestamps.
+    try:
+        adb('shell', 'log', '-p', 'i', '-t', 'OrisHarness', 'phase=' + name)
+    except Exception:
+        pass
+    print('phase', name, flush=True)
+
+
 def net(mode):
     # adb root restarts adbd and the device can briefly read as offline; retry.
     for _ in range(5):
@@ -152,7 +162,9 @@ try:
     time.sleep(2)
 except Exception:
     pass
+mark('before-cut')
 net('disable')
+mark('after-cut')
 time.sleep(3)
 
 # Tap the first quick-pick cell (structural pick, title recorded for verification).
@@ -200,8 +212,20 @@ wait_label('Playback diagnostic', seconds=30)
 time.sleep(1)
 screen('diag_dialog')
 
-# Back online and healthy.
+# Back online and healthy. svc returning 0 does not mean DNS is back yet:
+# gate on a real lookup before trusting the network again.
 net('enable')
+mark('after-enable')
+end = time.monotonic() + 90
+while True:
+    try:
+        adb('shell', 'ping', '-c', '1', '-W', '2', 'www.youtube.com')
+        break
+    except Exception:
+        if time.monotonic() > end:
+            raise AssertionError('connectivity never returned after net enable')
+        time.sleep(3)
+mark('connectivity-verified')
 from playback_check import tap
 tap('Close')
 
@@ -219,6 +243,7 @@ adb('shell', 'wm', 'density', 'reset')
 adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
 time.sleep(3)
 
+mark('before-retry-tap')
 # Functional Retry check: reopen the player, tap Retry, and require the banner
 # to clear - reportStarted only fires when playback really starts.
 root = tree()
