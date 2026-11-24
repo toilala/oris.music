@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.orismusic.client.settings.*
@@ -50,18 +52,21 @@ fun PlayerSettingsPage(onBack: () -> Unit) {
 internal fun PlayerLookPreview() {
     var playing by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(.38f) }
+    val bg = MaterialTheme.colorScheme.background
+    val lightMode = bg.luminance() >= 0.5f
+    // The preview mirrors the real wash: dark in dark mode, washed into the paper in light.
     val gradient = when(PlayerSettings.backgroundStyle) {
         PlayerBackgroundStyle.Gradient -> listOf(Color(0xFF4C3835), Color(0xFF20272F), Color(0xFF151515))
         PlayerBackgroundStyle.Blur -> listOf(Color(0xFF635B4B), Color(0xFF3B4549), Color(0xFF161E22))
         PlayerBackgroundStyle.Solid -> listOf(Color.Black, Color.Black)
-    }
+    }.let { stops -> if (lightMode) stops.mapIndexed { i, c -> if (i == stops.lastIndex) bg else lerp(c, bg, 0.55f + 0.18f * i) } else stops }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.verticalGradient(gradient)).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         StyledArtwork(null, "Artwork preview", Modifier.size(142.dp), sample = true)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Your next favourite", style = MaterialTheme.typography.titleSmall, color = Color.White)
-                Text("Artwork preview", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .55f))
+                Text("Your next favourite", style = MaterialTheme.typography.titleSmall, color = PlayerTextButtonColor)
+                Text("Artwork preview", style = MaterialTheme.typography.labelSmall, color = PlayerTextButtonColor.copy(alpha = .55f))
             }
             OrbitPlayButton(playing, { playing = !playing }, icon = if(playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = "Preview play", style = PlayerSettings.playButton)

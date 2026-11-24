@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +48,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -64,9 +67,15 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
-// Light controls over the dark player wash.
-internal val PlayerTextButtonColor = Color.White
-internal val PlayerIconButtonColor = Color.Black
+/*
+ * Controls over the player wash: white over the dark wash, warm ink over the light one.
+ * The player follows the app theme; the wash behind it lightens to match.
+ */
+internal val PlayerInk = Color(0xFF1A1613)
+internal val PlayerTextButtonColor: Color
+    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else PlayerInk
+internal val PlayerIconButtonColor: Color
+    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.Black else Color.White
 
 /** One chip shape for every small player button: a soft square, no fan-out ends. */
 internal val PlayerChipShape = RoundedCornerShape(14.dp)
@@ -96,6 +105,8 @@ internal fun OrbitPlayButton(
         infiniteRepeatable(tween(6000, easing = LinearEasing)),
         label = "orbit degrees",
     )
+    val btnText = PlayerTextButtonColor
+    val btnIcon = PlayerIconButtonColor
     Box(
         modifier.size(88.dp).graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
@@ -123,13 +134,13 @@ internal fun OrbitPlayButton(
                         val y = c.y + rr * sin(theta).toFloat()
                         if (step == 0) path.moveTo(x,y) else path.lineTo(x,y)
                     }
-                    path.close(); drawPath(path, PlayerTextButtonColor)
+                    path.close(); drawPath(path, btnText)
                 }
-                else -> drawCircle(PlayerTextButtonColor, radius = radius * if (style == com.orismusic.client.settings.PlayButtonStyle.Ripple) 0.85f else 1f)
+                else -> drawCircle(btnText, radius = radius * if (style == com.orismusic.client.settings.PlayButtonStyle.Ripple) 0.85f else 1f)
             }
             if (style == com.orismusic.client.settings.PlayButtonStyle.Ripple) {
                 val pulse = (sin(phase * Math.PI * 2).toFloat() * 0.5f + 0.5f) * active
-                drawCircle(PlayerTextButtonColor.copy(alpha = 0.3f + 0.2f * pulse), radius * (0.94f + 0.04f * pulse), style = Stroke(1.dp.toPx()))
+                drawCircle(btnText.copy(alpha = 0.3f + 0.2f * pulse), radius * (0.94f + 0.04f * pulse), style = Stroke(1.dp.toPx()))
             }
         }
         // Orbit: a hairline ring with one satellite dot, drawn only while playing.
@@ -138,7 +149,7 @@ internal fun OrbitPlayButton(
                 val radius = size.minDimension / 2f - 2.dp.toPx()
                 val center = Offset(size.width / 2f, size.height / 2f)
                 drawCircle(
-                    PlayerTextButtonColor.copy(alpha = 0.45f * ringAlpha),
+                    btnText.copy(alpha = 0.45f * ringAlpha),
                     radius = radius,
                     center = center,
                     style = Stroke(1.6.dp.toPx()),
@@ -148,10 +159,10 @@ internal fun OrbitPlayButton(
                     (center.x + radius * cos(rad)).toFloat(),
                     (center.y + radius * sin(rad)).toFloat(),
                 )
-                drawCircle(PlayerTextButtonColor.copy(alpha = ringAlpha), radius = 3.dp.toPx(), center = dot)
+                drawCircle(btnText.copy(alpha = ringAlpha), radius = 3.dp.toPx(), center = dot)
             }
         }
-        Icon(icon, contentDescription, Modifier.size(36.dp), tint = PlayerIconButtonColor)
+        Icon(icon, contentDescription, Modifier.size(36.dp), tint = btnIcon)
     }
 }
 
@@ -173,6 +184,7 @@ internal fun GhostSkipButton(
     val scale by animateFloatAsState(if (pressed) 0.88f else 1f, spring(dampingRatio = 0.55f, stiffness = 500f), label = "skip press")
     val lean by animateFloatAsState(if (pressed) 5f * direction else 0f, spring(dampingRatio = 0.5f, stiffness = 450f), label = "skip lean")
     val ringAlpha by animateFloatAsState(if (pressed) 0.8f else 0.35f, tween(180), label = "skip ring")
+    val btnText = PlayerTextButtonColor
     Box(
         modifier.size(88.dp).graphicsLayer { scaleX = scale; scaleY = scale; translationX = lean.dp.toPx() }
             .alpha(if (enabled) 1f else 0.35f)
@@ -182,12 +194,12 @@ internal fun GhostSkipButton(
     ) {
         Canvas(Modifier.size(64.dp)) {
             drawCircle(
-                PlayerTextButtonColor.copy(alpha = ringAlpha),
+                btnText.copy(alpha = ringAlpha),
                 radius = size.minDimension / 2f - 1.dp.toPx(),
                 style = Stroke(1.4.dp.toPx()),
             )
         }
-        Icon(icon, contentDescription, Modifier.size(32.dp), tint = PlayerTextButtonColor)
+        Icon(icon, contentDescription, Modifier.size(32.dp), tint = btnText)
     }
 }
 
@@ -230,12 +242,13 @@ internal fun ClusterButton(
 /** Slim seek track: a 10dp rounded bar, no thumb, active portion in solid white. */
 @Composable
 internal fun SlimSliderTrack(fraction: Float, modifier: Modifier = Modifier) {
+    val btnText = PlayerTextButtonColor
     Canvas(modifier) {
         val height = 10.dp.toPx()
         val top = (size.height - height) / 2f
         val corner = CornerRadius(height / 2f)
         drawRoundRect(
-            color = PlayerTextButtonColor.copy(alpha = 0.4f),
+            color = btnText.copy(alpha = 0.4f),
             topLeft = Offset(0f, top),
             size = Size(size.width, height),
             cornerRadius = corner,
@@ -243,7 +256,7 @@ internal fun SlimSliderTrack(fraction: Float, modifier: Modifier = Modifier) {
         val activeWidth = (size.width * fraction.coerceIn(0f, 1f))
         if (activeWidth > 0f) {
             drawRoundRect(
-                color = PlayerTextButtonColor,
+                color = btnText,
                 topLeft = Offset(0f, top),
                 size = Size(activeWidth, height),
                 cornerRadius = corner,
@@ -271,9 +284,10 @@ internal fun HeartBurstIcon(liked: Boolean, tint: Color, modifier: Modifier = Mo
     }
     Box(modifier, contentAlignment = androidx.compose.ui.Alignment.Center) {
         if (ring.value in 0.01f..0.99f) {
+            val btnText = PlayerTextButtonColor
             Canvas(Modifier.fillMaxSize()) {
                 val r = size.minDimension / 2f * (0.5f + ring.value * 0.9f)
-                drawCircle(PlayerTextButtonColor.copy(alpha = (1f - ring.value) * 0.6f), radius = r)
+                drawCircle(btnText.copy(alpha = (1f - ring.value) * 0.6f), radius = r)
             }
         }
         Icon(
@@ -292,7 +306,9 @@ internal fun HeartBurstIcon(liked: Boolean, tint: Color, modifier: Modifier = Mo
 @Composable
 internal fun rememberPlayerGradientColors(url: String?): List<Color>? {
     val context = LocalContext.current
-    val colors by produceState<List<Color>?>(null, url) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val base = MaterialTheme.colorScheme.background
+    val colors by produceState<List<Color>?>(null, url, dark, base) {
         if (url.isNullOrBlank()) { value = null; return@produceState }
         val request = ImageRequest.Builder(context).data(url).size(CoilSize(100, 100)).allowHardware(false).build()
         val bitmap: Bitmap? = runCatching {
@@ -317,11 +333,10 @@ internal fun rememberPlayerGradientColors(url: String?): List<Color>? {
             hsv[1] = (hsv[1] * if (vibrant) 1.3f else 1.1f).coerceAtMost(1f)
             hsv[2] = (hsv[2] * 0.9f).coerceIn(0.4f, 0.85f)
             val primary = Color(android.graphics.Color.HSVToColor(hsv))
-            listOf(
-                primary,
-                primary.copy(alpha = 0.6f),
-                Color.Black,
-            )
+            // Dark mode glows from the artwork down into the background; light mode washes
+            // the artwork colour through the paper so ink controls stay readable.
+            if (dark) listOf(primary, primary.copy(alpha = 0.6f), base)
+            else listOf(lerp(primary, base, 0.52f), lerp(primary, base, 0.74f).copy(alpha = 0.6f), base)
         }
     }
     return colors

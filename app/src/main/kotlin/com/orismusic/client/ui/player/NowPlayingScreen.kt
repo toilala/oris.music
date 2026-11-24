@@ -160,7 +160,9 @@ fun NowPlayingScreen(
     val gradientColors = rememberPlayerGradientColors(art)
     val backgroundStyle = PlayerSettings.backgroundStyle
 
-    Box(modifier.fillMaxSize().background(Color.Black)) {
+    // The wash follows the app theme: charcoal (or black in AMOLED) in dark, warm paper in light.
+    val playerBase = MaterialTheme.colorScheme.background
+    Box(modifier.fillMaxSize().background(playerBase)) {
         when (backgroundStyle) {
             PlayerBackgroundStyle.Gradient -> {
                 // Gradient background: three stops from the artwork, crossfading on song change.
@@ -187,7 +189,7 @@ fun NowPlayingScreen(
             }
             PlayerBackgroundStyle.Solid -> {}
         }
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (backgroundStyle == PlayerBackgroundStyle.Blur) 0.6f else 0.2f)))
+        Box(Modifier.fillMaxSize().background(playerBase.copy(alpha = if (backgroundStyle == PlayerBackgroundStyle.Blur) 0.6f else 0.2f)))
 
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Spacer(Modifier.height(48.dp))

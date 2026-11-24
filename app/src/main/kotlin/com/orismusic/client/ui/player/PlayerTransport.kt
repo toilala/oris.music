@@ -58,8 +58,8 @@ internal fun NowPlayingTitle(title: String, artist: String, modifier: Modifier =
     val content: @Composable (Pair<String, String>) -> Unit = { (t, a) ->
         Column {
             Text(t, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(a, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.68f),
+                color = PlayerTextButtonColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(a, style = MaterialTheme.typography.bodyLarge, color = PlayerTextButtonColor.copy(alpha = 0.68f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = if (onArtistClick != null) Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() }, indication = null,
@@ -112,7 +112,7 @@ private fun SkipKey(icon: ImageVector, label: String, enabled: Boolean, directio
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, modifier = Modifier.size((box * 0.62f).dp),
-            tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f))
+            tint = PlayerTextButtonColor.copy(alpha = if (enabled) 1f else 0.3f))
     }
 }
 

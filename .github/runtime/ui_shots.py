@@ -168,7 +168,7 @@ wait_label('Lyrics', seconds=60)
 time.sleep(2)
 screen('player_artwork_offbeat')
 
-# Light theme pass: the same journey over the paper theme. The player stays the dark room.
+# Light theme pass: the same journey over the paper theme, player and lyrics included.
 light_xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
              '<string name="theme">Light</string></map>')
 adb('shell', 'am', 'force-stop', PKG)
@@ -201,4 +201,8 @@ tap('Open player')
 wait_label('Lyrics', seconds=60)
 time.sleep(1)
 screen('light_player')
+tap('Lyrics')
+wait_label('Back to player', seconds=30)
+time.sleep(2)
+screen('light_lyrics')
 print('PASS: light theme', flush=True)

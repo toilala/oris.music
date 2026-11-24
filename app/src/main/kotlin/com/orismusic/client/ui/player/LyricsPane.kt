@@ -7,6 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.lerp
@@ -231,10 +232,11 @@ private fun LyricRow(
     if (selected && timed && !lineWords.isNullOrEmpty()) {
         // Karaoke: the sung words sweep through the active line.
         val currentWord = lineWords.indexOfLast { position >= it.startMs }
+        val wordInk = PlayerTextButtonColor
         val karaoke = buildAnnotatedString {
             lineWords.forEachIndexed { wi, w ->
                 withStyle(SpanStyle(
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (wi <= currentWord) 1f else 0.3f),
+                    color = wordInk.copy(alpha = if (wi <= currentWord) 1f else 0.3f),
                     fontWeight = if (wi == currentWord) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Bold,
                 )) { append(w.text) }
                 if (wi < lineWords.lastIndex) append(" ")
@@ -245,7 +247,7 @@ private fun LyricRow(
         Text(
             line.text.ifBlank { "\u266a" },
             style = lineStyle,
-            color = androidx.compose.ui.graphics.Color.White.copy(alpha = alpha),
+            color = PlayerTextButtonColor.copy(alpha = alpha),
             modifier = lineModifier,
         )
     }
@@ -272,6 +274,7 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
     val album = metadata?.albumTitle?.toString().orEmpty()
     val source = "automatic"
     val context = LocalContext.current
+    val scrim = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.Black else MaterialTheme.colorScheme.background
     val options = remember(context) { LyricsPreferences(context).read() }
     var retry by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
@@ -298,29 +301,29 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
     val tint by androidx.compose.animation.animateColorAsState(
         com.orismusic.client.ui.components.rememberArtworkColor(artUrl) ?: Color(0xFFE9E4DC),
         animationSpec = tween(700), label = "lyrics accent")
-    val accent = lerp(tint, Color.White, 0.55f)
+    val accent = lerp(tint, PlayerTextButtonColor, 0.55f)
 
     // --- layout ---
     Column(Modifier.fillMaxSize()) {
         // Compact header: drag handle, then collapse + mini artwork + the song's words.
         Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 10.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.35f)))
+            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(PlayerTextButtonColor.copy(alpha = 0.35f)))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onClose),
+                Modifier.size(44.dp).clip(CircleShape).background(PlayerTextButtonColor.copy(alpha = 0.10f)).clickable(onClick = onClose),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.KeyboardArrowDown, "Back to player", Modifier.size(22.dp), tint = Color.White.copy(alpha = 0.85f))
+                Icon(Icons.Rounded.KeyboardArrowDown, "Back to player", Modifier.size(22.dp), tint = PlayerTextButtonColor.copy(alpha = 0.85f))
             }
             Spacer(Modifier.width(12.dp))
             com.orismusic.client.ui.components.Artwork(artUrl, Modifier.size(44.dp), RoundedCornerShape(8.dp), null, px = 200)
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
-                    color = Color.White, overflow = TextOverflow.Ellipsis)
+                    color = PlayerTextButtonColor, overflow = TextOverflow.Ellipsis)
                 Text(artist, style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    color = PlayerTextButtonColor.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         // The viewport: lyrics scroll between the header and the bottom bar, faded at both ends.
@@ -336,7 +339,7 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
                 ) {
                     Text(
                         if (id.isBlank()) "Choose a song to see its lyrics." else "Lyrics unavailable from this source. Try Automatic or another source.",
-                        color = Color.White.copy(alpha = 0.75f), textAlign = TextAlign.Center,
+                        color = PlayerTextButtonColor.copy(alpha = 0.75f), textAlign = TextAlign.Center,
                     )
                     if (id.isNotBlank()) TextButton(onClick = { retry++ }) { Text("Try again", color = accent) }
                 }
@@ -359,16 +362,16 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
                     }
                     // The words melt away before they reach the header or the bottom bar.
                     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(40.dp)
-                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
+                        .background(Brush.verticalGradient(listOf(scrim.copy(alpha = 0.55f), Color.Transparent))))
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(40.dp)
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, scrim.copy(alpha = 0.55f)))))
                 }
             }
         }
         // Pinned controls: the same seek bar and transport as the player, on their own scrim.
         Column(
             Modifier.fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.62f))))
+                .background(Brush.verticalGradient(listOf(scrim.copy(alpha = 0.35f), scrim.copy(alpha = 0.62f))))
                 .navigationBarsPadding()
                 .padding(horizontal = 22.dp),
         ) {

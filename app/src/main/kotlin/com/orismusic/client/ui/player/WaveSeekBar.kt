@@ -87,11 +87,12 @@ fun WaveSeekBar(
         infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart),
         label = "wave phase value",
     )
-    val track = Color.White.copy(alpha = 0.28f)
+    val track = PlayerTextButtonColor.copy(alpha = 0.28f)
     val shownSec by remember(durationMs) {
         derivedStateOf { (((if (dragging) dragFrac else progress) * durationMs) / 1000f).toLong() }
     }
 
+    val btnText = PlayerTextButtonColor
     Column(modifier.fillMaxWidth()) {
         Canvas(
             Modifier.fillMaxWidth().height(44.dp)
@@ -135,7 +136,7 @@ fun WaveSeekBar(
                     drawLine(if (bx <= x) accent else track, Offset(bx, cy - hh / 2f), Offset(bx, cy + hh / 2f), bw, StrokeCap.Round)
                 }
                 val th = thumb.dp.toPx()
-                drawRoundRect(Color.White, topLeft = Offset(x - 1.5.dp.toPx(), cy - th / 2f), size = Size(3.dp.toPx(), th), cornerRadius = CornerRadius(1.5.dp.toPx()))
+                drawRoundRect(btnText, topLeft = Offset(x - 1.5.dp.toPx(), cy - th / 2f), size = Size(3.dp.toPx(), th), cornerRadius = CornerRadius(1.5.dp.toPx()))
                 return@Canvas
             }
             drawLine(track, Offset(x, cy), Offset(w, cy), strokeW, StrokeCap.Round)
@@ -162,14 +163,14 @@ fun WaveSeekBar(
             val big by animateFloatAsState(if (dragging) 1.3f else 1f, spring(0.6f, 400f), label = "time pop")
             Text(
                 if (durationMs > 0) formatTime(shownSec * 1000L) else "--:--", style = MaterialTheme.typography.labelSmall,
-                color = if (dragging) accent else Color.White.copy(alpha = 0.75f),
+                color = if (dragging) accent else PlayerTextButtonColor.copy(alpha = 0.75f),
                 modifier = Modifier.graphicsLayer { scaleX = big; scaleY = big; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) },
             )
             androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
             val total = durationMs.coerceAtLeast(0L)
             Text(
                 if (total <= 0) "--:--" else if (com.orismusic.client.settings.PlayerSettings.remaining) "-" + formatTime((total - shownSec * 1000L).coerceAtLeast(0L)) else formatTime(total),
-                style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.labelSmall, color = PlayerTextButtonColor.copy(alpha = 0.75f),
             )
         }
     }
@@ -185,13 +186,14 @@ fun SeekPreview(progress: Float, accent: Color, onChange: (Float) -> Unit) {
         0f, (2 * PI).toFloat(),
         infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart), label = "preview phase value",
     )
+    val previewInk = PlayerTextButtonColor
     Canvas(
         Modifier.fillMaxWidth().height(40.dp)
             .pointerInput(Unit) { detectTapGestures { onChange((it.x / size.width).coerceIn(0f, 1f)) } }
             .pointerInput(Unit) { detectHorizontalDragGestures { c, _ -> c.consume(); onChange((c.position.x / size.width).coerceIn(0f, 1f)) } },
     ) {
         val w = size.width; val cy = size.height / 2f; val x = progress * w
-        val track = Color.White.copy(alpha = 0.28f)
+        val track = previewInk.copy(alpha = 0.28f)
         if (style == SeekStyle.Bars) {
             val gap = 3.dp.toPx(); val bw = 3.dp.toPx()
             val n = (w / (bw + gap)).toInt().coerceAtLeast(1)
