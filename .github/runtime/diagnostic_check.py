@@ -192,8 +192,46 @@ adb('shell', 'svc', 'wifi', 'enable')
 adb('shell', 'svc', 'data', 'enable')
 from playback_check import tap
 tap('Close')
+
+# Compact display + large text: layout evidence on a smaller canvas.
+adb('shell', 'settings', 'put', 'system', 'font_scale', '1.3')
+adb('shell', 'wm', 'size', '900x2000')
+adb('shell', 'wm', 'density', '320')
+time.sleep(4)
+screen('diag_banner_compact')
+tap('Collapse player')
+time.sleep(2)
+screen('diag_home_compact')
+adb('shell', 'wm', 'size', 'reset')
+adb('shell', 'wm', 'density', 'reset')
+adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
+time.sleep(3)
+
+# Functional Retry check: reopen the player, tap Retry, and require the banner
+# to clear - reportStarted only fires when playback really starts.
+root = tree()
+tray = tray_node(root)
+assert tray is not None, 'tray missing after display reset'
+b = bounds(tray)
+x = int(b[0] + (b[2] - b[0]) * 0.35)
+y1 = int(b[1] + (b[3] - b[1]) * 0.6)
+adb('shell', 'input', 'swipe', str(x), str(y1), str(x), str(y1 - 350), '150')
+time.sleep(2)
+wait_label('Retry', seconds=30)
+tap('Retry')
+end = time.monotonic() + 120
+cleared = False
+while time.monotonic() < end:
+    root = tree()
+    if not any(any(f in (n.get('text') or '').lower() for f in FAIL_FRAGMENTS) for n in root.iter('node')):
+        cleared = True
+        break
+    time.sleep(3)
+screen('diag_retry_recovery')
+assert cleared, 'Retry did not recover playback: failure banner still visible'
+
 logcat = adb('shell', 'logcat', '-d')
 open('runtime-evidence/diag-logcat.txt', 'wb').write(logcat)
 assert b'FATAL EXCEPTION' not in logcat, 'app crashed during diagnostic check'
 still_open()
-print('PASS: failure banner and history dialog rendered and captured', flush=True)
+print('PASS: banner, dialog, compact layout and retry recovery rendered and captured', flush=True)
