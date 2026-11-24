@@ -1027,7 +1027,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         refreshMediaNotification()
-        if (isPlaying) com.orismusic.client.utils.PlaybackDiagnostic.reportStarted()
+        if (isPlaying) com.orismusic.client.utils.PlaybackDiagnostic.reportStarted(player.currentMediaItem?.mediaId)
         if (!isPlaying) {
             positionPersistJob?.cancel()
             positionPersistJob = null
