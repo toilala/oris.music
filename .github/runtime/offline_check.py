@@ -22,16 +22,21 @@ appends a recreation marker (pid, elapsed clock, extras flag) that is collected
 as supplemental diagnosis; recreation is never asserted to be process death.
 
 Span discovery follows the REAL media3 1.7.1 SimpleCache layout: payloads are
-*.v3 files inside numbered subdirectories (files/download/<0-9>/<id>.<pos>.<ts>.v3);
-the root holds only metadata (cached_content_index.exi, <hex>.uid), which is never
-payload. The contract is grounded on actual device output by a nested sandbox probe
+*.v3.exo files inside numbered subdirectories
+(files/download/<0-9>/<id>.<pos>.<ts>.v3.exo; SimpleCacheSpan SUFFIX is ".v3" +
+COMMON_SUFFIX ".exo"), grounded on the actual captured filename
+files/download/3/0.0.1795630832855.v3.exo. The root holds only metadata
+(cached_content_index.exi, <hex>.uid), which is never payload. The contract is grounded on actual device output by a nested sandbox probe
 before any span assertion, and its parser is checked host-side (--self-test). The
 span filename encodes the cache's numeric id, not the song id: key attribution is
 fresh isolated-cache evidence (pm clear, single fixture key), stated as such.
 
 Legs are independent with declared dependencies and explicit prerequisite resets;
 each leg records PASS/FAIL/UNVERIFIED, writes its evidence BEFORE asserting, and a
-failed leg never aborts independent routes. The overall run fails when any required
+failed leg never aborts independent routes. Every product-route leg establishes
+its own state (source/cache/saved) through the debug surface before exercising
+its route, so a failed classifier gates only legs that genuinely need its
+product, not every later route. The overall run fails when any required
 leg fails. Final collection (connectivity-after, continuous logcat, results
 summary) runs regardless."""
 import glob
@@ -61,14 +66,15 @@ def parse_byte_count(text):
     raise ValueError('no byte count in wc output')
 
 
-SPAN_RE = re.compile(r'/\d+/\d+\.\d+\.\d+\.v3$')
+SPAN_RE = re.compile(r'/\d+/\d+\.\d+\.\d+\.v3\.exo$')
 
 
 def span_payloads(listing):
     """Only real span payload files from a recursive listing: media3 1.7.1
-    SimpleCache writes spans as files/download/<0-9>/<id>.<position>.<ts>.v3.
-    Root files (cached_content_index.exi, <hex>.uid) are identity/index metadata,
-    never payload, and anything outside a numeric subdirectory is excluded."""
+    SimpleCache writes spans as files/download/<0-9>/<id>.<position>.<ts>.v3.exo
+    (SUFFIX = ".v3" + COMMON_SUFFIX ".exo"). Root files (cached_content_index.exi,
+    <hex>.uid) are identity/index metadata, never payload, and anything outside a
+    numeric subdirectory or with a bare .v3 name is excluded."""
     return {p: b for p, b in listing.items() if SPAN_RE.search(p)}
 
 
@@ -107,34 +113,40 @@ def self_test():
     contract defines, metadata and blank exclusions, a full positive payload
     example in the REAL media3 1.7.1 layout, and strict sampler verdicts."""
     # find -type f contract: one path per line; blanks dropped.
-    assert parse_find_paths('files/download/4/0.0.1764072000000.v3\n'
+    assert parse_find_paths('files/download/3/0.0.1795630832855.v3.exo\n'
                             'files/download/cached_content_index.exi\n\n'
-                            'files/download/666931664b3ea675.uid\n') == \
-        ['files/download/4/0.0.1764072000000.v3',
+                            'files/download/4e5de23f3f59f775.uid\n') == \
+        ['files/download/3/0.0.1795630832855.v3.exo',
          'files/download/cached_content_index.exi',
-         'files/download/666931664b3ea675.uid']
+         'files/download/4e5de23f3f59f775.uid']
     # wc -c contract: the byte count is the first field; padding and the echoed
     # path (including one with spaces) are ignored.
     assert parse_byte_count('32044 files/download/4/0.0.1764072000000.v3\n') == 32044
     assert parse_byte_count('     12 files/span-probe/alpha.bin\n') == 12
     assert parse_byte_count('12\n') == 12
     assert parse_byte_count('7 files/download/my file.v3\n') == 7
-    # Metadata exclusions: .uid and .exi are never payload, and a .v3 at the root
-    # (the pre-1.7 flat layout) does not satisfy the real-layout contract.
-    listing = {'files/download/666931664b3ea675.uid': 0,
+    # Metadata exclusions and wrong shapes: .uid and .exi are never payload, a
+    # .v3.exo at the root is rejected, and a BARE .v3 (the shape wrongly assumed
+    # before the actual device output grounded the contract) is rejected.
+    listing = {'files/download/4e5de23f3f59f775.uid': 0,
                'files/download/cached_content_index.exi': 4096,
-               'files/download/oris.1.1764072000000.v3': 32044,
-               'files/download/4/0.0.1764072000000.v3': 32044}
+               'files/download/0.0.1795630832855.v3.exo': 480044,
+               'files/download/4/0.0.1764072000000.v3': 32044,
+               'files/download/3/0.0.1795630832855.v3.exo': 480044}
     assert span_payloads(listing) == \
-        {'files/download/4/0.0.1764072000000.v3': 32044}
-    assert span_payloads({'files/download/666931664b3ea675.uid': 0}) == {}
-    # Positive payload: a full recursive round-trip over canned raw output.
-    raw_paths = 'files/span-probe/4/0.0.1764072000000.v3\nfiles/span-probe/alpha.bin\n'
-    sizes = {'files/span-probe/4/0.0.1764072000000.v3':
-             '11 files/span-probe/4/0.0.1764072000000.v3\n',
+        {'files/download/3/0.0.1795630832855.v3.exo': 480044}
+    assert span_payloads({'files/download/4e5de23f3f59f775.uid': 0}) == {}
+    assert span_payloads({'files/download/4/0.0.1764072000000.v3': 32044}) == {}
+    # Positive payload: the ACTUAL captured filename/size from the device, and a
+    # full recursive round-trip over canned raw output in that shape.
+    assert span_payloads({'files/download/3/0.0.1795630832855.v3.exo': 480044}) == \
+        {'files/download/3/0.0.1795630832855.v3.exo': 480044}
+    raw_paths = 'files/span-probe/3/0.0.1795630832855.v3.exo\nfiles/span-probe/alpha.bin\n'
+    sizes = {'files/span-probe/3/0.0.1795630832855.v3.exo':
+             '12 files/span-probe/3/0.0.1795630832855.v3.exo\n',
              'files/span-probe/alpha.bin': '11 files/span-probe/alpha.bin\n'}
     got = {p: parse_byte_count(sizes[p]) for p in parse_find_paths(raw_paths)}
-    assert got == {'files/span-probe/4/0.0.1764072000000.v3': 11,
+    assert got == {'files/span-probe/3/0.0.1795630832855.v3.exo': 12,
                    'files/span-probe/alpha.bin': 11}, got
     # Strict sampler: the rejected shapes first.
     assert playing_progression([(3, 0), (1, 2003)]) == (False, [0])  # start/end pair
@@ -259,7 +271,7 @@ def preflight_listing():
                         capture_output=True)
     assert mk.returncode == 0, 'probe dir failed: ' + mk.stderr.decode(errors='replace')
     fixtures = {'alpha.bin': b'oris-probe-a', 'beta.v3': b'x', '.hidden': b'12345',
-                '4/0.0.1764072000000.v3': b'span-payload'}
+                '3/0.0.1795630832855.v3.exo': b'span-payload'}
     for name, data in sorted(fixtures.items()):
         w = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee', probe + '/' + name],
                            input=data, capture_output=True)
@@ -273,7 +285,7 @@ def preflight_listing():
     assert got == expected, 'listing contract mismatch on actual device output: got ' \
         + repr(got) + ' expected ' + repr(expected)
     picked = span_payloads(got)
-    assert picked == {probe + '/4/0.0.1764072000000.v3': len(b'span-payload')}, picked
+    assert picked == {probe + '/3/0.0.1795630832855.v3.exo': len(b'span-payload')}, picked
     print('SPAN-PREFLIGHT: recursive listing contract grounded on actual device '
           'output: ' + repr(sorted(got.items())), flush=True)
 
@@ -541,6 +553,9 @@ def leg_a1():
 
 
 def leg_a2():
+    # Prerequisite reset: establish READY (re-source/re-download if an earlier
+    # mutation removed it), then restart and revalidate from the persisted spans.
+    ensure_ready()
     adb('shell', 'am', 'force-stop', PKG)
     launch_debug()  # no setup extra: no rewrite path exists on this launch
     wait_label('Offline state: READY', seconds=60)
@@ -552,6 +567,8 @@ def leg_a2():
 
 
 def leg_a3():
+    # Prerequisite reset: establish READY before the isolation window.
+    ensure_ready()
     adb('shell', 'am', 'force-stop', PKG)
     launch_debug()
     wait_label('Offline state: READY', seconds=60)
@@ -604,6 +621,8 @@ def leg_a3():
 
 
 def leg_insets():
+    # Prerequisite reset: READY cached playback, debug surface foreground.
+    ensure_ready()
     tap('Play offline')
     adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
     tap_mini_player(TONE)
@@ -623,9 +642,11 @@ def leg_insets():
 
 def leg_library_menu():
     # B2/B6. Real Library Saved-section row and overflow actions, separate from the
-    # debug activity. The Saved section header text contains "Saved for offline"
-    # inside a longer string, so exact-match chip assertions are done on the Liked
+    # debug activity. Prerequisite reset: a saved READY row exists. The Saved
+    # section header text contains "Saved for offline" inside a longer string, so
+    # exact-match chip assertions are done on the Liked
     # row only; the Saved row is asserted through its menu discipline and count.
+    ensure_ready()
     adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
     wait_label('Library', seconds=30)
     tap('Library')
@@ -660,13 +681,22 @@ def leg_removal():
           '(recursive span listing)', flush=True)
 
 
-def leg_real_ui_save():
-    # B1. Real-UI save from the Liked row (same process, fixtureUri still set by
-    # the removal leg's relaunch; the source file persists after removal).
+def goto_liked_row():
+    """Navigate the real UI to the Liked row (the debug surface may be foreground)."""
     adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
     wait_label('Library', seconds=30)
     tap('Library')
     tap('Liked (1)')
+
+
+def leg_real_ui_save():
+    # B1. Real-UI save from the Liked row. Prerequisite reset: not-saved with the
+    # source present, fixtureUri set in this process by the debug launch, then the
+    # real-UI flow. No earlier happy-path leg is required.
+    remove_via_debug()
+    if not source_present():
+        setup_fixture()
+    goto_liked_row()
     open_row_menu()
     menu = labels()
     assert 'Save for offline' in menu, 'unsaved row must offer Save for offline: ' + repr(menu)
@@ -680,9 +710,11 @@ def leg_real_ui_save():
 
 
 def leg_failed_route():
-    # B3. FAILED route, deterministic: remove, delete the source, then save again
-    # on the same Liked row. No network involved: the write fails on the missing
-    # local file.
+    # B3. FAILED route, deterministic: establish a READY row, remove, delete the
+    # source, then save again on the same Liked row. No network involved: the
+    # write fails on the missing local file.
+    ensure_ready()
+    goto_liked_row()
     open_row_menu()
     menu = labels()
     assert 'Remove from offline' in menu, 'READY Liked row must offer Remove: ' + repr(menu)
@@ -718,9 +750,12 @@ def leg_retry():
 def leg_cancel():
     # B5. Cancel with a controlled blocked source: a FIFO in place of the file
     # makes the writer block in open, so DOWNLOADING is directly observed via the
-    # menu. Cancel is requested, the FIFO is released under a bounded host write,
+    # menu. Prerequisite reset: a READY row, removed again by this leg before the
+    # FIFO swap. Cancel is requested, the FIFO is released under a bounded host write,
     # and only the settled state is asserted: no READY, no FAILED, no saved entry,
     # no resurrected payloads.
+    ensure_ready()
+    goto_liked_row()
     open_row_menu()
     tap('Remove from offline')
     gone('Saved for offline')
@@ -775,15 +810,15 @@ LEGS = [
     ('SETUP-INSTALL', leg_setup_install, ()),
     ('SETUP-FIXTURE', leg_setup_fixture, ('SETUP-INSTALL',)),
     ('A1-CACHE-WRITE', leg_a1, ('SETUP-FIXTURE',)),
-    ('A2-RESTART', leg_a2, ('A1-CACHE-WRITE',)),
-    ('A3-ISOLATED-PLAYBACK', leg_a3, ('A1-CACHE-WRITE',)),
-    ('C-INSETS', leg_insets, ('A1-CACHE-WRITE',)),
-    ('B2B6-LIBRARY-MENU', leg_library_menu, ('A1-CACHE-WRITE',)),
-    ('F-REMOVAL', leg_removal, ('A1-CACHE-WRITE',)),
-    ('B1-REAL-UI-SAVE', leg_real_ui_save, ('F-REMOVAL',)),
-    ('B3-FAILED-ROUTE', leg_failed_route, ('B1-REAL-UI-SAVE',)),
+    ('A2-RESTART', leg_a2, ('SETUP-FIXTURE',)),
+    ('A3-ISOLATED-PLAYBACK', leg_a3, ('SETUP-FIXTURE',)),
+    ('C-INSETS', leg_insets, ('SETUP-FIXTURE',)),
+    ('B2B6-LIBRARY-MENU', leg_library_menu, ('SETUP-FIXTURE',)),
+    ('F-REMOVAL', leg_removal, ('SETUP-FIXTURE',)),
+    ('B1-REAL-UI-SAVE', leg_real_ui_save, ('SETUP-FIXTURE',)),
+    ('B3-FAILED-ROUTE', leg_failed_route, ('SETUP-FIXTURE',)),
     ('B4-RETRY', leg_retry, ('B3-FAILED-ROUTE',)),
-    ('B5-CANCEL', leg_cancel, ('B4-RETRY',)),
+    ('B5-CANCEL', leg_cancel, ('SETUP-FIXTURE',)),
 ]
 
 try:
