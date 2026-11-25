@@ -24,3 +24,25 @@ class ConsecutiveFailureGuard(val limit: Int = 3) {
         streak = 0
     }
 }
+
+/** What happens when a song's retries run out. */
+enum class RetriesExhausted { SkipToNext, PauseForStreak, StopInPlace }
+
+/** Decides the end of the retry path. Only a queue with somewhere left to go feeds the
+ *  streak guard; a trailing or only song (or the pinned first song) stops in place with
+ *  its own reason, so a one-song queue never invents a streak. */
+fun retriesExhausted(pinned: Boolean, hasNext: Boolean, guard: ConsecutiveFailureGuard): RetriesExhausted =
+    if (!pinned && hasNext) {
+        if (guard.onSongGaveUp()) RetriesExhausted.PauseForStreak else RetriesExhausted.SkipToNext
+    } else {
+        RetriesExhausted.StopInPlace
+    }
+
+/** Why playback paused after the guard's streak. */
+fun streakPauseMessage(limit: Int): String =
+    "Playback paused: $limit songs failed in a row. Tap play to try again."
+
+/** Why playback stopped when there was no next song to walk to. No try count: each app
+ *  retry wraps the loader's own attempts, so any single number would be wrong. */
+fun terminalStopMessage(): String =
+    "Playback stopped: this song failed to load after retrying. Tap play to try again."

@@ -48,4 +48,41 @@ class ConsecutiveFailureGuardTest {
         assertTrue(guard.streak >= 2)
         assertTrue(guard.onSongGaveUp())
     }
+
+    @Test
+    fun `a queue with somewhere left to go walks and feeds the streak`() {
+        val guard = ConsecutiveFailureGuard(limit = 3)
+        assertEquals(RetriesExhausted.SkipToNext, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+        assertEquals(RetriesExhausted.SkipToNext, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+        assertEquals(RetriesExhausted.PauseForStreak, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+        assertEquals(3, guard.streak)
+    }
+
+    @Test
+    fun `a trailing song stops in place without touching the streak`() {
+        val guard = ConsecutiveFailureGuard(limit = 3)
+        assertEquals(RetriesExhausted.StopInPlace, retriesExhausted(pinned = false, hasNext = false, guard = guard))
+        assertEquals(0, guard.streak)
+    }
+
+    @Test
+    fun `the pinned first song stops in place without touching the streak`() {
+        val guard = ConsecutiveFailureGuard(limit = 3)
+        assertEquals(RetriesExhausted.StopInPlace, retriesExhausted(pinned = true, hasNext = true, guard = guard))
+        assertEquals(0, guard.streak)
+    }
+
+    @Test
+    fun `the terminal stop message says retrying and never claims a streak or a count`() {
+        val message = terminalStopMessage()
+        assertTrue(message.contains("after retrying"))
+        assertTrue(message.contains("Tap play"))
+        assertFalse(message.contains("in a row"))
+        assertFalse(message.any { it.isDigit() })
+    }
+
+    @Test
+    fun `the streak pause message keeps its own wording`() {
+        assertEquals("Playback paused: 3 songs failed in a row. Tap play to try again.", streakPauseMessage(3))
+    }
 }

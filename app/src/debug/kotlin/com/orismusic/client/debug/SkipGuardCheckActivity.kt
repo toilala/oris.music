@@ -15,7 +15,8 @@ import kotlin.math.sin
 /** Drives the real service through a deterministic failure sequence on local files, no
  *  network: two failures advance the queue, a good tone proves a successful start resets
  *  the streak, three more failures make the skip-walk guard pause instead of reaching the
- *  last item. The status line mirrors the player so the harness can follow along. */
+ *  last item. With --es queue single it queues one bad item only, for the terminal-stop
+ *  check. The status line mirrors the player so the harness can follow along. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class SkipGuardCheckActivity : Activity() {
     private lateinit var status: TextView
@@ -46,7 +47,12 @@ class SkipGuardCheckActivity : Activity() {
                 override fun onIsPlayingChanged(isPlaying: Boolean) = render(player)
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = render(player)
             })
-            player.setMediaItems(listOf(bad(1), bad(2), good(1), bad(3), bad(4), bad(5), good(2)))
+            // --es queue single: one bad item only, for the terminal-stop check.
+            val single = intent?.getStringExtra("queue") == "single"
+            player.setMediaItems(
+                if (single) listOf(bad(6))
+                else listOf(bad(1), bad(2), good(1), bad(3), bad(4), bad(5), good(2)),
+            )
             player.prepare()
             player.play()
         }
