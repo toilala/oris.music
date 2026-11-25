@@ -7,6 +7,7 @@
  */
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
 import com.orismusic.client.settings.HomeSettings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
@@ -265,14 +266,14 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int, tint: androidx.compose
     val a by t.animateFloat(
         0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(13000, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.tween(OrisMotion.Drift, easing = androidx.compose.animation.core.LinearEasing),
             androidx.compose.animation.core.RepeatMode.Reverse,
         ), label = "a",
     )
     val b by t.animateFloat(
         1f, 0f,
         androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(17000, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.tween(OrisMotion.SlowDrift, easing = androidx.compose.animation.core.LinearEasing),
             androidx.compose.animation.core.RepeatMode.Reverse,
         ), label = "b",
     )
@@ -280,7 +281,7 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int, tint: androidx.compose
         androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.tertiary, tint, 0.45f)
     else MaterialTheme.colorScheme.tertiary
     val warm by androidx.compose.animation.animateColorAsState(
-        warmTarget, androidx.compose.animation.core.tween(900), label = "aurora warm",
+        warmTarget, OrisMotion.entrance(), label = "aurora warm",
     )
     val cool = MaterialTheme.colorScheme.primary
     androidx.compose.foundation.Canvas(
@@ -317,7 +318,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
         while (true) {
             kotlinx.coroutines.delay(6500)
             if (!pager.isScrollInProgress && songs.size > 1) {
-                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = androidx.compose.animation.core.tween(900))
+                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = OrisMotion.entrance())
             }
         }
     }
@@ -376,7 +377,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
             repeat(songs.size) { i ->
                 val active = pager.currentPage == i
                 val w by androidx.compose.animation.core.animateDpAsState(
-                    if (active) 20.dp else 6.dp, androidx.compose.animation.core.spring(0.6f, 400f), label = "dot",
+                    if (active) 20.dp else 6.dp, OrisMotion.settle(), label = "dot",
                 )
                 Box(
                     Modifier.padding(horizontal = 2.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
@@ -399,8 +400,7 @@ private fun HomeHeader(scroll: () -> Int) {
     }
     val reveal = remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        reveal.animateTo(1f, androidx.compose.animation.core.tween(650,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        reveal.animateTo(1f, OrisMotion.slow())
     }
     Row(
         Modifier.fillMaxWidth().height(88.dp).padding(horizontal = 22.dp),
@@ -582,7 +582,7 @@ private fun HeroPager(albums: List<com.music.innertube.models.AlbumItem>, onOpen
                 val active = pager.currentPage == i
                 val w by androidx.compose.animation.core.animateDpAsState(
                     if (active) 22.dp else 6.dp,
-                    androidx.compose.animation.core.spring(0.6f, 400f), label = "dot",
+                    OrisMotion.settle(), label = "dot",
                 )
                 Box(
                     Modifier.padding(horizontal = 3.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))

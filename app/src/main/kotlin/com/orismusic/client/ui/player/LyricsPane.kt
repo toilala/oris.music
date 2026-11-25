@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -221,8 +222,8 @@ private fun LyricRow(
         distance == 4 -> 0.35f
         else -> 0.28f
     }
-    val alpha by animateFloatAsState(targetAlpha, tween(300), label = "line alpha")
-    val scale by animateFloatAsState(if (selected) 1f else 0.85f, tween(400), label = "line scale")
+    val alpha by animateFloatAsState(targetAlpha, OrisMotion.standard(), label = "line alpha")
+    val scale by animateFloatAsState(if (selected) 1f else 0.85f, OrisMotion.standard(), label = "line scale")
     val settings = com.orismusic.client.settings.PlayerSettings
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val view = androidx.compose.ui.platform.LocalView.current
@@ -314,7 +315,7 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
     val artUrl = metadata?.artworkUri?.toString()
     val tint by androidx.compose.animation.animateColorAsState(
         com.orismusic.client.ui.components.rememberArtworkColor(artUrl) ?: Color(0xFFE9E4DC),
-        animationSpec = tween(700), label = "lyrics accent")
+        animationSpec = OrisMotion.slow(), label = "lyrics accent")
     val accent = lerp(tint, PlayerTextButtonColor, 0.55f)
 
     // --- layout ---

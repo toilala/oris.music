@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
 import android.content.Context
 import org.json.JSONArray
 import androidx.compose.animation.core.animateFloat
@@ -497,7 +498,7 @@ private fun PlayingBars(playing: Boolean) {
                 initialValue = 0.25f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    tween(420 + i * 130),
+                    tween(OrisMotion.Standard + i * 130),
                     androidx.compose.animation.core.RepeatMode.Reverse,
                 ),
                 label = "bar$i",
