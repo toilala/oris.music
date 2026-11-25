@@ -1,6 +1,7 @@
 package com.orismusic.client.playback
 
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -26,6 +27,14 @@ import kotlinx.coroutines.launch
  *   commit and no successor start can interleave between span handling and those
  *   edits. A start after removal is a clean new lifecycle whose commit lands strictly
  *   after onRemove, never erased by it.
+ * - Failure marking is part of the owner's teardown transition: eligibility is decided
+ *   and the failure callback runs under the ownership lock, so a cancel or removal
+ *   recorded before the write unwinds suppresses the marker, and a late failure can
+ *   never restore one onto a cancelled or removed download.
+ * - Settlement never depends on the job body having entered: a job cancelled before
+ *   its first dispatch completes without running, so a completion handler runs the
+ *   same guarded teardown for a never-entered body. An ordinary cancellation is
+ *   never marked failed; only a genuine (non-cancellation) completion cause can be.
  */
 class DownloadRegistry<ID : Any, P>(
     private val scope: CoroutineScope,
@@ -43,6 +52,9 @@ class DownloadRegistry<ID : Any, P>(
 
         /** Aborts the blocking write; the write body sets this before it starts blocking. */
         @Volatile var cancelWrite: () -> Unit = {}
+
+        /** Set when the job body actually entered; a skipped body settles via completion. */
+        @Volatile internal var entered: Boolean = false
 
         internal var job: Job? = null
     }
@@ -66,7 +78,21 @@ class DownloadRegistry<ID : Any, P>(
             active[id] = record
             onBusyChange(id, true)
         }
-        record.job = scope.launch { run(record, write) }
+        val job = scope.launch { run(record, write) }
+        record.job = job
+        // Settlement must not depend on the body having entered: a job cancelled
+        // before its first dispatch completes without running run(), so ownership
+        // would otherwise never settle. The handler runs the same identity-guarded
+        // teardown for a never-entered body; a body that did run has already settled
+        // and the guard returns. Registered after launch, it still fires for an
+        // already-completed job, so a fast completion cannot stay registered either.
+        job.invokeOnCompletion { cause ->
+            if (!record.entered) {
+                // An ordinary cancellation is never a failure; only a genuine
+                // (non-cancellation) completion cause may be marked failed.
+                teardown(record, if (cause is CancellationException) null else cause)
+            }
+        }
         return true
     }
 
@@ -116,6 +142,8 @@ class DownloadRegistry<ID : Any, P>(
     }
 
     private fun run(record: Record, write: Record.() -> Unit) {
+        record.entered = true
+        var failure: Throwable? = null
         try {
             record.write()
             synchronized(lock) {
@@ -128,15 +156,23 @@ class DownloadRegistry<ID : Any, P>(
                     return
                 }
             }
-            teardown(record)
         } catch (e: Exception) {
-            if (!record.cancelRequested) onFailed(record.id, record.payload)
-            teardown(record)
+            failure = e
+        } finally {
+            // Every path out of the write settles here, so cleanup never depends on
+            // which way the job exited. After a commit the record is already retired
+            // and teardown returns immediately.
+            teardown(record, failure)
         }
     }
 
-    /** Span cleanup and deregistration, run only by the owner after the write unwound. */
-    private fun teardown(record: Record) {
+    /**
+     * Span cleanup, failure marking and deregistration, run only by the owner after
+     * the write unwound. Failure eligibility is decided and the failure callback runs
+     * inside this same ownership transition: a cancel or removal recorded before the
+     * unwind wins, so a late failure can never re-mark a cancelled or removed download.
+     */
+    private fun teardown(record: Record, failure: Throwable?) {
         synchronized(lock) {
             if (active[record.id] !== record) return
             if (record.cancelRequested) {
@@ -145,6 +181,8 @@ class DownloadRegistry<ID : Any, P>(
                 } catch (e: Exception) {
                     onCleanupFailed(record.id, e)
                 }
+            } else if (failure != null) {
+                onFailed(record.id, record.payload)
             }
             active.remove(record.id)
             onBusyChange(record.id, false)

@@ -8,6 +8,8 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
+import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,10 +59,13 @@ class DownloadRegistryTest {
         cancelWrite = {}
     }
 
-    private fun awaitActive(id: String, expected: Boolean) {
+    private fun awaitActive(id: String, expected: Boolean) =
+        awaitActive(registry, id, expected)
+
+    private fun awaitActive(reg: DownloadRegistry<String, String>, id: String, expected: Boolean) {
         val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (registry.isActive(id) != expected && System.nanoTime() < end) Thread.sleep(10)
-        assertEquals("isActive($id)", expected, registry.isActive(id))
+        while (reg.isActive(id) != expected && System.nanoTime() < end) Thread.sleep(10)
+        assertEquals("isActive($id)", expected, reg.isActive(id))
     }
 
     private fun CountDownLatch.awaitLatched() =
@@ -284,5 +289,193 @@ class DownloadRegistryTest {
         awaitActive("a", false)
         assertEquals(1, events.count { it == "drop:a" })
         assertEquals(1, events.count { it == "busy:false" })
+    }
+
+    @Test
+    fun `a failure after a recorded cancel is teardown-decided as cancel, never FAILED`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        assertTrue(registry.start("a", "p") {
+            cancelWrite = { events.add("cancelWrite") }
+            entered.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            throw RuntimeException("boom") // a genuine write failure, not the cancel abort
+        })
+        entered.awaitLatched()
+
+        // The cancel is fully recorded while the writer is still blocked; the write
+        // then fails. Eligibility is decided at teardown under the ownership lock, so
+        // the recorded cancel wins: spans drop and no FAILED marker lands.
+        assertTrue(registry.cancel("a"))
+        release.countDown()
+        awaitActive("a", false)
+        assertEquals(
+            listOf("busy:true", "cancelWrite", "drop:a", "busy:false"),
+            events.toList())
+        assertFalse(events.contains("failed:a"))
+    }
+
+    @Test
+    fun `a failure after a recorded eviction suppresses the marker and settles removal`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        assertTrue(registry.start("a", "p") {
+            cancelWrite = { events.add("cancelWrite") }
+            entered.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            throw RuntimeException("boom")
+        })
+        entered.awaitLatched()
+
+        // Removal (eviction intent + saved-state edits) is fully recorded while the
+        // writer is still blocked; the write then fails. Teardown sees the intent and
+        // drops the spans; no FAILED marker lands on the removed entry.
+        registry.evict("a")
+        release.countDown()
+        awaitActive("a", false)
+        assertEquals(
+            listOf("busy:true", "remove:a", "cancelWrite", "drop:a", "busy:false"),
+            events.toList())
+        assertFalse(events.contains("failed:a"))
+        assertFalse(events.contains("commit:a"))
+    }
+
+    @Test
+    fun `a settled failure is marked once and a later removal clears it in order`() {
+        assertTrue(registry.start("a", "p") { throw RuntimeException("boom") })
+        awaitActive("a", false)
+        // A plain failure keeps partial spans for a later resume; removal then drops
+        // them and clears the saved state strictly after the marker was set.
+        assertEquals(listOf("busy:true", "failed:a", "busy:false"), events.toList())
+
+        registry.evict("a")
+        assertEquals(
+            listOf("busy:true", "failed:a", "busy:false", "drop:a", "remove:a"),
+            events.toList())
+    }
+
+    @Test
+    fun `failure marking runs inside the ownership transition, not before it`() {
+        val localEvents = Collections.synchronizedList(mutableListOf<String>())
+        val inFailed = CountDownLatch(1)
+        val leaveFailed = CountDownLatch(1)
+        val local = DownloadRegistry<String, String>(
+            scope = scope,
+            dropSpans = { id -> localEvents.add("drop:$id") },
+            onCommit = { id, _ -> localEvents.add("commit:$id") },
+            onFailed = { id, _ ->
+                localEvents.add("failed:$id")
+                inFailed.countDown()
+                leaveFailed.await(5, TimeUnit.SECONDS)
+            },
+            onBusyChange = { _, busy -> localEvents.add("busy:$busy") },
+            onCleanupFailed = { id, _ -> localEvents.add("cleanupFailed:$id") },
+            onRemove = { id -> localEvents.add("remove:$id") },
+        )
+        assertTrue(local.start("a", "p") { throw RuntimeException("boom") })
+        // The job is parked inside onFailed. If the callback ran outside the
+        // ownership lock, a concurrent eviction would complete its removal edits now.
+        inFailed.awaitLatched()
+        val evictor = thread { local.evict("a") }
+        Thread.sleep(300)
+        assertFalse(localEvents.contains("remove:a"))
+
+        leaveFailed.countDown()
+        evictor.join(5000)
+        // The failure transition settles completely before the removal runs.
+        assertEquals(
+            listOf("busy:true", "failed:a", "busy:false", "drop:a", "remove:a"),
+            localEvents.toList())
+    }
+
+    @Test
+    fun `cancel before the writer ever starts still settles ownership`() {
+        // A dedicated single-thread scope whose only thread is occupied: the launch
+        // queues without entering the body, which is exactly the leak shape.
+        val gateDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+        val gateScope = CoroutineScope(SupervisorJob() + gateDispatcher)
+        try {
+            val localEvents = Collections.synchronizedList(mutableListOf<String>())
+            val local = DownloadRegistry<String, String>(
+                scope = gateScope,
+                dropSpans = { id -> localEvents.add("drop:$id") },
+                onCommit = { id, _ -> localEvents.add("commit:$id") },
+                onFailed = { id, _ -> localEvents.add("failed:$id") },
+                onBusyChange = { _, busy -> localEvents.add("busy:$busy") },
+                onCleanupFailed = { id, _ -> localEvents.add("cleanupFailed:$id") },
+                onRemove = { id -> localEvents.add("remove:$id") },
+            )
+            val occupy = CountDownLatch(1)
+            val enteredBody = CountDownLatch(1)
+            gateScope.launch { occupy.await(5, TimeUnit.SECONDS) }
+            assertTrue(local.start("a", "p") {
+                enteredBody.countDown()
+                cancelWrite = {}
+            })
+
+            // The cancel lands while the job is still queued: the body never runs.
+            assertTrue(local.cancel("a"))
+            occupy.countDown()
+            awaitActive(local, "a", false)
+
+            // Ownership and busy settle via completion, with spans dropped per the
+            // recorded intent; a skipped body is ordinary cancellation, never FAILED.
+            assertEquals(1L, enteredBody.count)
+            assertEquals(
+                listOf("busy:true", "drop:a", "busy:false"),
+                localEvents.toList())
+
+            // The next start proceeds on a clean lifecycle and commits.
+            assertTrue(local.start("a", "p2") { cancelWrite = {} })
+            awaitActive(local, "a", false)
+            assertEquals(
+                listOf("busy:true", "drop:a", "busy:false",
+                    "busy:true", "commit:a", "busy:false"),
+                localEvents.toList())
+        } finally {
+            gateDispatcher.close()
+        }
+    }
+
+    @Test
+    fun `cancel after writer entry settles only after the blocked writer unwinds`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        assertTrue(registry.start("a", "p") {
+            cancelWrite = { events.add("cancelWrite") }
+            entered.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            // The cancelled writer unwinds by returning, not by throwing.
+        })
+        entered.awaitLatched()
+
+        assertTrue(registry.cancel("a"))
+        // While the writer is still blocked, completion settlement must not run:
+        // the key stays owned and no spans are dropped.
+        Thread.sleep(300)
+        assertTrue(registry.isActive("a"))
+        assertEquals(listOf("busy:true", "cancelWrite"), events.toList())
+
+        release.countDown()
+        awaitActive("a", false)
+        // Exactly one settlement: the owning teardown's, never a second from completion.
+        assertEquals(
+            listOf("busy:true", "cancelWrite", "drop:a", "busy:false"),
+            events.toList())
+        assertEquals(1, events.count { it == "drop:a" })
+    }
+
+    @Test
+    fun `a launch that completes instantly is settled once and never left registered`() {
+        // Samples the completion-before-handler-registration interleaving: an instant
+        // write can finish before invokeOnCompletion is attached; settlement must be
+        // exactly-once either way and the record must not stay registered.
+        repeat(50) {
+            val id = "k$it"
+            assertTrue(registry.start(id, "p", instantWrite()))
+            awaitActive(id, false)
+        }
+        assertEquals(50, events.count { it.startsWith("commit:") })
+        assertEquals(50, events.count { it == "busy:false" })
     }
 }

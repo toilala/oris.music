@@ -10,15 +10,67 @@ Cache-engine evidence (debug activity buttons driving OfflineAudio directly) is
 kept separate from real-UI lifecycle evidence (Library rows and overflow menus).
 Cancel/retry semantics follow DownloadRegistry ownership: after Cancel the row may
 stay DOWNLOADING until the blocked writer is released and the owning teardown
-settles; only the settled state is asserted."""
+settles; only the settled state is asserted. The span-listing contract is grounded
+on actual device output by a sandbox probe before any span assertion, and its
+parser is checked host-side (--self-test)."""
 import glob
 import math
 import re
 import struct
 import subprocess
+import sys
 import time
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
+
+
+def parse_listing_names(text):
+    """Names from `ls -1A` output: one entry per line, dot entries excluded by -A,
+    dotfiles included. Blank lines are ignored and stray dot entries are dropped
+    defensively; every other line is one exact name (no metadata columns)."""
+    return [line.strip() for line in text.splitlines()
+            if line.strip() and line.strip() not in ('.', '..')]
+
+
+def parse_byte_count(text):
+    """Byte count from `wc -c` output: the first integer field of the first
+    non-blank line; an echoed path after the count is ignored."""
+    for line in text.splitlines():
+        fields = line.split()
+        if fields:
+            return int(fields[0])
+    raise ValueError('no byte count in wc output')
+
+
+def self_test():
+    """Host-side parser checks, no device: the raw formats the device contract
+    defines, metadata and blank exclusions, and a full positive payload example."""
+    # ls -1A contract: one name per line; dotfiles kept, dot entries dropped.
+    names = parse_listing_names(
+        'oris.1.1764072000000.v3\ncached_content_index.exi\n.hidden-probe\n\n')
+    assert names == ['oris.1.1764072000000.v3', 'cached_content_index.exi',
+                     '.hidden-probe'], names
+    assert parse_listing_names('.\n..\n\nreal-file.v3\n') == ['real-file.v3']
+    # wc -c contract: the byte count is the first field; padding and the echoed
+    # path (including one with spaces) are ignored.
+    assert parse_byte_count('32044 files/download/oris.1.1764072000000.v3\n') == 32044
+    assert parse_byte_count('     12 files/span-probe/alpha.bin\n') == 12
+    assert parse_byte_count('12\n') == 12
+    assert parse_byte_count('7 files/download/my file.v3\n') == 7
+    # Positive payload: a full listing round-trip over canned raw output.
+    raw_names = 'oris.1.1764072000000.v3\ncached_content_index.exi\n'
+    sizes = {'oris.1.1764072000000.v3': '32044 files/download/oris.1.1764072000000.v3\n',
+             'cached_content_index.exi': '4096 files/download/cached_content_index.exi\n'}
+    payload = {n: parse_byte_count(sizes[n]) for n in parse_listing_names(raw_names)}
+    assert payload == {'oris.1.1764072000000.v3': 32044,
+                       'cached_content_index.exi': 4096}, payload
+    print('SELF-TEST: span listing parser checks passed (raw format, metadata '
+          'exclusions, positive payload)', flush=True)
+
+
+if '--self-test' in sys.argv[1:]:
+    self_test()
+    sys.exit(0)
 
 from playback_check import adb, tap, wait_label, screen, tree, back, tap_mini_player, OUT, PKG
 
@@ -56,20 +108,59 @@ def gone(label, seconds=25):
     raise AssertionError('UI still showed ' + repr(label))
 
 
-def span_listing():
-    """Names and sizes under the download cache dir; empty when the dir does not
-    exist yet. Evidence for span-payload comparison, not a status derivation."""
-    r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'ls', '-la', CACHE_DIR],
+def span_listing(cache_dir=CACHE_DIR):
+    """(raw evidence text, {name: bytes}) under cache_dir; (raw, {}) when the dir
+    does not exist yet. Defined contract instead of ls metadata parsing: `ls -1A`
+    emits exactly one name per line (dot entries excluded, dotfiles included) and
+    `wc -c` per name prints the byte count as its first field. Grounded on actual
+    device output by preflight_listing() before any span assertion. Evidence for
+    span-payload comparison, not a status derivation."""
+    r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'ls', '-1A', cache_dir],
                        capture_output=True)
     if r.returncode != 0:
-        return {}
+        raw = r.stdout.decode(errors='replace') + r.stderr.decode(errors='replace')
+        return raw, {}
+    names_raw = r.stdout.decode(errors='replace')
     out = {}
-    for line in r.stdout.decode(errors='replace').splitlines():
-        m = re.match(r'\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+\S+\s+\S+\s+\S+\s+(\S+)$',
-                     line.strip())
-        if m and m.group(2) not in ('.', '..'):
-            out[m.group(2)] = int(m.group(1))
-    return out
+    size_lines = []
+    for name in parse_listing_names(names_raw):
+        quoted = "'" + (cache_dir + '/' + name).replace("'", "'\\''") + "'"
+        s = subprocess.run(['adb', 'shell', 'run-as', PKG, 'wc', '-c', quoted],
+                           capture_output=True)
+        size_lines.append(s.stdout.decode(errors='replace').strip()
+                          or s.stderr.decode(errors='replace').strip())
+        if s.returncode != 0:
+            continue  # not a plain file (e.g. a subdir); the raw line stays in evidence
+        out[name] = parse_byte_count(s.stdout.decode(errors='replace'))
+    return names_raw + '-- sizes (wc -c) --\n' + '\n'.join(size_lines), out
+
+
+def preflight_listing():
+    """Grounds the listing contract on ACTUAL device output before any span check:
+    writes fixture files of known sizes into a scratch dir inside the app sandbox,
+    then asserts span_listing reports exactly those names and sizes, including a
+    dotfile (kept by -A). The raw device output is saved to evidence either way."""
+    probe = 'files/span-probe'
+    subprocess.run(['adb', 'shell', 'run-as', PKG, 'rm', '-rf', probe],
+                   capture_output=True)
+    mk = subprocess.run(['adb', 'shell', 'run-as', PKG, 'mkdir', '-p', probe],
+                        capture_output=True)
+    assert mk.returncode == 0, 'probe dir failed: ' + mk.stderr.decode(errors='replace')
+    fixtures = {'alpha.bin': b'oris-probe-a', 'beta.v3': b'x', '.hidden': b'12345'}
+    for name, data in sorted(fixtures.items()):
+        w = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee', probe + '/' + name],
+                           input=data, capture_output=True)
+        assert w.returncode == 0, 'probe write failed for ' + name + ': ' \
+            + w.stderr.decode(errors='replace')
+    raw, got = span_listing(probe)
+    subprocess.run(['adb', 'shell', 'run-as', PKG, 'rm', '-rf', probe],
+                   capture_output=True)
+    open(OUT + '/span-preflight.txt', 'w').write(raw + '\n' + repr(sorted(got.items())))
+    expected = {name: len(data) for name, data in fixtures.items()}
+    assert got == expected, 'listing contract mismatch on actual device output: got ' \
+        + repr(got) + ' expected ' + repr(expected)
+    print('SPAN-PREFLIGHT: listing contract grounded on actual device output: '
+          + repr(sorted(got.items())), flush=True)
 
 
 def fixture_wav_bytes():
@@ -188,11 +279,15 @@ assert not live, 'network still live, refusing to run: ' + repr(live[:2])
 print('NETWORK-DISABLED: no connected network before the check (local-fixture evidence)',
       flush=True)
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
+# Fresh prefs are established, not assumed: install -r keeps any pre-existing app
+# data, so clear it before seeding (no-op difference on a fresh emulator).
+adb('shell', 'pm', 'clear', PKG)
 seed_liked()
+preflight_listing()
 
 # Span-payload baseline: a fresh install has no download cache payloads.
-baseline = span_listing()
-open(OUT + '/span-baseline.txt', 'w').write(repr(sorted(baseline.items())))
+baseline_raw, baseline = span_listing()
+open(OUT + '/span-baseline.txt', 'w').write(baseline_raw + '\n' + repr(sorted(baseline.items())))
 print('SPAN-BASELINE: %d cache files before any download' % len(baseline), flush=True)
 
 # A1. Real cache write and state lifecycle through the real CacheWriter over file://.
@@ -202,10 +297,11 @@ wait_label('Offline state: NOT SAVED', seconds=30)
 tap('Download fixture')
 wait_label('Offline state: READY', seconds=60)
 screen('offline_ready')
-ready_listing = span_listing()
+ready_raw, ready_listing = span_listing()
 payload = {k: v for k, v in ready_listing.items() if k not in baseline}
-open(OUT + '/span-ready.txt', 'w').write(repr(sorted(ready_listing.items())))
-assert payload, 'READY but no new cache payload appeared: ' + repr(ready_listing)
+open(OUT + '/span-ready.txt', 'w').write(ready_raw + '\n' + repr(sorted(ready_listing.items())))
+assert payload, 'READY but no new cache payload appeared: ' + repr(ready_listing) \
+    + ' raw: ' + ready_raw
 print('CACHE-WRITE: download reached READY over the local fixture; span payload '
       'positive control: ' + repr(sorted(payload.items())), flush=True)
 
@@ -408,8 +504,8 @@ else:
         'a cancelled download must not show the READY chip'
     wait_label('Saved (0)', seconds=15)
     screen('library_cancel_settled')
-    after = span_listing()
-    open(OUT + '/span-after-cancel.txt', 'w').write(repr(sorted(after.items())))
+    after_raw, after = span_listing()
+    open(OUT + '/span-after-cancel.txt', 'w').write(after_raw + '\n' + repr(sorted(after.items())))
     resurrected = {k: v for k, v in after.items() if k not in baseline}
     assert not resurrected, 'span payloads present after cancelled download settled: ' \
         + repr(resurrected)
