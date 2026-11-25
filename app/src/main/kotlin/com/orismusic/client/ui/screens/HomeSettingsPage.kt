@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
@@ -73,6 +74,9 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             ChoiceRow("Jump back in layout", JumpStyle.entries, HomeSettings.jumpStyle, { it.label }) { HomeSettings.jumpStyle = it; HomeSettings.save() }
             ChoiceRow("Artist shelves", listOf(1, 2, 3, 4, 5), HomeSettings.becauseCount, { "$it" }) { HomeSettings.becauseCount = it; HomeSettings.save() }
             TextButton(onClick = { HomeSettings.reset() }) { Text("Reset Home") }
+            }
+            SettingsFold("Filters") {
+            DiscoveryFiltersSection()
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -129,3 +133,34 @@ private fun HomePreview() {
 
 private fun Modifier.androidx_graphics(rotation: Float, shiftDp: Float): Modifier =
     this.graphicsLayer { rotationZ = rotation; translationY = shiftDp.dp.toPx() }
+
+@Composable
+private fun DiscoveryFiltersSection() {
+    val store = com.orismusic.client.library.DiscoveryFilterStore.get(androidx.compose.ui.platform.LocalContext.current)
+    val filters = store.filters.collectAsState().value
+    Text("Hidden and disliked songs and blocked artists stay out of Quick picks. Remove one to bring it back.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    FilterGroup("Hidden songs", filters.hidden.map { it.id to listOf(it.title, it.artist) }) { store.unhide(it) }
+    FilterGroup("Disliked songs", filters.disliked.map { it.id to listOf(it.title, it.artist) }) { store.undislike(it) }
+    FilterGroup("Blocked artists", filters.blockedArtists.map { it to listOf(it, "") }) { store.unblockArtist(it) }
+}
+
+@Composable
+private fun FilterGroup(title: String, entries: List<Pair<String, List<String>>>, onRemove: (String) -> Unit) {
+    Spacer(Modifier.height(10.dp))
+    Text("$title (${entries.size})", style = MaterialTheme.typography.titleSmall)
+    if (entries.isEmpty()) {
+        Text("Nothing here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    entries.forEach { (key, label) ->
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label[0], style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                if (label[1].isNotEmpty()) Text(label[1], style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+            TextButton(onClick = { onRemove(key) }) { Text("Remove") }
+        }
+    }
+}

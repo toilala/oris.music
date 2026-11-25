@@ -84,6 +84,8 @@ import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.queues.MusicRadioQueue
 import com.orismusic.client.music.MusicCandidates
+import com.orismusic.client.library.DiscoveryFilterStore
+import com.orismusic.client.library.FilteredSong
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.queues.ListQueue
@@ -147,6 +149,8 @@ fun HomeScreen(
     val liked = store.liked.collectAsState().value
     val counts = store.playCounts.collectAsState().value
     val taste = remember(history, liked, counts) { Taste.from(history, liked, counts) }
+    val filterStore = DiscoveryFilterStore.get(context)
+    val filters = filterStore.filters.collectAsState().value
     val shelves by produceState<List<ArtistShelf>>(emptyList(), taste.artists, refreshTick) {
         value = if (taste.artists.isEmpty()) emptyList() else loadArtistShelves(taste.artists.take(6))
     }
@@ -163,8 +167,8 @@ fun HomeScreen(
             .orEmpty().distinctBy { it.id }.take(5)
     }
 
-    val quickPicks by produceState<Pair<List<SongItem>, String>?>(null, feed, refreshTick) {
-        value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it) }
+    val quickPicks by produceState<Pair<List<SongItem>, String>?>(null, feed, refreshTick, filters, taste.artists) {
+        value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it, filters, taste.artists) }
     }
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
@@ -246,7 +250,16 @@ fun HomeScreen(
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {
                             quickPicks?.let { (picks, _) ->
-                                item(key = "quick-picks") { Column(Modifier.entrance(2)) { QuickPicksSection(picks, playerConnection, scope) } }
+                                item(key = "quick-picks") {
+                                    Column(Modifier.entrance(2)) {
+                                        QuickPicksSection(
+                                            picks, playerConnection, scope,
+                                            onHide = { s -> filterStore.hide(FilteredSong(s.id, s.title, s.artists.joinToString { it.name })) },
+                                            onDislike = { s -> filterStore.dislike(FilteredSong(s.id, s.title, s.artists.joinToString { it.name })) },
+                                            onBlockArtist = { name -> filterStore.blockArtist(name) },
+                                        )
+                                    }
+                                }
                             }
                             if (community.isNotEmpty() && !HomeSettings.minimal) item(key = "community-playlists") { CommunityPlaylistsSection(community, onOpen) }
                             feedItems(state.page, newAlbums, playerConnection, onOpen, scope, quickPicks?.second)

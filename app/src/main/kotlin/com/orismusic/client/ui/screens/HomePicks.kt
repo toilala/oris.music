@@ -44,6 +44,9 @@ import com.music.innertube.models.PlaylistItem
 import com.music.innertube.models.SongItem
 import com.music.innertube.pages.HomePage
 import com.orismusic.client.extensions.toMediaItem
+import com.orismusic.client.library.DiscoveryFilters
+import com.orismusic.client.library.rankedByTaste
+import com.orismusic.client.library.withoutFiltered
 import com.orismusic.client.music.MusicCandidates
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.queues.ListQueue
@@ -64,25 +67,33 @@ private const val PICKS_PER_PAGE = 8
 /** The home feed's own song shelf to show as the Quick picks list: the shelf the feed
  * labels for quick listening when it carries one, else its strongest song shelf.
  * Returns the picks and the consumed shelf's title so it is not repeated as cards. */
-fun chooseQuickPicks(page: HomePage): Pair<List<SongItem>, String>? {
+fun chooseQuickPicks(page: HomePage, filters: DiscoveryFilters, tasteArtists: List<String>): Pair<List<SongItem>, String>? {
     val shelves = page.sections.filter { s -> s.items.count { it is SongItem } >= ROWS_PER_PAGE * 2 }
     val chosen = shelves.firstOrNull { it.title.contains("quick", ignoreCase = true) }
         ?: shelves.maxByOrNull { s -> s.items.count { it is SongItem } } ?: return null
-    val picks = MusicCandidates.select(chosen.items.filterIsInstance<SongItem>())
-        .distinctBy { it.id }.take(ROWS_PER_PAGE * 4)
-    if (picks.size < ROWS_PER_PAGE * 2) return null
+    val raw = MusicCandidates.select(chosen.items.filterIsInstance<SongItem>()).distinctBy { it.id }
+    if (raw.size < ROWS_PER_PAGE * 2) return null
+    // The listener's filters run on the raw shelf; whatever survives, even nothing, is
+    // what the section shows - filtered-out songs never come back through a fallback.
+    val picks = raw
+        .withoutFiltered(filters, { it.id }, { s -> s.artists.map { it.name } })
+        .rankedByTaste(tasteArtists) { s -> s.artists.map { it.name } }
+        .take(ROWS_PER_PAGE * 4)
     return picks to chosen.title
 }
 
 /** Anonymous feeds can carry only playlists. Use actual songs from one of those
  * recommendations rather than making Quick picks disappear for new listeners. */
-suspend fun loadQuickPicks(page: HomePage): Pair<List<SongItem>, String>? {
-    chooseQuickPicks(page)?.let { return it }
+suspend fun loadQuickPicks(page: HomePage, filters: DiscoveryFilters, tasteArtists: List<String>): Pair<List<SongItem>, String>? {
+    chooseQuickPicks(page, filters, tasteArtists)?.let { return it }
     val playlists = page.sections.flatMap { it.items.filterIsInstance<PlaylistItem>() }
         .distinctBy { it.id }.take(3)
     for (playlist in playlists) {
         val songs = YouTube.playlist(playlist.id).getOrNull()?.songs.orEmpty()
-        val picks = MusicCandidates.select(songs).distinctBy { it.id }.take(16)
+        val picks = MusicCandidates.select(songs).distinctBy { it.id }
+            .withoutFiltered(filters, { it.id }, { s -> s.artists.map { it.name } })
+            .rankedByTaste(tasteArtists) { s -> s.artists.map { it.name } }
+            .take(16)
         if (picks.size >= ROWS_PER_PAGE) return picks to ""
     }
     return null
@@ -97,6 +108,9 @@ fun QuickPicksSection(
     songs: List<SongItem>,
     connection: PlayerConnection?,
     scope: CoroutineScope,
+    onHide: (SongItem) -> Unit = {},
+    onDislike: (SongItem) -> Unit = {},
+    onBlockArtist: (String) -> Unit = {},
 ) {
     fun playFrom(index: Int) {
         connection ?: return
@@ -117,7 +131,7 @@ fun QuickPicksSection(
                 Text("Quick picks", style = MaterialTheme.typography.titleLarge,
                     fontFamily = com.orismusic.client.ui.theme.DisplaySerif)
             }
-            Row(
+            if (songs.isNotEmpty()) Row(
                 Modifier.clip(RoundedCornerShape(50))
                     .background(MaterialTheme.colorScheme.tertiary)
                     .pressClickable({ playFrom(0) }, 0.94f)
@@ -130,6 +144,15 @@ fun QuickPicksSection(
                 Text("Play all", style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onTertiary)
             }
+        }
+        if (songs.isEmpty()) {
+            Text(
+                "Your filters hide these picks. Manage them in Home settings.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            return@Column
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val pageCount = (songs.size + PICKS_PER_PAGE - 1) / PICKS_PER_PAGE
@@ -157,6 +180,9 @@ fun QuickPicksSection(
                                             com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
                                         }
                                     },
+                                    onHide = { onHide(song) },
+                                    onDislike = { onDislike(song) },
+                                    onBlockArtist = song.artists.firstOrNull()?.name?.let { name -> { onBlockArtist(name) } },
                                 )
                             }
                             if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -177,6 +203,9 @@ private fun QuickPickChip(
     onPlayNext: (() -> Unit)?,
     onAddToQueue: (() -> Unit)?,
     onStartRadio: (() -> Unit)?,
+    onHide: (() -> Unit)?,
+    onDislike: (() -> Unit)?,
+    onBlockArtist: (() -> Unit)?,
 ) {
     Box(modifier) {
         var menu by remember { mutableStateOf(false) }
@@ -184,7 +213,7 @@ private fun QuickPickChip(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
                 .pressCombinedClickable(
                     onClick,
-                    onLongClick = { if (onPlayNext != null || onAddToQueue != null || onStartRadio != null) menu = true },
+                    onLongClick = { menu = true },
                     pressedScale = 0.97f,
                 )
                 .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -206,6 +235,11 @@ private fun QuickPickChip(
             if (onPlayNext != null) DropdownMenuItem(text = { Text("Play next") }, onClick = { onPlayNext(); menu = false })
             if (onAddToQueue != null) DropdownMenuItem(text = { Text("Add to queue") }, onClick = { onAddToQueue(); menu = false })
             if (onStartRadio != null) DropdownMenuItem(text = { Text("Start radio") }, onClick = { onStartRadio(); menu = false })
+            if (onHide != null) DropdownMenuItem(text = { Text("Hide song") }, onClick = { onHide(); menu = false })
+            if (onDislike != null) DropdownMenuItem(text = { Text("Dislike song") }, onClick = { onDislike(); menu = false })
+            if (onBlockArtist != null) {
+                DropdownMenuItem(text = { Text("Block ${song.artists.first().name}") }, onClick = { onBlockArtist(); menu = false })
+            }
         }
     }
 }
