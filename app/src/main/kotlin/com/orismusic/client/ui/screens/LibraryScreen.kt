@@ -66,9 +66,13 @@ import coil3.compose.AsyncImage
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.ImportPreview
 import com.orismusic.client.library.ListeningStats
+import com.orismusic.client.library.isUnmatchedImport
 import com.orismusic.client.library.listeningStats
 import com.orismusic.client.library.matching
+import com.orismusic.client.library.parsePlaylistImport
+import com.orismusic.client.library.toSavedSong
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.PlayerConnection
@@ -99,6 +103,10 @@ fun LibraryScreen(
     var openPlaylist by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var importing by remember { mutableStateOf(false) }
+    var importText by rememberSaveable { mutableStateOf("") }
+    var importName by rememberSaveable { mutableStateOf("") }
+    var importPreview by remember { mutableStateOf<ImportPreview?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
     val opened = playlists.firstOrNull { it.id == openPlaylist }
     val stats = listeningStats(playCounts, history + liked + saved + playlists.flatMap { it.songs })
@@ -142,6 +150,56 @@ fun LibraryScreen(
                 ) { Text("Create") }
             },
             dismissButton = { TextButton(onClick = { creating = false; newName = "" }) { Text("Cancel") } },
+        )
+    }
+
+    if (importing) {
+        AlertDialog(
+            onDismissRequest = { importing = false },
+            title = { Text("Import playlist") },
+            text = {
+                Column {
+                    OutlinedTextField(value = importName, onValueChange = { importName = it },
+                        singleLine = true, label = { Text("Name") })
+                    OutlinedTextField(
+                        value = importText,
+                        onValueChange = { importText = it; importPreview = null },
+                        label = { Text("Songs as Title - Artist, one per line, or a CSV export") },
+                        minLines = 4,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    importPreview?.let { p ->
+                        Text(
+                            text = p.unsupportedReason
+                                ?: ("${p.songs.size} songs ready" +
+                                    (if (p.duplicates > 0) ", ${p.duplicates} ${if (p.duplicates == 1) "duplicate" else "duplicates"} collapsed" else "") +
+                                    (if (p.skipped.isNotEmpty()) ", ${p.skipped.size} ${if (p.skipped.size == 1) "line" else "lines"} couldn't be read" else "") +
+                                    (if (p.songs.any { it.videoId == null }) ". Songs without a video id are listed but can't play until matched." else "")),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (p.unsupportedReason != null) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val p = importPreview
+                if (p == null) {
+                    TextButton(onClick = { importPreview = parsePlaylistImport(importText) }) { Text("Preview") }
+                } else {
+                    TextButton(
+                        onClick = {
+                            val id = playlistStore.create(importName.ifBlank { "Imported playlist" })
+                            p.songs.forEach { playlistStore.add(id, it.toSavedSong()) }
+                            importing = false; importText = ""; importName = ""; importPreview = null
+                            section = 2; openPlaylist = id
+                        },
+                        enabled = p.songs.isNotEmpty(),
+                    ) { Text("Import") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { importing = false }) { Text("Cancel") } },
         )
     }
     Column(modifier = modifier) {
@@ -192,8 +250,11 @@ fun LibraryScreen(
             )
         }
         if (section == 2 && opened == null) {
-            TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Text("New playlist")
+            Row {
+                TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text("New playlist")
+                }
+                TextButton(onClick = { importing = true }) { Text("Import playlist") }
             }
             if (playlists.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -237,6 +298,7 @@ fun LibraryScreen(
             Text(opened.name, style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             val shown = songs.matching(query)
+            val playable = shown.filter { !it.isUnmatchedImport() }
             if (songs.isEmpty()) {
                 Text("Nothing here yet. Open a song's player and add it to this playlist.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -251,12 +313,12 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Button(onClick = { play(shown, 0) }, enabled = connection != null) {
+                    Button(onClick = { play(playable, 0) }, enabled = connection != null && playable.isNotEmpty()) {
                         Icon(Icons.Filled.PlayArrow, null)
                         Spacer(Modifier.width(6.dp))
                         Text("Play")
                     }
-                    OutlinedButton(onClick = { play(shown, 0, shuffle = true) }, enabled = connection != null) {
+                    OutlinedButton(onClick = { play(playable, 0, shuffle = true) }, enabled = connection != null && playable.isNotEmpty()) {
                         Icon(Icons.Filled.Shuffle, null)
                         Spacer(Modifier.width(6.dp))
                         Text("Shuffle")
@@ -264,8 +326,10 @@ fun LibraryScreen(
                 }
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->
+                        val playableIndex = playable.indexOfFirst { it.id == song.id }
                         Row(
-                            modifier = Modifier.fillMaxWidth().entrance(index).clickable { play(shown, index) }
+                            modifier = Modifier.fillMaxWidth().entrance(index)
+                                .clickable(enabled = playableIndex >= 0) { play(playable, playableIndex) }
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -280,7 +344,11 @@ fun LibraryScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
-                                Text(song.artist, style = MaterialTheme.typography.bodyMedium,
+                                Text(
+                                    if (song.isUnmatchedImport())
+                                        listOf(song.artist, "Not matched yet").filter { it.isNotBlank() }.joinToString(" · ")
+                                    else song.artist,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
                             }
