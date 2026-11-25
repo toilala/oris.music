@@ -83,6 +83,23 @@ def chip_state(label):
     return node.get('selected') if node is not None else None
 
 
+def chip_state_wait(label, seconds=6):
+    """Poll the chip's selected attribute on FRESH trees after its tap, never retrying
+    the tap itself. On timeout capture the screen and the last-seen attribute before
+    failing, so a product defect cannot hide behind a single hiccuped a11y read."""
+    end = time.monotonic() + seconds
+    last = None
+    while time.monotonic() < end:
+        last = chip_state(label)
+        if last == 'true':
+            return
+        time.sleep(0.5)
+    screen('eq_preset_failed')
+    raise AssertionError(
+        label + ' chip did not read as selected after its tap (last seen: '
+        + repr(last) + '); post-tap capture is eq_preset_failed.png')
+
+
 def tap_clickable(label):
     """Tap the clickable ancestor of the node carrying label, so taps never land on a
     plain Text sibling of the real control."""
@@ -151,7 +168,7 @@ wait_label('Bass boost')
 screen('eq_presets_in_view')
 tap_clickable('Bass boost')
 time.sleep(2)
-assert chip_state('Bass boost') == 'true', 'Bass boost chip did not read as selected after its tap'
+chip_state_wait('Bass boost')
 screen('eq_preset_bass')
 for _ in range(8):
     if any(re.fullmatch(r'\d+(\.\d+)? (Hz|kHz)', n.get('text') or '') for n in tree().iter('node')):

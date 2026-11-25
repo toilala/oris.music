@@ -63,9 +63,6 @@ import com.orismusic.client.MainActivity
 import com.orismusic.client.R
 import com.orismusic.client.constants.AudioNormalizationKey
 import com.orismusic.client.constants.AudioOffload
-import com.orismusic.client.constants.CrossfadeDurationKey
-import com.orismusic.client.constants.CrossfadeEnabledKey
-import com.orismusic.client.constants.CrossfadeGaplessKey
 import com.orismusic.client.constants.HideExplicitKey
 import com.orismusic.client.constants.HideVideoSongsKey
 import com.orismusic.client.constants.InfiniteQueueKey
@@ -81,13 +78,11 @@ import com.orismusic.client.constants.SkipSilenceInstantKey
 import com.orismusic.client.constants.SkipSilenceKey
 import com.orismusic.client.constants.StopPlaybackOnTaskRemovedKey
 import com.orismusic.client.constants.IpVersionKey
-import com.orismusic.client.constants.transitionModeOf
 import com.orismusic.client.di.AudioFxService
 import com.orismusic.client.di.AudioLabStore
 import com.orismusic.client.di.AudioSpectrum
 import com.orismusic.client.di.CarLyrics
 import com.orismusic.client.di.CastConnectionHandler
-import com.orismusic.client.di.CrossmixTransitionAudioProcessor
 import com.orismusic.client.di.CustomEqualizerAudioProcessor
 import com.orismusic.client.di.CustomStreamResult
 import com.orismusic.client.di.DiscordPresence
@@ -103,7 +98,6 @@ import com.orismusic.client.di.NetworkConnectivityObserver
 import com.orismusic.client.di.PlayerCache
 import com.orismusic.client.di.ReplayGainTags
 import com.orismusic.client.di.Scrobbler
-import com.orismusic.client.di.SilenceDetectorAudioProcessor
 import com.orismusic.client.di.SleepTimer
 import com.orismusic.client.di.SongTuning
 import com.orismusic.client.di.SourceModules
@@ -213,27 +207,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     var preferredDeviceId: Int? = null
         private set
 
-    private var crossfadeEnabled = false
-    private var crossfadeDuration = 5000f
-    private var crossfadeGapless = true
-    private var crossmixMode = CrossmixMode.OFF
-    private var crossfadeTriggerJob: Job? = null
-
-    private val secondaryPlayerListener = object : Player.Listener {
-        override fun onPlayerError(error: PlaybackException) {
-            Timber.tag("OrisMediaService").e(error, "Secondary player error")
-            secondaryPlayer?.stop()
-            secondaryPlayer?.clearMediaItems()
-            secondaryPlayer?.let { failed ->
-                failed.removeListener(this)
-                playerCrossmixProcessors.remove(failed)
-                playerSilenceProcessors.remove(failed)
-                failed.release()
-            }
-            secondaryPlayer = null
-        }
-    }
-
     private var scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val binder = MusicBinder()
@@ -332,10 +305,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     lateinit var player: ExoPlayer
         private set
-    private var secondaryPlayer: ExoPlayer? = null
-    private var fadingPlayer: ExoPlayer? = null
-    private var isCrossfading = false
-    private var crossfadeJob: Job? = null
 
     @Volatile private var skipBlend = false
     @Volatile private var blendAhead = 1
@@ -344,18 +313,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     @Volatile private var studioForVideos = false
     private var fadingLoudnessEnhancer: LoudnessEnhancer? = null
     private var loudnessEnhancerSessionId = C.AUDIO_SESSION_ID_UNSET
-    private var promotingCrossmix = false
-
     // Minimal TransportTransitions
     val transport = object {
         val host = object {}
-    }
-
-    val crossmixMixing = MutableStateFlow(false)
-    val crossmixStatus = MutableStateFlow("")
-
-    fun testCrossmix() {
-        // Crossmix test
     }
 
     private val playingStreams = java.util.concurrent.ConcurrentHashMap<String, Any>() // CustomStreamResult placeholder
@@ -409,13 +369,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         // Handle lyrics sync result
     }
 
-    private data class CrossfadeConfig(
-        val mode: CrossmixMode,
-        val enabled: Boolean,
-        val durationSeconds: Float,
-        val disableForGaplessAlbums: Boolean,
-    )
-
     private lateinit var mediaSession: MediaLibrarySession
 
     private var carLyrics: CarLyrics? = null
@@ -429,10 +382,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private val _playerFlow = MutableStateFlow<ExoPlayer?>(null)
     val playerFlow = _playerFlow.asStateFlow()
 
-    private val playerSilenceProcessors = java.util.HashMap<Player, SilenceDetectorAudioProcessor>()
     private val playerReplayGain = java.util.HashMap<Player, ReplayGainTags>()
     private val playerEqProcessors = java.util.HashMap<Player, CustomEqualizerAudioProcessor>()
-    private val playerCrossmixProcessors = java.util.HashMap<Player, CrossmixTransitionAudioProcessor>()
     private val playerSpectra = java.util.WeakHashMap<Player, AudioSpectrum>()
 
     fun spectrumOf(player: Player): AudioSpectrum? = playerSpectra[player]
@@ -597,9 +548,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private fun loadPreferences() {
         scope.launch {
             dataStore.data.collect { prefs ->
-                crossfadeEnabled = prefs[CrossfadeEnabledKey] ?: false
-                crossfadeDuration = (prefs[CrossfadeDurationKey] ?: 5f) * 1000
-                crossfadeGapless = prefs[CrossfadeGaplessKey] ?: true
                 mixWithOtherApps = prefs[MixWithOtherAppsKey] ?: false
             }
         }
@@ -860,10 +808,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         if (::player.isInitialized) player.removeListener(this)
         if (::mediaSession.isInitialized) mediaSession.release()
         if (::player.isInitialized) player.release()
-        secondaryPlayer?.release()
-        secondaryPlayer = null
-        fadingPlayer?.release()
-        fadingPlayer = null
         abandonAudioFocus()
         if (::audioManager.isInitialized && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
@@ -1293,10 +1237,5 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     // AudioQuality enum for settings
     enum class AudioQuality {
         LOW, MEDIUM, HIGH, LOSSLESS, AUTO
-    }
-
-    // CrossmixMode enum
-    enum class CrossmixMode {
-        OFF, CROSSFADE, AUTOMIX
     }
 }

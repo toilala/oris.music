@@ -41,11 +41,6 @@ enum class AudioQuality {
     }
 }
 
-// Crossfade preferences
-val CrossfadeEnabledKey = booleanPreferencesKey("crossfadeEnabled")
-val CrossfadeDurationKey = floatPreferencesKey("crossfadeDuration")
-val CrossfadeGaplessKey = booleanPreferencesKey("crossfadeGapless")
-
 // Audio focus and behavior
 val MixWithOtherAppsKey = booleanPreferencesKey("mixWithOtherApps")
 val PauseOnMute = booleanPreferencesKey("pauseOnMute")
@@ -82,23 +77,6 @@ val SkipSilenceInstantKey = booleanPreferencesKey("skipSilenceInstant")
 // Audio normalization
 val AudioNormalizationKey = booleanPreferencesKey("audioNormalization")
 
-// Crossfade/automix
-val CrossmixModeKey = stringPreferencesKey("crossmixMode")
-
-enum class CrossmixMode {
-    AUTO_CROSSFADE,
-    OFF,
-    MANUAL_CROSSFADE,
-    CROSSMIX,
-}
-
-val DefaultTransitionMode = CrossmixMode.CROSSMIX
-
-fun transitionModeOf(prefs: Preferences): CrossmixMode =
-    prefs[CrossmixModeKey]?.let { saved -> runCatching { CrossmixMode.valueOf(saved) }.getOrNull() }
-        ?: if (prefs[CrossfadeEnabledKey] == true) CrossmixMode.MANUAL_CROSSFADE else DefaultTransitionMode
-
-val CrossmixAlwaysMixKey = booleanPreferencesKey("crossmixAlwaysMix")
 
 // Volume
 val PlayerVolumeKey = floatPreferencesKey("playerVolume")
@@ -208,32 +186,7 @@ val LastFMSessionKey = stringPreferencesKey("lastfmSession")
 val LastFMUseNowPlaying = booleanPreferencesKey("lastfmUseNowPlaying")
 val LastFMUseSendLikes = booleanPreferencesKey("lastfmUseSendLikes")
 
-// Automix crossfade
-val AutomixCrossfadeKey = booleanPreferencesKey("automixCrossfade")
-
-// Crossmix additional settings
-val CrossmixLengthKey = stringPreferencesKey("crossmixLength")
-val CrossmixTempoMatchKey = stringPreferencesKey("crossmixTempoMatch")
-val CrossmixStyleKey = stringPreferencesKey("crossmixStyle")
-val CrossmixStuntsKey = booleanPreferencesKey("crossmixStunts")
-val CrossmixStartLatencyKey = floatPreferencesKey("crossmixStartLatencyMs")
-
-enum class CrossmixLength(val scale: Float) {
-    SHORT(0.6f),
-    MEDIUM(1f),
-    LONG(1.5f),
-}
-
-enum class CrossmixTempoMatch(val maxSpeedUp: Float) {
-    OFF(0.006f),
-    GENTLE(0.04f),
-    FULL(0.10f),
-}
-
-const val CrossmixStyleAuto = "AUTO"
-
 // Default values
-const val DEFAULT_CROSSFADE_DURATION = 5f
 const val DEFAULT_PLAYER_VOLUME = 1f
 const val DEFAULT_REPEAT_MODE = Player.REPEAT_MODE_OFF
 const val DEFAULT_SCRUBBLE_DELAY_PERCENT = 0.5f

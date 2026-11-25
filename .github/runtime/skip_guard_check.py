@@ -118,7 +118,37 @@ assert 'playback started: sg-good-2' not in log, 'queue advanced past the guard 
 # Playing; the banner's Retry button prepares and plays the failed item, which exhausts
 # once more (streak 1 after the pause-time reset) and advances to good2.
 resume_main()
-tap_clickable('SkipGuard bad 5')
+
+
+def tap_mini_player(title):
+    """Tap the mini-player pill: the clickable ancestor of the title text whose subtree
+    owns a transport button (content-desc Play/Pause/Replay). Home's 'Continue listening'
+    row carries the same title but no transport buttons, so title alone is ambiguous."""
+    end = time.monotonic() + 30
+    while time.monotonic() < end:
+        root = tree()
+        parents = {c: p for p in root.iter('node') for c in p}
+        for label_node in [n for n in root.iter('node') if n.get('text') == title]:
+            node = label_node
+            while node is not None and node.get('clickable') != 'true':
+                node = parents.get(node)
+            if node is None:
+                continue
+            descs = [d.get('content-desc') for d in node.iter('node')]
+            if any(d in ('Play', 'Pause', 'Replay') for d in descs):
+                x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+                print('TAP mini player ' + title + ' bounds=' + node.get('bounds'), flush=True)
+                adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
+                return
+        time.sleep(1)
+    screen('failure')
+    raise AssertionError('mini player pill for ' + title + ' never found')
+
+
+tap_mini_player('SkipGuard bad 5')
+# Now Playing must actually be open before the banner can be: 'Collapse player' exists
+# only on that screen.
+wait_label('Collapse player', seconds=30)
 tap_clickable('Retry')
 end = time.monotonic() + 150
 recovered = False
@@ -131,5 +161,5 @@ screen('skip_guard_recovered')
 log = diag_log()
 open('runtime-evidence/skip-guard-logcat.txt', 'w').write(log)
 assert recovered, 'banner Retry never recovered to sg-good-2'
-assert log.count(PAUSE_MSG) == 1, 'the retried failure must not re-pause: the pause resets the streak'
+assert pause_count(log) == 1, 'the retried failure must not re-pause: the pause resets the streak'
 print('PASS: skip-walk guard (advance x2, success reset, no early pause, pause at 3, banner Retry recovery)', flush=True)
