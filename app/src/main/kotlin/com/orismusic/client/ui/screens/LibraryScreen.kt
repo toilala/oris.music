@@ -1,6 +1,7 @@
 package com.orismusic.client.ui.screens
 
 import com.orismusic.client.ui.theme.OrisMotion
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Settings
@@ -109,6 +111,7 @@ fun LibraryScreen(
     var importName by rememberSaveable { mutableStateOf("") }
     var importPreview by remember { mutableStateOf<ImportPreview?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
+    BackHandler(enabled = showStats) { showStats = false }
     val opened = playlists.firstOrNull { it.id == openPlaylist }
     val stats = listeningStats(playCounts, history + liked + saved + playlists.flatMap { it.songs })
     val songs = when {
@@ -226,6 +229,12 @@ fun LibraryScreen(
             }
         }
         if (showStats) {
+            TextButton(onClick = { showStats = false }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null,
+                    modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Back to Library")
+            }
             StatsContent(stats)
         } else {
         Row(
