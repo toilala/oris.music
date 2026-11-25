@@ -181,7 +181,13 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     Text("Equalizer", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Unavailable right now.",
+                        when (eq.unavailableReason) {
+                            com.orismusic.client.playback.EqUnavailable.NoSession ->
+                                "No audio session for it to work on right now."
+                            com.orismusic.client.playback.EqUnavailable.InitFailed ->
+                                "Could not start the equalizer on this output."
+                            null -> "Unavailable right now."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

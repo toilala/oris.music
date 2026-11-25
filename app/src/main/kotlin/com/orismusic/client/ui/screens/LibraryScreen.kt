@@ -61,6 +61,7 @@ import coil3.compose.AsyncImage
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.matching
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.PlayerConnection
@@ -86,6 +87,7 @@ fun LibraryScreen(
     var openPlaylist by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val opened = playlists.firstOrNull { it.id == openPlaylist }
     val songs = when {
         section == 0 -> liked
@@ -156,6 +158,15 @@ fun LibraryScreen(
             FilterChip(selected = section == 3, onClick = { section = 3 },
                 label = { Text("Saved (${saved.size})") })
         }
+        if (songs.isNotEmpty() && (section != 2 || opened != null)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                label = { Text("Filter this list") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
         if (section == 2 && opened == null) {
             TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text("New playlist")
@@ -201,9 +212,14 @@ fun LibraryScreen(
             }
             Text(opened.name, style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val shown = songs.matching(query)
             if (songs.isEmpty()) {
                 Text("Nothing here yet. Open a song's player and add it to this playlist.",
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp))
+            } else if (shown.isEmpty()) {
+                Text("No matches.", style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp))
             } else {
@@ -211,21 +227,21 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Button(onClick = { play(songs, 0) }, enabled = connection != null) {
+                    Button(onClick = { play(shown, 0) }, enabled = connection != null) {
                         Icon(Icons.Filled.PlayArrow, null)
                         Spacer(Modifier.width(6.dp))
                         Text("Play")
                     }
-                    OutlinedButton(onClick = { play(songs, 0, shuffle = true) }, enabled = connection != null) {
+                    OutlinedButton(onClick = { play(shown, 0, shuffle = true) }, enabled = connection != null) {
                         Icon(Icons.Filled.Shuffle, null)
                         Spacer(Modifier.width(6.dp))
                         Text("Shuffle")
                     }
                 }
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
-                    itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                    itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().entrance(index).clickable { play(songs, index) }
+                            modifier = Modifier.fillMaxWidth().entrance(index).clickable { play(shown, index) }
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -265,8 +281,18 @@ fun LibraryScreen(
                 )
             }
         } else {
+            val shown = songs.matching(query)
+            if (shown.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No matches.", style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(32.dp))
+                }
+                return@Column
+            }
             Text(
-                text = "$title  \u00b7  ${songs.size} ${if (songs.size == 1) "song" else "songs"}",
+                text = if (query.isBlank()) "$title  \u00b7  ${songs.size} ${if (songs.size == 1) "song" else "songs"}"
+                    else "$title  \u00b7  ${shown.size} of ${songs.size} ${if (songs.size == 1) "song" else "songs"}",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
@@ -276,12 +302,12 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(onClick = { play(songs, 0) }, enabled = connection != null) {
+                Button(onClick = { play(shown, 0) }, enabled = connection != null) {
                     Icon(Icons.Filled.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Play")
                 }
-                OutlinedButton(onClick = { play(songs, 0, shuffle = true) }, enabled = connection != null) {
+                OutlinedButton(onClick = { play(shown, 0, shuffle = true) }, enabled = connection != null) {
                     Icon(Icons.Filled.Shuffle, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Shuffle")
@@ -290,12 +316,12 @@ fun LibraryScreen(
                 if (section == 1) TextButton(onClick = { store.clearHistory() }) { Text("Clear") }
             }
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
-                itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->
                     Box(Modifier.entrance(index)) {
                     SavedSongRow(
                         song = song,
                         liked = liked.any { it.id == song.id },
-                        onClick = { play(songs, index) },
+                        onClick = { play(shown, index) },
                         onToggleLike = { store.toggleLike(song) },
                         playlists = playlists.map { it.id to it.name },
                         onAddToPlaylist = { id -> playlistStore.add(id, song) },

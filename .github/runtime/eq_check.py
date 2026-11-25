@@ -13,7 +13,9 @@ from playback_check import adb, tap, wait_label, screen, tree, PKG, OUT
 
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
 MAIN = PKG + '/com.orismusic.client.MainActivity'
-UNAVAILABLE = 'Unavailable right now.'
+UNAVAILABLE_LINES = ('Unavailable right now.',
+                     'No audio session for it to work on right now.',
+                     'Could not start the equalizer on this output.')
 OFF_COPY = 'Off: sound passes through unchanged.'
 ON_COPY = 'On: shaping the sound of the current output.'
 
@@ -168,12 +170,13 @@ scroll_to_eq()
 screen('eq_cold')
 dump_audio('dumpsys-audio-eq-cold.txt')
 
-if has_text(UNAVAILABLE):
-    # The platform could not create an equalizer for this session: honest capture, not
-    # an app failure. Supported controls stay unverified in this environment.
+unavailable = next((line for line in UNAVAILABLE_LINES if has_text(line)), None)
+if unavailable is not None:
+    # No usable equalizer in this state: honest capture, not an app failure. Supported
+    # controls stay unverified in this environment.
     adb('shell', 'am', 'force-stop', PKG)
-    print('RESULT: Equalizer unavailable at cold start on this emulator; unavailable '
-          'copy verified. Supported-state controls unverified here.', flush=True)
+    print('RESULT: Equalizer unavailable at cold start on this emulator (' + unavailable
+          + '); unavailable copy verified. Supported-state controls unverified here.', flush=True)
     raise SystemExit(0)
 
 # 2. Available at cold start: the equalizer attached before any playback. Exercise it.

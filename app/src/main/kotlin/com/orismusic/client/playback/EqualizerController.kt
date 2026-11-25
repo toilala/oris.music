@@ -7,6 +7,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Why the equalizer cannot be used right now. Only distinctions the attach path can
+ *  actually establish: there is no usable audio session, or the effect failed to start
+ *  (which can be transient, so it is never reported as unsupported hardware). */
+enum class EqUnavailable { NoSession, InitFailed }
+
+fun eqUnavailableReason(session: Int, effectCreated: Boolean): EqUnavailable? =
+    if (session == 0) EqUnavailable.NoSession
+    else if (!effectCreated) EqUnavailable.InitFailed
+    else null
+
 /** What the settings screen needs to draw the equalizer. */
 data class EqState(
     val available: Boolean = false,
@@ -15,6 +25,7 @@ data class EqState(
     val maxLevel: Int = 1500,
     val centerHz: List<Int> = emptyList(),
     val levels: List<Int> = emptyList(),
+    val unavailableReason: EqUnavailable? = null,
 )
 
 /** Levels a preset shape produces for a device band layout, stretched across however many
@@ -63,9 +74,15 @@ object EqualizerController {
     private fun attach(session: Int) {
         runCatching { eq?.release() }
         eq = null
-        if (session == 0) { _state.value = EqState(); return }
-        val e = runCatching { Equalizer(0, session) }.getOrNull()
-        if (e == null) { _state.value = EqState(); return }
+        val created = if (session == 0) null else runCatching { Equalizer(0, session) }
+            .onFailure { android.util.Log.w("OrisEQ", "equalizer init failed on session $session", it) }
+            .getOrNull()
+        val reason = eqUnavailableReason(session, created != null)
+        if (reason != null || created == null) {
+            _state.value = EqState(unavailableReason = reason ?: EqUnavailable.InitFailed)
+            return
+        }
+        val e = created
         eq = e
         val range = e.bandLevelRange
         val count = e.numberOfBands.toInt()

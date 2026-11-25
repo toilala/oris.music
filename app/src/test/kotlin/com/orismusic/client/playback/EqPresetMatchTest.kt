@@ -50,4 +50,20 @@ class EqPresetMatchTest {
         assertEquals(-600, vocal[0])
         assertEquals("Vocal", eqPresetNameFor(presets, vocal, -1500, 1500))
     }
+
+    @Test
+    fun `session zero reads as no session whether or not an effect would have started`() {
+        assertEquals(EqUnavailable.NoSession, eqUnavailableReason(0, effectCreated = false))
+        assertEquals(EqUnavailable.NoSession, eqUnavailableReason(0, effectCreated = true))
+    }
+
+    @Test
+    fun `an effect that failed to start on a real session reads as an init failure`() {
+        assertEquals(EqUnavailable.InitFailed, eqUnavailableReason(42, effectCreated = false))
+    }
+
+    @Test
+    fun `a started effect on a real session is available`() {
+        assertNull(eqUnavailableReason(42, effectCreated = true))
+    }
 }
