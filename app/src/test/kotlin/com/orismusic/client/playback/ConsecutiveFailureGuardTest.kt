@@ -73,6 +73,35 @@ class ConsecutiveFailureGuardTest {
     }
 
     @Test
+    fun `a guard pause resets the streak so a continued queue cannot pause early`() {
+        val guard = ConsecutiveFailureGuard(limit = 3)
+        repeat(2) { assertFalse(guard.onSongGaveUp()) }
+        assertTrue(guard.onSongGaveUp())
+        // The service's pause branch deliberately resets on the same path, so the paused
+        // state never retains a streak at the limit.
+        guard.onUserAction()
+        assertEquals(0, guard.streak)
+        // The continuation gets the full allowance again: two walks before any pause.
+        assertEquals(RetriesExhausted.SkipToNext, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+        assertEquals(RetriesExhausted.SkipToNext, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+        assertEquals(RetriesExhausted.PauseForStreak, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+    }
+
+    @Test
+    fun `a terminal stop leaves the streak nonzero and the next user action still gets the full allowance`() {
+        val guard = ConsecutiveFailureGuard(limit = 3)
+        repeat(2) { assertFalse(guard.onSongGaveUp()) }
+        // A trailing song stops in place and deliberately leaves the streak alone.
+        assertEquals(RetriesExhausted.StopInPlace, retriesExhausted(pinned = false, hasNext = false, guard = guard))
+        assertEquals(2, guard.streak)
+        // Starting fresh is a user action; without it the retained streak would shorten
+        // the next queue's allowance, which is exactly the early pause being ruled out.
+        guard.onUserAction()
+        assertEquals(0, guard.streak)
+        assertEquals(RetriesExhausted.SkipToNext, retriesExhausted(pinned = false, hasNext = true, guard = guard))
+    }
+
+    @Test
     fun `the terminal stop message says retrying and never claims a streak or a count`() {
         val message = terminalStopMessage()
         assertTrue(message.contains("after retrying"))

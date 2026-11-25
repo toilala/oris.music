@@ -79,6 +79,8 @@ fun diagnosticSummary(raw: String): String {
         "no playable stream" in t -> "This song can't play right now. Try another one."
         // The skip guard's pause message is already human wording; show it as-is.
         "failed in a row" in t -> raw
+        // The terminal stop's after-retrying reason is human wording too; never flatten it.
+        "failed to load after retrying" in t -> raw
         else -> "This song couldn't play. Try again."
     }
 }
@@ -92,6 +94,7 @@ fun diagnosticShort(raw: String): String {
         "refused" in t -> "Playback refused"
         "no playable stream" in t -> "Can't play this song"
         "failed in a row" in t -> "Paused after failures"
+        "failed to load after retrying" in t -> "Stopped after retries"
         else -> "Couldn't play"
     }
 }

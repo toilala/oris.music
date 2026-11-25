@@ -9,7 +9,7 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 
-from playback_check import adb, tap, wait_label, screen, tree, PKG
+from playback_check import adb, tap, wait_label, screen, tree, PKG, OUT
 
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
 MAIN = PKG + '/com.orismusic.client.MainActivity'
@@ -75,6 +75,10 @@ def chip_state(label):
     """The selected attribute of the clickable ancestor carrying the label, or None when
     the label is absent. Compose maps a FilterChip's selected state onto that ancestor."""
     root = tree()
+    states = [n.get('content-desc') for n in root.iter('node')
+              if (n.get('content-desc') or '').startswith('Active preset:')]
+    if states:
+        print('EQ-STATE ' + states[0], flush=True)
     parents = {c: p for p in root.iter('node') for c in p}
     target = next((n for n in root.iter('node') if n.get('text') == label), None)
     node = target
@@ -85,8 +89,9 @@ def chip_state(label):
 
 def chip_state_wait(label, seconds=6):
     """Poll the chip's selected attribute on FRESH trees after its tap, never retrying
-    the tap itself. On timeout capture the screen and the last-seen attribute before
-    failing, so a product defect cannot hide behind a single hiccuped a11y read."""
+    the tap itself. On timeout capture the screen, the FULL tree, the matched node with
+    its ancestors and descendants, and every selected node, so the review can tell a
+    stale or duplicated a11y node apart from semantics the app never set."""
     end = time.monotonic() + seconds
     last = None
     while time.monotonic() < end:
@@ -95,9 +100,30 @@ def chip_state_wait(label, seconds=6):
             return
         time.sleep(0.5)
     screen('eq_preset_failed')
+    root = tree()
+    import xml.etree.ElementTree as ET
+    open(OUT + '/eq-preset-tree.xml', 'w').write(ET.tostring(root, encoding='unicode'))
+    parents = {c: p for p in root.iter('node') for c in p}
+    matches = [n for n in root.iter('node') if n.get('text') == label]
+    print('EQ-FORENSICS nodes carrying text ' + repr(label) + ': ' + str(len(matches)), flush=True)
+    for m in matches:
+        chain = []
+        node = m
+        while node is not None:
+            chain.append(node.get('class') + ' sel=' + str(node.get('selected'))
+                         + ' click=' + str(node.get('clickable')) + ' ' + str(node.get('bounds')))
+            node = parents.get(node)
+        print('EQ-FORENSICS chain: ' + ' <- '.join(chain), flush=True)
+        print('EQ-FORENSICS subtree: ' + ET.tostring(m, encoding='unicode')[:1500], flush=True)
+    selected = [n for n in root.iter('node') if n.get('selected') == 'true']
+    print('EQ-FORENSICS selected nodes: '
+          + str([(n.get('text'), n.get('content-desc'), n.get('bounds')) for n in selected]), flush=True)
+    states = [n.get('content-desc') for n in root.iter('node')
+              if (n.get('content-desc') or '').startswith('Active preset:')]
+    print('EQ-FORENSICS app state line: ' + repr(states), flush=True)
     raise AssertionError(
         label + ' chip did not read as selected after its tap (last seen: '
-        + repr(last) + '); post-tap capture is eq_preset_failed.png')
+        + repr(last) + '); post-tap capture is eq_preset_failed.png, tree is eq-preset-tree.xml')
 
 
 def tap_clickable(label):

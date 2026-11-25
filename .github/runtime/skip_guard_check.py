@@ -149,6 +149,7 @@ tap_mini_player('SkipGuard bad 5')
 # Now Playing must actually be open before the banner can be: 'Collapse player' exists
 # only on that screen.
 wait_label('Collapse player', seconds=30)
+screen('skip_guard_banner')
 tap_clickable('Retry')
 end = time.monotonic() + 150
 recovered = False

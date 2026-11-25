@@ -198,7 +198,14 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                         com.orismusic.client.playback.EqualizerController.presets,
                         eq.levels, eq.minLevel, eq.maxLevel,
                     )
-                    Column {
+                    // The active preset as one accessible state line: a single unambiguous
+                    // anchor for the current mix, beyond each chip's own selected state.
+                    Column(
+                        Modifier.semantics {
+                            contentDescription = "Active preset: " + (activePreset ?: "Custom")
+                            stateDescription = "Active preset: " + (activePreset ?: "Custom")
+                        },
+                    ) {
                         Text("Presets", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
                         androidx.compose.foundation.layout.Row(

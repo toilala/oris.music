@@ -108,7 +108,9 @@ def diag_log():
     return adb('logcat', '-d', '-s', 'OrisDiag').decode()
 
 
-adb('shell', 'am', 'start', '-n', COMPONENT, '--es', 'queue', 'single')
+# CLEAR_TOP destroys any instance a previous check left running, so the single queue
+# is always armed by a fresh onCreate/bind; onNewIntent in the activity is the backstop.
+adb('shell', 'am', 'start', '-n', COMPONENT, '-f', '0x04000000', '--es', 'queue', 'single')
 wait_status('item=sg-bad-6', 60)
 base_log = diag_log()
 term0 = count_msg(base_log, TERMINAL_MSG)

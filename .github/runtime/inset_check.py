@@ -62,6 +62,14 @@ def sweep(suffix):
 
 
 adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
+# A previous check can leave Now Playing open over the dock: collapse it by its own label
+# so the sweeps always start from the plain tab screens.
+for _ in range(5):
+    if any(n.get('content-desc') == 'Collapse player' for n in tree().iter('node')):
+        tap('Collapse player')
+        time.sleep(1)
+        break
+    time.sleep(1)
 sweep('')
 adb('shell', 'settings', 'put', 'system', 'font_scale', '1.3')
 time.sleep(2)

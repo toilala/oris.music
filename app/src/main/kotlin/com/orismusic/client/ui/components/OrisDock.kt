@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -144,6 +146,9 @@ fun OrisDock(
                 val tint by animateColorAsState(if (active) activeTint else scheme.onSurfaceVariant, label = "tint")
                 Column(
                     Modifier.width(tabW).height(tabH)
+                        // The tab itself carries the accessible name: a clickable control must
+                        // not depend on a child icon's node reaching the a11y tree.
+                        .semantics { contentDescription = label(i) }
                         .clickable(interactionSource = pressSrc, indication = null) {
                             if (NavSettings.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSelect(i)
@@ -152,7 +157,7 @@ fun OrisDock(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        icon(i), contentDescription = label(i), tint = tint,
+                        icon(i), contentDescription = null, tint = tint,
                         modifier = Modifier.size(NavSettings.size.icon.dp).graphicsLayer { scaleX = pop * pressScale; scaleY = pop * pressScale },
                     )
                     if (showLabels) Text(label(i), color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
