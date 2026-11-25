@@ -1,7 +1,10 @@
 package com.orismusic.client.utils
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.SystemClock
 import com.metrolist.innertubex.InnerTube
 import com.metrolist.innertubex.InnerTubeLogLevel
@@ -110,6 +113,10 @@ object InnerTubeXResolver {
     warmup =
       scope.launch {
         delay(delayMs)
+        if (!canPayWarmup()) {
+          Timber.tag(TAG).w("InnerTubeX warm-up skipped: offline or too little heap headroom")
+          return@launch
+        }
         val start = SystemClock.elapsedRealtime()
         runCatching {
             innerTube.cookie = com.music.innertube.YouTube.cookie
@@ -364,6 +371,38 @@ object InnerTubeXResolver {
   private const val EXCLUDE_MS = 10 * 60 * 1000L
   private const val MAX_REMEMBERED = 64
   /** Off the cold-start path; the first tap on a track is rarely sooner. */
+  /**
+   * The prewarm boots a QuickJS solver and a BotGuard WebView, none of which can succeed
+   * offline, and whose Java-side footprint aborts small-heap processes outright (seen as a
+   * process OOM death on a 16MB-heap emulator). Pay it only with a network and real heap
+   * headroom; resolving on the play path stays available either way.
+   */
+  private fun canPayWarmup(): Boolean {
+    val app = appContext ?: return false
+    val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    val online =
+      cm?.activeNetwork?.let {
+        val caps = cm.getNetworkCapabilities(it)
+        caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+          caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+      } == true
+    val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+    val info = ActivityManager.MemoryInfo()
+    am.getMemoryInfo(info)
+    val rt = Runtime.getRuntime()
+    val freeHeap = rt.maxMemory() - (rt.totalMemory() - rt.freeMemory())
+    return !shouldSkipWarmup(online, info.lowMemory, freeHeap, WARMUP_MIN_FREE_HEAP_BYTES)
+  }
+
   private const val WARM_DELAY_MS = 2_000L
+  private const val WARMUP_MIN_FREE_HEAP_BYTES = 32L * 1024 * 1024
   private const val KEPT_PLAYERS = 3
 }
+
+/** The warm-up decision, kept pure so unit tests can cover it without Android. */
+internal fun shouldSkipWarmup(
+  online: Boolean,
+  lowMemory: Boolean,
+  freeHeapBytes: Long,
+  minFreeHeapBytes: Long,
+): Boolean = !online || lowMemory || freeHeapBytes < minFreeHeapBytes
