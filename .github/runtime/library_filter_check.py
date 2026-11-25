@@ -7,9 +7,10 @@ saved-list filtering, and the layout at 1.3x font scale. Assertions are exact-ma
 composed nodes; anything missing fails loudly with the standard failure capture."""
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
-from playback_check import adb, tap, wait_label, screen, tree, PKG, OUT
+from playback_check import adb, tap, wait_label, screen, tree, restore_setting, PKG, OUT
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 
@@ -41,9 +42,26 @@ def seed():
                + '<string name="songs">' + escape(songs_json(SAVED)) + '</string>'
                + '</map>')
     for name, content in (('oris-library', library), ('oris-offline', offline)):
-        subprocess.run(['adb', 'shell', 'run-as', PKG, 'sh', '-c',
-                        'cat > shared_prefs/' + name + '.xml'],
-                       input=content.encode(), check=True)
+        data = content.encode()
+        # tee runs directly as the app user with no shell between adb and the write, so
+        # no shell-quoting contract is involved: adb joins argv with spaces and the
+        # device execs run-as -> tee with a plain path argument. (The earlier sh -c
+        # 'cat > ...' form lost its inner quotes to that join and the redirect ran in
+        # the outer /system/bin/sh at /, so nothing was ever written - run 131.)
+        r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee',
+                            'shared_prefs/' + name + '.xml'],
+                           input=data, capture_output=True)
+        assert r.returncode == 0, ('fixture write failed for ' + name + ': '
+                                   + r.stderr.decode(errors='replace'))
+        # The file on disk must be exactly what was sent, and well-formed prefs XML.
+        back = subprocess.run(['adb', 'shell', 'run-as', PKG, 'cat',
+                               'shared_prefs/' + name + '.xml'],
+                              capture_output=True)
+        assert back.returncode == 0 and back.stdout == data, ('fixture read-back mismatch for '
+                                                              + name + '.xml')
+        ET.fromstring(back.stdout)
+        print('FIXTURE-SEED ' + name + '.xml bytes=' + str(len(data))
+              + ', read-back identical, parses', flush=True)
 
 
 def visible(text):
@@ -120,7 +138,7 @@ def queue_shows(titles, not_titles):
 adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
 original_font = adb('shell', 'settings', 'get', 'system', 'font_scale').decode().strip()
-print('FONT initial=' + original_font, flush=True)
+print('FONT initial=' + repr(original_font), flush=True)
 adb('shell', 'am', 'force-stop', PKG)
 prior = subprocess.run(['adb', 'shell', 'run-as', PKG, 'cat', 'shared_prefs/oris-library.xml'],
                        capture_output=True)
@@ -131,9 +149,14 @@ adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
 tap('Library')
 
-# Blank query keeps everything, header counts the full list.
+# Fixture-read gate: the app was force-stopped before seeding, so this process start
+# reads the seeded stores. The seeded rows must surface before any filter assertion
+# runs; a miss here means the seed did not take, not that filtering broke.
 wait_label('Liked (3)')
 wait_visible('Midnight City')
+print('FIXTURE-READ seeded library rows visible in the UI', flush=True)
+
+# Blank query keeps everything, header counts the full list.
 wait_visible('One More Time')
 wait_visible('Liked songs  ·  3 songs')
 screen('library_filter_default')
@@ -234,9 +257,7 @@ try:
     wait_visible('Liked songs  ·  1 of 3 songs')
     screen('library_filter_largetext')
 finally:
-    adb('shell', 'settings', 'put', 'system', 'font_scale', original_font)
-    left = adb('shell', 'settings', 'get', 'system', 'font_scale').decode().strip()
-    print('FONT restored=' + left, flush=True)
+    restore_setting('system', 'font_scale', original_font)
 adb('shell', 'am', 'force-stop', PKG)
 print('PASS: library filtering across liked/recent/saved/playlist, blank/title/artist/no-match, '
       'filtered queue identity, query retention, large-text capture', flush=True)

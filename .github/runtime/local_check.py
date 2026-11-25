@@ -32,6 +32,8 @@ print('ACTIVE DEFAULT NETWORK before: ' + active_default(conn), flush=True)
 assert not live, 'network still live, refusing to run: ' + repr(live[:2])
 print('NETWORK-DISABLED: no connected network before the checks', flush=True)
 
+print('SUITE IDENTITY: this run boots a fresh emulator; nothing persists across runs, '
+      'while checks within this run share the installed app and its data', flush=True)
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
 
 failures = []

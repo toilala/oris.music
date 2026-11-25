@@ -9,7 +9,7 @@ it cannot prove the absence of short animations if frame timing is inadequate.""
 import re
 import time
 
-from playback_check import adb, wait_label, screen, tree, PKG
+from playback_check import adb, wait_label, screen, tree, restore_setting, PKG
 
 adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
@@ -56,8 +56,8 @@ try:
     wait_label('Preview state: paused', seconds=15)
     screen('reduced_motion_after_toggles')
 finally:
-    adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', original_scale)
-left = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
-assert left == original_scale, 'animator scale was not restored: ' + left
+    left = restore_setting('global', 'animator_duration_scale', original_scale)
+assert left == original_scale, ('animator scale was not restored: ' + repr(left)
+                                + ' (initial ' + repr(original_scale) + ')')
 adb('shell', 'am', 'force-stop', PKG)
 print('PASS: production control toggled under the OS reduced-motion setting, burst captured, scale restored to ' + left, flush=True)

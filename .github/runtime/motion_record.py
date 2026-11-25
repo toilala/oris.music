@@ -11,7 +11,8 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 
-from playback_check import adb, tap, wait_label, screen, tree, tap_mini_player, PKG, OUT
+from playback_check import (adb, tap, wait_label, screen, tree, restore_setting,
+                            PKG, OUT)
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -28,28 +29,119 @@ def set_scale(value):
     return got
 
 
-def record(name, seconds, act):
-    """Record the screen while act() performs the real gesture; the recording only counts
-    if the pulled file exists and carries actual frames."""
-    proc = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', str(seconds),
+def record(name, max_seconds, resolve, confirm):
+    """Record a real transition so the gesture and the destination both land on camera.
+    The tap target is resolved BEFORE the recorder starts (a uiautomator dump costs
+    seconds and must not eat the window), then re-resolved once to prove it is still
+    current; the recorder warms up ~1.5s, the tap is a bare input tap on the resolved
+    center, and recording runs until the destination is tree-confirmed plus a 1.5s
+    tail, stopped with SIGINT so the mp4 finalizes. Byte size and the confirmation
+    state are both logged. A confirmation failure still pulls the partial recording
+    and captures screen+tree, so partial evidence survives."""
+    first = resolve()
+    if first is None:
+        screen('failure')
+        raise AssertionError(name + ': gesture target never resolved before recording')
+    x, y, desc = first
+    again = resolve()
+    if again is None:
+        screen('failure')
+        raise AssertionError(name + ': gesture target vanished before recording')
+    if abs(again[0] - x) > 12 or abs(again[1] - y) > 12:
+        x, y, desc = again
+        print('TARGET-MOVED re-resolved: ' + desc, flush=True)
+    print('TARGET ' + desc, flush=True)
+    proc = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', str(max_seconds),
                              '/sdcard/' + name],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    time.sleep(0.7)
+    time.sleep(1.5)
+    adb('shell', 'input', 'tap', str(x), str(y))
+    print('TAP-RECORDED ' + name + ' at ' + str(x) + ',' + str(y), flush=True)
+    confirmed = False
+    end = time.monotonic() + max(3, max_seconds - 4)
+    while time.monotonic() < end:
+        if confirm():
+            confirmed = True
+            break
+        time.sleep(0.5)
+    time.sleep(1.5)
+    pid = adb('shell', 'pidof', 'screenrecord').decode().strip().split()
+    if pid:
+        adb('shell', 'kill', '-2', pid[0])
     try:
-        act()
-    except Exception:
+        proc.wait(timeout=25)
+    except subprocess.TimeoutExpired:
         proc.kill()
         proc.wait(timeout=15)
-        adb('pull', '/sdcard/' + name, OUT + '/' + name)
-        adb('shell', 'rm', '/sdcard/' + name)
-        raise
-    proc.wait(timeout=seconds + 30)
     adb('pull', '/sdcard/' + name, OUT + '/' + name)
     adb('shell', 'rm', '/sdcard/' + name)
     size = os.path.getsize(OUT + '/' + name) if os.path.exists(OUT + '/' + name) else 0
-    print('RECORDED ' + name + ' bytes=' + str(size), flush=True)
+    print('RECORDED ' + name + ' bytes=' + str(size)
+          + ' destination-confirmed=' + str(confirmed), flush=True)
     if size < 20000:
         raise AssertionError(name + ' never recorded real frames (bytes=' + str(size) + ')')
+    if not confirmed:
+        screen(name[:-4] + '_unconfirmed')
+        open(OUT + '/' + name[:-4] + '_unconfirmed_tree.xml', 'w').write(
+            ET.tostring(tree(), encoding='unicode'))
+        raise AssertionError(name + ': destination never confirmed inside the window; '
+                             'partial recording, screen and tree preserved')
+
+
+def resolve_dock_tab(name):
+    """Center of the clickable dock-tab node carrying name, matched structurally: its
+    holder must also hold a sibling tab label, so a content match elsewhere on the page
+    is not mistaken for the tab. None when absent."""
+    root = tree()
+    parents = {c: p for p in root.iter('node') for c in p}
+    for h in [n for n in root.iter('node') if name in (n.get('text'), n.get('content-desc'))]:
+        node = h
+        while node is not None and node.get('clickable') != 'true':
+            node = parents.get(node)
+        holder = parents.get(node) if node is not None else None
+        if holder is None:
+            continue
+        siblings = [d.get('content-desc') for d in holder.iter('node')]
+        if not any(s in ('Home', 'Library', 'Queue') and s != name for s in siblings):
+            continue
+        x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+        return (x1 + x2) // 2, (y1 + y2) // 2, 'dock tab ' + name + ' bounds=' + node.get('bounds')
+    return None
+
+
+def resolve_clickable(label):
+    """Center of the clickable ancestor of the node carrying label; None when absent."""
+    root = tree()
+    parents = {c: p for p in root.iter('node') for c in p}
+    target = next((n for n in root.iter('node') if label in (n.get('text'), n.get('content-desc'))), None)
+    if target is None:
+        return None
+    node = target
+    while node is not None and node.get('clickable') != 'true':
+        node = parents.get(node)
+    if node is None:
+        node = target
+    x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+    return (x1 + x2) // 2, (y1 + y2) // 2, label + ' bounds=' + node.get('bounds')
+
+
+def resolve_mini_player(title):
+    """Center of the mini-player pill: the clickable ancestor of the title whose subtree
+    owns a transport button (same rule as playback_check.tap_mini_player). None when
+    absent."""
+    root = tree()
+    parents = {c: p for p in root.iter('node') for c in p}
+    for label_node in [n for n in root.iter('node') if n.get('text') == title]:
+        node = label_node
+        while node is not None and node.get('clickable') != 'true':
+            node = parents.get(node)
+        if node is None:
+            continue
+        descs = [d.get('content-desc') for d in node.iter('node')]
+        if any(d in ('Play', 'Pause', 'Replay') for d in descs):
+            x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+            return (x1 + x2) // 2, (y1 + y2) // 2, 'mini player ' + title + ' bounds=' + node.get('bounds')
+    return None
 
 
 def resumed_activity():
@@ -81,47 +173,6 @@ def has_text(fragment):
 
 def has_label(fragment):
     return any(fragment in (n.get('text'), n.get('content-desc')) for n in tree().iter('node'))
-
-
-def tap_dock_tab(name, marker):
-    """Tap the dock tab carrying name, identified structurally: its clickable ancestor
-    sits in the tab row beside the other tabs (a content match elsewhere on the page is
-    not the tab). Verify the destination marker; on a miss dump the tree, capture the
-    screen, and retry the gesture once before failing."""
-    for attempt in (1, 2):
-        root = tree()
-        parents = {c: p for p in root.iter('node') for c in p}
-        tapped = False
-        for h in [n for n in root.iter('node') if name in (n.get('text'), n.get('content-desc'))]:
-            node = h
-            while node is not None and node.get('clickable') != 'true':
-                node = parents.get(node)
-            holder = parents.get(node) if node is not None else None
-            if holder is None:
-                continue
-            siblings = [d.get('content-desc') for d in holder.iter('node')]
-            if not any(s in ('Home', 'Library', 'Queue') and s != name for s in siblings):
-                continue
-            x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
-            print('TAP dock tab ' + name + ' bounds=' + node.get('bounds')
-                  + ' attempt=' + str(attempt), flush=True)
-            adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
-            tapped = True
-            break
-        if not tapped:
-            print('TAB-NAV no dock tab node matched ' + name + ' (attempt '
-                  + str(attempt) + ')', flush=True)
-        end = time.monotonic() + 8
-        while time.monotonic() < end:
-            if has_label(marker):
-                print('TAB-NAV ' + name + ' destination verified: ' + marker, flush=True)
-                return
-            time.sleep(0.7)
-        open(OUT + '/tab-nav-tree-' + name + '.xml', 'w').write(
-            ET.tostring(tree(), encoding='unicode'))
-        screen('tab_nav_failed_' + name.lower())
-    raise AssertionError('dock tab ' + name + ' never reached its destination ('
-                         + marker + '); tree and screen captured per attempt')
 
 
 def tap_clickable(label):
@@ -175,10 +226,11 @@ os.makedirs(OUT, exist_ok=True)
 def phase(scale, tag):
     asked = set_scale(scale)
 
-    # Dock tab switch, destination verified inside the recording window.
+    # Dock tab switch: the destination is confirmed while the recorder is running.
     cold_main()
-    record('transition-tab-' + tag + '.mp4', 6,
-           lambda: tap_dock_tab('Search', 'Songs, albums, artists'))
+    record('transition-tab-' + tag + '.mp4', 15,
+           lambda: resolve_dock_tab('Search'),
+           lambda: has_label('Songs, albums, artists'))
 
     # Now Playing expand and collapse on the local tone, no network involved.
     adb('shell', 'am', 'force-stop', PKG)
@@ -187,9 +239,12 @@ def phase(scale, tag):
     time.sleep(2)
     resume_main()
     wait_label(TONE, seconds=25)
-    record('transition-player-expand-' + tag + '.mp4', 8, lambda: tap_mini_player(TONE))
-    wait_label('Collapse player', seconds=25)
-    record('transition-player-collapse-' + tag + '.mp4', 8, lambda: tap('Collapse player'))
+    record('transition-player-expand-' + tag + '.mp4', 15,
+           lambda: resolve_mini_player(TONE),
+           lambda: has_label('Collapse player'))
+    record('transition-player-collapse-' + tag + '.mp4', 15,
+           lambda: resolve_clickable('Collapse player'),
+           lambda: not has_label('Collapse player') and has_label(TONE))
 
     # Equalizer preset tap, when this environment exposes an equalizer at all.
     open_playback_settings()
@@ -213,28 +268,20 @@ def phase(scale, tag):
     current_name = current.split(': ', 1)[1] if current else None
     target = 'Flat' if current_name == 'Bass boost' else 'Bass boost'
     print('EQ-TARGET ' + target + ' (current ' + repr(current_name) + ')', flush=True)
-    record('transition-preset-' + tag + '.mp4', 6, lambda: tap_clickable(target))
-    end = time.monotonic() + 8
-    while time.monotonic() < end:
-        if any((n.get('content-desc') or '') == 'Active preset: ' + target
-               for n in tree().iter('node')):
-            print('EQ-VERIFIED preset moved to ' + target, flush=True)
-            break
-        time.sleep(0.7)
-    else:
-        screen('failure')
-        raise AssertionError('preset transition never landed: Active preset stayed '
-                             + repr(current_name))
+    record('transition-preset-' + tag + '.mp4', 15,
+           lambda: resolve_clickable(target),
+           lambda: any((n.get('content-desc') or '') == 'Active preset: ' + target
+                       for n in tree().iter('node')))
+    print('EQ-VERIFIED preset moved to ' + target + ' (confirmed inside the recording)',
+          flush=True)
 
 
 initial_scale = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
-print('SCALE initial=' + initial_scale, flush=True)
+print('SCALE initial=' + repr(initial_scale), flush=True)
 try:
     phase('1', 'default')
     phase('0', 'disabled')
 finally:
-    adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', initial_scale)
-left = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
-print('SCALE restored=' + left, flush=True)
+    restore_setting('global', 'animator_duration_scale', initial_scale)
 adb('shell', 'am', 'force-stop', PKG)
 print('PASS: real transitions recorded at default and disabled animator scales', flush=True)

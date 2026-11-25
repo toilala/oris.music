@@ -240,14 +240,66 @@ for _ in range(8):
     adb('shell', 'input', 'swipe', '540', '1500', '540', '900', '350')
     time.sleep(1.2)
 screen('eq_band_sliders')
-# The band sliders carry accessible labels; drag one off its preset value and the chip
-# row must fall back to Custom, derived from the band values rather than a stored name.
+# The band sliders carry accessible labels; dragging one off its preset value must turn
+# the chip row into Custom, derived from the band values rather than a stored name. The
+# slider node exposes no value through uiautomator, so the band level is read back from
+# the persisted prefs before and after each drag, and the gesture starts on the computed
+# thumb position (EqualizerController's -1500..1500 millibel range) instead of track
+# center: a drag starting off the thumb can be ignored by the slider.
 slider = next((n for n in tree().iter('node') if n.get('content-desc') == 'Equalizer band 60 Hz'), None)
 assert slider is not None, 'no accessible Equalizer band 60 Hz slider in the tree'
 x1, y1, x2, y2 = map(int, re.findall(r'\d+', slider.get('bounds')))
-adb('shell', 'input', 'swipe', str((x1 + x2) // 2), str((y1 + y2) // 2), str(x1 + (x2 - x1) // 4), str((y1 + y2) // 2), '400')
-time.sleep(1.5)
-assert has_text('Custom'), 'Custom chip never appeared after a hand-tweaked band'
+print('EQ-SLIDER 60 Hz bounds=' + slider.get('bounds'), flush=True)
+
+
+def band0_level():
+    prefs = read_prefs('eq-prefs-band0.xml')
+    m = re.search(r'name="levels">([^<]*)<', prefs)
+    if not m:
+        return None
+    first = m.group(1).split(',')[0].strip()
+    return int(first) if first.lstrip('-').isdigit() else None
+
+
+def custom_present():
+    return any(n.get('text') == 'Custom'
+               or (n.get('content-desc') or '') == 'Active preset: Custom'
+               for n in tree().iter('node'))
+
+
+def drag_band(duration_ms):
+    before = band0_level()
+    span = x2 - x1
+    if before is None:
+        thumb = (x1 + x2) // 2
+    else:
+        thumb = min(max(x1 + int(span * (before + 1500) / 3000), x1 + 8), x2 - 8)
+    adb('shell', 'input', 'swipe', str(thumb), str((y1 + y2) // 2),
+        str(x1 + span // 4), str((y1 + y2) // 2), str(duration_ms))
+    end = time.monotonic() + 5
+    while time.monotonic() < end:
+        if custom_present():
+            return before, band0_level(), True
+        time.sleep(0.6)
+    return before, band0_level(), False
+
+
+b1, a1, ok1 = drag_band(800)
+print('EQ-CUSTOM first drag: band level ' + repr(b1) + ' -> ' + repr(a1)
+      + ', Custom visible=' + str(ok1), flush=True)
+if not ok1:
+    screen('eq_custom_first_drag')
+    open(OUT + '/eq_custom_first_drag_tree.xml', 'w').write(ET.tostring(tree(), encoding='unicode'))
+    b2, a2, ok2 = drag_band(1500)
+    print('EQ-CUSTOM retry drag: band level ' + repr(b2) + ' -> ' + repr(a2)
+          + ', Custom visible=' + str(ok2), flush=True)
+    if not ok2:
+        screen('eq_custom_failed')
+        open(OUT + '/eq_custom_failed_tree.xml', 'w').write(ET.tostring(tree(), encoding='unicode'))
+        raise AssertionError('Custom chip never appeared after two band drags; levels '
+                             'logged above, eq_custom_failed.png and tree captured')
+    print('EQ-CUSTOM-REPORT the first drag produced no change and the slower retry did; '
+          'the failed first interaction is reported, not masked', flush=True)
 screen('eq_custom_mix')
 prefs = read_prefs('eq-prefs-enabled.xml')
 assert 'enabled' in prefs and 'true' in prefs, 'equalizer enabled flag was not persisted'

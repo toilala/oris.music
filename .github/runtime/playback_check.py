@@ -88,6 +88,25 @@ def tap_mini_player(title):
     raise AssertionError('mini player pill for ' + title + ' never found')
 
 
+def get_setting(ns, key):
+    return adb('shell', 'settings', 'get', ns, key).decode().strip()
+
+
+def restore_setting(ns, key, initial):
+    """Restore a shared OS setting to its captured initial value. A captured 'null'
+    means the key was unset: delete it rather than writing the literal string 'null'
+    back (settings get prints null for an absent key). The final value is always read
+    back and printed so the log shows what the OS actually holds."""
+    if initial in ('', 'null'):
+        adb('shell', 'settings', 'delete', ns, key)
+    else:
+        adb('shell', 'settings', 'put', ns, key, initial)
+    final = get_setting(ns, key)
+    print('SETTING ' + ns + '/' + key + ' initial=' + repr(initial)
+          + ' final=' + repr(final), flush=True)
+    return final
+
+
 def back():
     adb('shell', 'input', 'keyevent', '4')
     time.sleep(1)
