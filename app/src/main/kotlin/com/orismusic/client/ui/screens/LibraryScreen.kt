@@ -69,6 +69,7 @@ import com.orismusic.client.library.SavedSong
 import com.orismusic.client.library.ImportPreview
 import com.orismusic.client.library.ListeningStats
 import com.orismusic.client.library.isUnmatchedImport
+import com.orismusic.client.library.matchedForPlayback
 import com.orismusic.client.library.listeningStats
 import com.orismusic.client.library.matching
 import com.orismusic.client.library.parsePlaylistImport
@@ -298,7 +299,7 @@ fun LibraryScreen(
             Text(opened.name, style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             val shown = songs.matching(query)
-            val playable = shown.filter { !it.isUnmatchedImport() }
+            val playable = shown.matchedForPlayback()
             if (songs.isEmpty()) {
                 Text("Nothing here yet. Open a song's player and add it to this playlist.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -323,6 +324,14 @@ fun LibraryScreen(
                         Spacer(Modifier.width(6.dp))
                         Text("Shuffle")
                     }
+                }
+                if (playable.size < shown.size) {
+                    Text(
+                        "Play and Shuffle cover the ${playable.size} matched ${if (playable.size == 1) "song" else "songs"}; ${shown.size - playable.size} ${if (shown.size - playable.size == 1) "is" else "are"} not matched yet and can't play.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
                 }
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                     itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->

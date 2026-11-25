@@ -2,6 +2,7 @@ package com.orismusic.client.library
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,19 +41,27 @@ class PlaylistImportTest {
 
     @Test
     fun `csv with quoted commas and a video id column parses`() {
-        val csv = "Track Name,Artist Name(s),Video ID\n\"Hello, World\",\"A, B\",abc123\nPlain,Artist C,"
+        val csv = "Track Name,Artist Name(s),Video ID\n\"Hello, World\",\"A, B\",dQw4w9WgXcQ\nPlain,Artist C,"
         val p = parsePlaylistImport(csv)
         assertEquals(ImportFormat.CSV, p.format)
         assertEquals(2, p.songs.size)
         assertEquals("Hello, World", p.songs[0].title)
         assertEquals("A, B", p.songs[0].artist)
-        assertEquals("abc123", p.songs[0].videoId)
+        assertEquals("dQw4w9WgXcQ", p.songs[0].videoId)
         assertNull(p.songs[1].videoId)
     }
 
     @Test
+    fun `a malformed video id is not treated as playable identity`() {
+        val p = parsePlaylistImport("Title,Artist,Video ID\nSome Song,Some Artist,notavalidid!")
+        assertEquals(1, p.songs.size)
+        assertNull(p.songs[0].videoId)
+        assertTrue(p.songs[0].toSavedSong().isUnmatchedImport())
+    }
+
+    @Test
     fun `same video id dedupes even when titles differ`() {
-        val csv = "Title,Artist,Video ID\nOld Title,Artist,abc123\nNew Title,Artist,abc123"
+        val csv = "Title,Artist,Video ID\nOld Title,Artist,dQw4w9WgXcQ\nNew Title,Artist,dQw4w9WgXcQ"
         val p = parsePlaylistImport(csv)
         assertEquals(1, p.songs.size)
         assertEquals(1, p.duplicates)
@@ -97,8 +106,8 @@ class PlaylistImportTest {
         val b = parsePlaylistImport("Song One - Artist A").songs[0].toSavedSong()
         assertEquals(a.id, b.id)
         assertTrue(a.isUnmatchedImport())
-        val withVideo = ImportedSong("Song", "Artist", "abc123").toSavedSong()
-        assertEquals("abc123", withVideo.id)
+        val withVideo = ImportedSong("Song", "Artist", "dQw4w9WgXcQ").toSavedSong()
+        assertEquals("dQw4w9WgXcQ", withVideo.id)
         assertTrue(!withVideo.isUnmatchedImport())
     }
 
@@ -107,5 +116,23 @@ class PlaylistImportTest {
         val p = parsePlaylistImport("Song One - Artist A\nhttps://example.com/watch?v=xyz")
         assertEquals(1, p.songs.size)
         assertEquals(1, p.skipped.size)
+    }
+
+    @Test
+    fun `legacy entries with impossible ids persisted before validation stay guarded`() {
+        assertTrue(SavedSong("notavalidid!", "Song", "Artist", null).isUnmatchedImport())
+        assertTrue(SavedSong("", "Song", "Artist", null).isUnmatchedImport())
+        assertFalse(SavedSong("dQw4w9WgXcQ", "Song", "Artist", null).isUnmatchedImport())
+    }
+
+    @Test
+    fun `matchedForPlayback drops unmatched entries and keeps order`() {
+        val songs = listOf(
+            SavedSong("dQw4w9WgXcQ", "First", "A", null),
+            SavedSong("import:song two|b", "Second", "B", null),
+            SavedSong("notavalidid!", "Third", "C", null),
+            SavedSong("kJQP7kiw5Fk", "Fourth", "D", null),
+        )
+        assertEquals(listOf("dQw4w9WgXcQ", "kJQP7kiw5Fk"), songs.matchedForPlayback().map { it.id })
     }
 }

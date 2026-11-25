@@ -4,6 +4,8 @@ import com.orismusic.client.ui.theme.OrisMotion
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.isUnmatchedImport
+import com.orismusic.client.library.matchedForPlayback
 import com.orismusic.client.library.localLibrarySearch
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.OfflineAudio
@@ -279,7 +281,8 @@ fun SearchScreen(
 
     fun playLocal(song: SavedSong) {
         val c = connection ?: return
-        val songs = localResults.map { it.song }
+        if (song.isUnmatchedImport()) return
+        val songs = localResults.map { it.song }.matchedForPlayback()
         c.playQueue(ListQueue("Library search", songs.map { it.toPlayableItem() },
             startIndex = songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)))
         PlayerLaunch.maybeOpen()
@@ -389,11 +392,13 @@ fun SearchScreen(
                             val result = localResults[i]
                             SongRow(
                                 title = result.song.title,
-                                subtitle = result.song.artist,
+                                subtitle = if (result.song.isUnmatchedImport())
+                                    listOf(result.song.artist, "Not matched yet").filter { it.isNotBlank() }.joinToString(" \u00b7 ")
+                                else result.song.artist,
                                 thumbnail = result.song.thumbnail,
                                 highlight = currentId == result.song.id,
                                 modifier = Modifier.entrance(i),
-                                onClick = { playLocal(result.song) },
+                                onClick = { if (!result.song.isUnmatchedImport()) playLocal(result.song) },
                                 trailing = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (result.downloaded) {

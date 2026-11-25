@@ -61,6 +61,7 @@ private fun csvRow(line: String): List<String> {
     return out
 }
 
+private val videoIdShape = Regex("[A-Za-z0-9_-]{11}")
 private val titleColumns = listOf("title", "track", "track name", "song", "song name", "name")
 private val artistColumns = listOf("artist", "artists", "artist name", "artist name(s)", "artist names")
 private val videoIdColumns = listOf("video id", "videoid", "video", "youtube id")
@@ -94,7 +95,7 @@ fun parsePlaylistImport(text: String): ImportPreview {
             val cols = csvRow(line)
             val title = cols.getOrNull(titleIdx)?.trim().orEmpty()
             val artist = cols.getOrNull(artistIdx)?.trim().orEmpty()
-            val video = cols.getOrNull(videoIdx)?.trim()?.ifEmpty { null }
+            val video = cols.getOrNull(videoIdx)?.trim()?.takeIf { it.matches(videoIdShape) }
             if (title.isEmpty()) { skipped += line; null } else ImportedSong(title, artist, video)
         }
         if (entries.all { it == null }) {
@@ -133,4 +134,14 @@ fun ImportedSong.toSavedSong(): SavedSong = SavedSong(
     thumbnail = null,
 )
 
-fun SavedSong.isUnmatchedImport(): Boolean = id.startsWith("import:")
+/** A library song is unmatched when it carries an "import:" placeholder id, or any
+ *  id that cannot be a YouTube video id at all (including entries persisted before
+ *  video id validation existed). Unmatched songs stay listed but must never enter
+ *  a playback or download queue. A shape-valid id is only syntactically plausible:
+ *  an unavailable video still fails through ordinary playback errors. */
+fun SavedSong.isUnmatchedImport(): Boolean = id.startsWith("import:") || !id.matches(videoIdShape)
+
+/** The playable subset of a library list, in the original order. Bulk actions
+ *  (Play, Shuffle, search-result queues) run on this; callers surface the
+ *  difference as "not matched yet" so nothing is silently omitted. */
+fun List<SavedSong>.matchedForPlayback(): List<SavedSong> = filter { !it.isUnmatchedImport() }
