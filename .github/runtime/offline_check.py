@@ -100,31 +100,39 @@ print('SOURCE-ABSENT before playback: the original tone file is gone; only the c
 # The activity's status ticker rewrites its line every 400ms, so a PLAYING text would
 # be raced away; the owned-session state and advancing position are the real evidence.
 tap('Play offline')
-# Progression from the owned session's position, which needs no state-name mapping:
-# two samples 800ms apart must advance, or the 2s fixture may legitimately have played
-# to its end between samples, which a position near the full length shows.
-found = None
+# Progression evidence, first path and fallback kept separate:
+#   first path: two observed samples with the position advancing.
+#   fallback: a new lifecycle observed as a low start position followed by a near-end
+#   position (the fixture tone is 2s, so it can finish between wider samples).
+# A single static near-end read is inconclusive, never a pass.
+seq = []
 end = time.monotonic() + 30
 while time.monotonic() < end:
-    found = session_position(fail=False)
-    if found and found[1] > 0:
-        break
-    time.sleep(1)
-if not found:
+    s = session_position(fail=False)
+    if s:
+        if not seq or s != seq[-1]:
+            seq.append(s)
+        if len(seq) >= 2 and s[1] > seq[0][1]:
+            break
+        if len(seq) >= 12:
+            break
+    time.sleep(0.4)
+if not seq:
     session_position()  # raises with the dump saved
-state1, pos1 = found
-time.sleep(0.8)
-state2, pos2 = session_position()
-if pos2 > pos1:
-    print('PLAYBACK: fixture tone session position %d -> %d ms (state %d -> %d) with '
-          'the source deleted and the network off' % (pos1, pos2, state1, state2), flush=True)
+advanced = next(((a, b) for a, b in zip(seq, seq[1:]) if b[1] > a[1]), None)
+if advanced:
+    a, b = advanced
+    print('PLAYBACK PROGRESSION: fixture tone session position %d -> %d ms '
+          '(state %d -> %d), source deleted and network off' % (a[1], b[1], a[0], b[0]),
+          flush=True)
+elif seq[0][1] <= 500 and seq[-1][1] >= 1900:
+    print('PLAYBACK COMPLETED-LIFECYCLE (fallback): new playback observed from %d ms '
+          'to %d ms of the 2s fixture across %d samples, source deleted and network '
+          'off; mid-play advance not sampled' % (seq[0][1], seq[-1][1], len(seq)),
+          flush=True)
 else:
-    assert pos2 >= 1900, \
-        'playback neither progressed nor completed: state %s -> %s, position %s -> %s' \
-        % (state1, state2, pos1, pos2)
-    print('PLAYBACK: fixture tone played to its end (%d ms of the 2s fixture) between '
-          'samples, source deleted and network off; mid-play progression not sampled'
-          % pos2, flush=True)
+    raise AssertionError('PLAYBACK PROGRESSION INCONCLUSIVE: no advancing samples and '
+                         'no reset-to-end lifecycle observed; sequence=' + repr(seq))
 screen('offline_playing')
 assert not source_present(), 'fixture source reappeared during playback'
 print('SOURCE-ABSENT after playback: playback did not regenerate the source', flush=True)
