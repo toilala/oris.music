@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Functional acceptance session v4: Library search query/results/change/clear and
-import Preview/create/reopen persistence, on seeded local data only. Each route
-establishes its own current screen from the live tree before acting, verifies the
-expected post-action context, and retains before/after tree+pixels. Selectors
-resolve labels to their clickable ancestor or to the EditText containing the label
-(shapes validated offline against retained v2/v3 trees). No repeated root BACK as
-a reset: recovery re-anchors via the dock. A failing route writes ACCEPTANCE-FAIL
-evidence and stops itself; nothing is retried or repaired. Network stays off for
-the whole session; no playback, no live-service requests."""
+"""Functional acceptance session v5: import create/reopen/restart-persistence,
+unsupported-input rejection, and provenance-marker guard behavior (mixed playlist,
+Liked section, Home shelves) on seeded local data only. Expectations are derived
+from the parser semantics at this revision (2 unique songs from the 4-line input:
+1 duplicate collapsed, 1 unreadable line) and the availability-qualified copy.
+Selectors resolve labels to their clickable ancestor or the EditText containing
+the label. Each route re-anchors from the live tree; a failing route writes
+ACCEPTANCE-FAIL evidence and stops itself. Network stays off for the whole
+session; the only playback action is one eligible-row attempt that must fail
+locally, recorded as observed evidence. No live-service requests."""
 import glob
 import re
 import subprocess
@@ -21,17 +22,19 @@ from playback_check import adb, wait_label, screen, OUT, PKG
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 
 LIKED = [
+    ('import:sea|tres', 'Sea', 'Tres'),
     ('dQw4w9WgXcQ', 'Midnight City', 'M83'),
-    ('kJQP7kiw5Fk', 'One More Time', 'Daft Punk'),
+    ('lf-4', 'Local Fixture', 'Debug'),
 ]
-HISTORY = [('60ItHLz5WEA', 'Nuvole Bianche', 'Ludovico Einaudi')]
-COUNTS = {'dQw4w9WgXcQ': 12, 'kJQP7kiw5Fk': 7, '60ItHLz5WEA': 3, 'abc123xyz99': 5}
+HISTORY = [
+    ('import:sky|lude', 'Sky', 'Lude'),
+    ('60ItHLz5WEA', 'Nuvole Bianche', 'Ludovico Einaudi'),
+]
+COUNTS = {'dQw4w9WgXcQ': 12, 'kJQP7kiw5Fk': 7, '60ItHLz5WEA': 3}
 PLAYLIST = [
     ('dQw4w9WgXcQ', 'Midnight City', 'M83'),
     ('import:aurora|bicep', 'Aurora', 'Bicep'),
 ]
-HINT = 'Search your liked songs'
-NOMATCH = 'Nothing in your library matches'
 CHIP_RE = re.compile(r'^(Liked|Recent|Playlists|Saved) \(\d+\)$')
 DOCK = ('Home', 'Search', 'Library')
 
@@ -40,6 +43,10 @@ IMPORT_NAME = 'Acceptance check'
 SONGS_LABEL = 'Songs as Title - Artist, one per line, or a CSV export'
 UNSUPPORTED_LINK = 'https://music.youtube.com/playlist'
 UNSUPPORTED_REASON = "Playlist links can't be read offline"
+MARKER = "Metadata only, can't play"
+CAPTION_ALL_META = "Play and Shuffle skip the 2 metadata-only entries; they can't play."
+CAPTION_MIXED = "Play and Shuffle skip the 1 metadata-only entry; it can't play."
+FAIL_PILL = 'No connection'
 
 
 def songs_json(rows):
@@ -105,9 +112,9 @@ def resolve_tap(root, label):
     hits = []
     for n in find_labelled(root, label):
         anc = clickable_ancestor(n, pmap)
-        notes.append('label-via=%s label-bounds=%s clickable=%s anc-bounds=%s'
+        notes.append('label-via=%s label-bounds=%s clickable=%s enabled=%s anc-bounds=%s'
                      % ('desc' if n.get('content-desc') == label else 'text',
-                        n.get('bounds'), n.get('clickable'),
+                        n.get('bounds'), n.get('clickable'), n.get('enabled'),
                         anc.get('bounds') if anc is not None else 'NONE'))
         if anc is not None:
             hits.append(anc)
@@ -146,9 +153,6 @@ def edit_text_containing(root, node):
 
 
 def focus_field(label, log_name):
-    """Tap the EditText whose bounds contain the given label/placeholder, then verify
-    an EditText actually holds focus. Returns False without tapping when no field
-    contains the label."""
     root = dump_ui('probe')
     hits = find_labelled(root, label)
     target = None
@@ -191,9 +195,6 @@ def field_with_text(sub):
 
 
 def tap_dock(label, log_name):
-    """Tap a dock entry: the BOTTOMMOST clickable ancestor of the label, so the
-    Search screen's own Library mode chip (higher on screen) is never mistaken
-    for the dock's Library entry."""
     root = dump_ui('probe')
     pmap = parent_map(root)
     hits = []
@@ -251,6 +252,11 @@ def dock_visible(root):
     return len(set(descs_of(root)) & set(DOCK)) >= 2
 
 
+def back():
+    adb('shell', 'input', 'keyevent', '4')
+    time.sleep(1)
+
+
 class RouteAbort(Exception):
     pass
 
@@ -285,10 +291,6 @@ def accept_fail(name, body):
 
 
 def ensure_library_list(tag):
-    """Establish the Library chip-list screen from wherever the session is, using the
-    dock and (only if stats is showing) its own in-view return action. Aborts the
-    whole session when the dock itself is gone; raises RouteAbort when Library shows
-    an unexpected state."""
     root = dump_ui('anchor-%s' % tag)
     if not dock_visible(root):
         snap('anchor-lost-%s' % tag)
@@ -322,56 +324,57 @@ def open_playlists_list(tag):
     return dump_ui('playlists-list-%s' % tag)
 
 
-def ensure_search_screen(tag):
-    root = dump_ui('anchor-%s' % tag)
-    if not dock_visible(root):
-        snap('anchor-lost-%s' % tag)
-        open(OUT + '/ANCHOR-LOST.txt', 'w').write(
-            'dock not visible while anchoring for %s; session stopped\n' % tag)
-        raise SessionAbort(tag)
-    require(tap_dock('Search', 'tap-search-%s.txt' % tag),
-            'dock Search not resolvable (%s)' % tag)
-    return dump_ui('search-screen-%s' % tag)
+def open_playlist(name, tag):
+    root = open_playlists_list(tag)
+    require(name in texts_of(root), 'playlist %r not listed (%s)' % (name, tag))
+    require(tap_label(name, 'tap-open-%s.txt' % tag),
+            'playlist %r row not resolvable (%s)' % (name, tag))
+    return dump_ui('playlist-%s' % tag)
 
 
-def select_library_mode(log_name):
-    """Tap the Search-screen Library mode chip: the topmost clickable ancestor of a
-    Library label (the dock's Library sits lower). Validated against retained trees."""
-    root = dump_ui('probe')
+def row_for(root, title):
+    """The clickable ancestor of the row's title text, or None."""
     pmap = parent_map(root)
-    notes = []
-    hits = []
-    for n in find_labelled(root, 'Library'):
+    for n in find_labelled(root, title):
+        if n.get('text') != title:
+            continue
         anc = clickable_ancestor(n, pmap)
-        notes.append('label-bounds=%s clickable=%s anc-bounds=%s'
-                     % (n.get('bounds'), n.get('clickable'),
-                        anc.get('bounds') if anc is not None else 'NONE'))
         if anc is not None:
-            hits.append(anc)
-    open(OUT + '/' + log_name, 'w').write(
-        'candidates for Library-mode chip (topmost resolved target tapped):\n'
-        + ('\n'.join(notes) if notes else 'none'))
-    if not hits:
-        return False
-    chosen = min(hits, key=lambda a: center(a)[1])
-    x, y = center(chosen)
+            return anc
+    return None
+
+
+def tap_node(node):
+    x, y = center(node)
     adb('shell', 'input', 'tap', str(x), str(y))
     time.sleep(1.5)
-    return True
 
 
-def hint_visible(root):
-    return any(HINT in (n.get('text') or '') for n in root.iter('node'))
+def no_attempt_observed(name, seconds=4):
+    """No failure pill and no player opened within the window."""
+    time.sleep(seconds)
+    root = dump_ui(name)
+    ts = texts_of(root)
+    return FAIL_PILL not in ts
 
 
-def clear_and_retype(query, tap_log, field_log):
-    require(tap_label('Clear search', tap_log), 'Clear search action not resolvable')
-    root = dump_ui('probe')
-    require(hint_visible(root), 'clear did not restore the blank-query hint')
-    require(focus_field('Songs, albums, artists', field_log),
-            'search field not focusable for %r' % query)
-    type_text(query)
-    time.sleep(2)
+def menu_items_for_row(root, row, log_name):
+    """Open the row's overflow (the 'Add to playlist' icon button inside the row's
+    subtree) and return the menu texts."""
+    target = None
+    for n in row.iter('node'):
+        if n.get('content-desc') == 'Add to playlist':
+            target = n
+            break
+    if target is None:
+        open(OUT + '/' + log_name, 'w').write('no Add to playlist button inside row subtree')
+        return None
+    btn = target if target.get('clickable') == 'true' else clickable_ancestor(target, parent_map(root))
+    if btn is None:
+        return None
+    tap_node(btn)
+    menu = dump_ui('menu-' + log_name.replace('.txt', ''))
+    return texts_of(menu)
 
 
 adb('wait-for-device')
@@ -397,62 +400,7 @@ adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
 
 
-def search_functional_route():
-    ensure_search_screen('sf')
-    require(select_library_mode('mode-select.txt'),
-            'no Library-labelled candidate resolves on the Search screen')
-    root = snap('20-search-library-mode')
-    require(hint_visible(root), 'Library-mode blank-query hint missing after mode tap')
-
-    require(focus_field('Songs, albums, artists', 'tap-field-1.txt'),
-            'search field not focusable for first query')
-    type_text('midnight')
-    time.sleep(2)
-    root = snap('21-search-results-midnight')
-    ts = texts_of(root)
-    if not ('Midnight City' in ts and 'M83' in ts):
-        accept_fail('search-query',
-                    'query "midnight" did not surface the seeded liked song; texts=%r\n'
-                    % ts[:20])
-    if 'One More Time' in ts:
-        accept_fail('search-query',
-                    'query "midnight" leaked a non-matching song; texts=%r\n' % ts[:20])
-    print('ACCEPT: Library search query "midnight" returns the seeded Midnight City row',
-          flush=True)
-
-    clear_and_retype('nuvole', 'tap-clear-1.txt', 'tap-field-2.txt')
-    root = snap('22-search-results-changed')
-    ts = texts_of(root)
-    if not ('Nuvole Bianche' in ts and 'Ludovico Einaudi' in ts):
-        accept_fail('search-change',
-                    'changed query "nuvole" did not surface the seeded history song; texts=%r\n'
-                    % ts[:20])
-    if 'Midnight City' in ts:
-        accept_fail('search-change',
-                    'stale Midnight City row after query change; texts=%r\n' % ts[:20])
-    print('ACCEPT: query change replaces results (history song found, prior result gone)',
-          flush=True)
-
-    clear_and_retype('zzzz', 'tap-clear-2.txt', 'tap-field-3.txt')
-    root = snap('23-search-nomatch')
-    ts = texts_of(root)
-    if not any(NOMATCH in t for t in ts):
-        accept_fail('search-nomatch',
-                    'no-match state text missing for "zzzz"; texts=%r\n' % ts[:20])
-    print('ACCEPT: no-match query renders the empty state', flush=True)
-
-    require(tap_label('Clear search', 'tap-clear-3.txt'),
-            'Clear search action not resolvable (final)')
-    root = snap('24-search-cleared')
-    if not hint_visible(root):
-        accept_fail('search-clear',
-                    'clear did not restore the blank-query hint; texts=%r\n'
-                    % texts_of(root)[:20])
-    print('ACCEPT: clear restores the initial Library-mode state', flush=True)
-route('search-functional', search_functional_route)
-
-
-def import_functional_route():
+def import_full_route():
     root = open_playlists_list('impf')
     if 'Import playlist' not in texts_of(root):
         open(OUT + '/import-candidates.txt', 'w').write(
@@ -475,47 +423,66 @@ def import_functional_route():
     require(tap_label('Preview', 'tap-preview.txt'), 'Preview action not resolvable')
     root = snap('31-import-preview')
     ts = texts_of(root)
-    ok = (any('3 songs ready' in t for t in ts)
+    ok = (any('2 entries ready to import' in t for t in ts)
           and any('1 duplicate collapsed' in t for t in ts)
           and any("1 line couldn't be read" in t for t in ts)
-          and any("can't play until matched" in t for t in ts))
+          and any('2 entries are metadata only: listed in the playlist' in t for t in ts)
+          and not any('songs ready' in t for t in ts)
+          and not any('3 entries' in t for t in ts))
     if not ok:
         accept_fail('import-preview',
-                    'preview summary mismatch (expected 3 ready, 1 duplicate, 1 skipped, '
-                    'unmatched warning); texts=%r\n' % ts[:24])
-    print('ACCEPT: preview reports 3 ready, 1 duplicate collapsed, 1 line skipped, '
-          'unmatched-play warning', flush=True)
+                    'preview summary mismatch (expected 2 entries ready, 1 duplicate, '
+                    '1 skipped, metadata-only limitation; no "songs ready"); texts=%r\n'
+                    % ts[:24])
+    print('ACCEPT: preview reports 2 entries ready to import, 1 duplicate collapsed, '
+          '1 skipped, metadata-only limitation (corrected expectation)', flush=True)
 
     require(tap_label('Import', 'tap-import-confirm.txt'),
             'Import confirm action not resolvable')
     root = snap('32-import-created')
     ts = texts_of(root)
-    if not (IMPORT_NAME in ts and any('Not matched yet' in t for t in ts)):
+    markers = sum(1 for t in ts if MARKER in t)
+    ok = (IMPORT_NAME in ts and 'Midnight City' in ts and 'Aurora' in ts
+          and markers >= 2 and CAPTION_ALL_META in ts)
+    if not ok:
         accept_fail('import-create',
-                    'created playlist detail missing name or unmatched markers; texts=%r\n'
+                    'created detail mismatch (name/rows/2 markers/caption); texts=%r\n'
                     % ts[:24])
-    print('ACCEPT: import creates the playlist and lists songs with unmatched markers',
-          flush=True)
+    print('ACCEPT: import creates the playlist; both rows marked metadata only; '
+          'caption states the skip', flush=True)
 
-    chip = next((t for t in ts if t.startswith('Playlists') and CHIP_RE.match(t)), None)
-    require(chip, 'no Playlists chip on the created playlist detail')
-    require(tap_label(chip, 'tap-playlists-chip-impf.txt'),
-            'Playlists chip not resolvable on detail')
+    pmap = parent_map(root)
+    for label in ('Play', 'Shuffle'):
+        hits = [clickable_ancestor(n, pmap) for n in find_labelled(root, label)]
+        hits = [h for h in hits if h is not None]
+        require(hits, 'no %s button on the all-metadata playlist detail' % label)
+        states = sorted(set(h.get('enabled') for h in hits))
+        if states != ['false']:
+            accept_fail('import-create-buttons',
+                        '%s button(s) not disabled on all-metadata playlist; states=%r\n'
+                        % (label, states))
+    print('ACCEPT: Play and Shuffle disabled when every entry is metadata only', flush=True)
+
+
+def import_reopen_route():
+    require(tap_label('All playlists', 'tap-all-playlists.txt'),
+            'All playlists return action not resolvable')
     root = snap('33-playlists-after-create')
     require(IMPORT_NAME in texts_of(root), 'created playlist not listed on Playlists')
     require(tap_label(IMPORT_NAME, 'tap-reopen.txt'),
             'created playlist row not resolvable')
     root = snap('34-import-reopened')
     ts = texts_of(root)
-    if not (IMPORT_NAME in ts and 'Midnight City' in ts
-            and ts.count('Aurora') >= 1 and any('Not matched yet' in t for t in ts)):
+    if not (IMPORT_NAME in ts and 'Midnight City' in ts and 'Aurora' in ts
+            and any(MARKER in t for t in ts)):
         accept_fail('import-reopen',
-                    'reopened playlist lost rows or unmatched markers; texts=%r\n'
-                    % ts[:24])
-    print('ACCEPT: reopened playlist persists rows and unmatched markers', flush=True)
+                    'reopened playlist lost rows or markers; texts=%r\n' % ts[:24])
+    print('ACCEPT: reopened playlist persists rows and metadata-only markers', flush=True)
 
-    require(tap_label(chip, 'tap-playlists-chip-impf2.txt'),
-            'Playlists chip not resolvable (unsupported-input pass)')
+
+def import_unsupported_route():
+    require(tap_label('All playlists', 'tap-all-playlists-u.txt'),
+            'All playlists return action not resolvable (unsupported pass)')
     require(tap_label('Import playlist', 'tap-import2.txt'),
             'Import playlist affordance not resolvable (second pass)')
     snap('35-import-dialog-2')
@@ -532,23 +499,195 @@ def import_functional_route():
         accept_fail('import-unsupported',
                     'unsupported link input was not rejected with its reason; texts=%r\n'
                     % ts[:24])
-    imp = []
-    for n in find_labelled(root, 'Import'):
-        anc = clickable_ancestor(n, parent_map(root))
-        if anc is not None:
-            imp.append('enabled=%s bounds=%s' % (anc.get('enabled'), anc.get('bounds')))
-    open(OUT + '/import-unsupported-button.txt', 'w').write(
-        'Import confirm candidates after unsupported preview:\n'
-        + ('\n'.join(imp) if imp else 'none'))
-    print('ACCEPT: unsupported playlist-link input rejected with its reason', flush=True)
+    pmap = parent_map(root)
+    hits = [clickable_ancestor(n, pmap) for n in find_labelled(root, 'Import')
+            if n.get('text') == 'Import']
+    hits = [h for h in hits if h is not None]
+    require(hits, 'no Import confirm button after unsupported preview')
+    states = sorted(set(h.get('enabled') for h in hits))
+    if states != ['false']:
+        accept_fail('import-unsupported-button',
+                    'Import confirm not disabled for unsupported input; states=%r\n' % states)
+    print('ACCEPT: unsupported playlist-link input rejected with its reason; '
+          'Import confirm disabled', flush=True)
 
     require(tap_label('Cancel', 'tap-import-cancel.txt'),
             'dialog Cancel not resolvable (second pass)')
     root = snap('37-import-cancelled')
-    require(chips_present(root), 'dialog did not dismiss back to the chip list')
-route('import-functional', import_functional_route)
+    require('Import playlist' in texts_of(root), 'dialog did not dismiss back to playlists')
 
+
+def liked_guard_route():
+    root = ensure_library_list('liked')
+    chip = next((t for t in texts_of(root)
+                 if t.startswith('Liked') and CHIP_RE.match(t)), None)
+    require(chip, 'no Liked chip on Library list')
+    require(tap_label(chip, 'tap-liked-chip.txt'), 'Liked chip not resolvable')
+    root = snap('40-liked-section')
+    ts = texts_of(root)
+    require('Sea' in ts and 'Local Fixture' in ts and 'Midnight City' in ts,
+            'seeded liked rows missing; texts=%r' % ts[:20])
+
+    sea = row_for(root, 'Sea')
+    fixture = row_for(root, 'Local Fixture')
+    require(sea is not None and fixture is not None, 'liked rows not resolvable')
+    sea_marker = any(MARKER in (n.get('text') or '') for n in sea.iter('node'))
+    fixture_marker = any(MARKER in (n.get('text') or '') for n in fixture.iter('node'))
+    if not sea_marker or fixture_marker:
+        accept_fail('liked-markers',
+                    'marker mismatch: import-marked row marker=%s, legacy-id row marker=%s\n'
+                    % (sea_marker, fixture_marker))
+    print('ACCEPT: import-marked liked row carries the marker; legacy non-shaped id row '
+          'does not', flush=True)
+
+    items = menu_items_for_row(root, sea, 'menu-sea.txt')
+    require(items is not None, 'menu did not open for the import-marked row')
+    if any('Save for offline' in t for t in items) or any('Retry download' in t for t in items):
+        accept_fail('liked-menu-sea',
+                    'offline save offered on an import-marked row; items=%r\n' % items)
+    if 'Imported mix' not in items:
+        accept_fail('liked-menu-sea',
+                    'playlist actions missing on import-marked row; items=%r\n' % items)
+    print('ACCEPT: import-marked row menu excludes offline save, keeps playlist actions',
+          flush=True)
+    back()
+    root = dump_ui('41-liked-after-sea-menu')
+
+    fixture = row_for(root, 'Local Fixture')
+    require(fixture is not None, 'Local Fixture row gone after menu dismiss')
+    items = menu_items_for_row(root, fixture, 'menu-fixture.txt')
+    require(items is not None, 'menu did not open for the legacy-id row')
+    if not any('Save for offline' in t for t in items):
+        accept_fail('liked-menu-fixture',
+                    'offline save missing on an attempt-eligible legacy-id row; items=%r\n'
+                    % items)
+    print('ACCEPT: legacy non-shaped id row keeps offline save (attempt eligible)',
+          flush=True)
+    back()
+    root = dump_ui('42-liked-after-fixture-menu')
+
+    sea = row_for(root, 'Sea')
+    require(sea is not None, 'Sea row gone before tap')
+    tap_node(sea)
+    if not no_attempt_observed('43-liked-sea-tap'):
+        accept_fail('liked-sea-tap',
+                    'tapping an import-marked row started a playback attempt\n')
+    root = dump_ui('43b-liked-sea-tap')
+    require('Sea' in texts_of(root), 'Liked section lost after import-marked row tap')
+    print('ACCEPT: tapping an import-marked liked row is a no-op (no attempt, no navigation)',
+          flush=True)
+
+
+def home_guard_route():
+    root = dump_ui('anchor-home')
+    require(dock_visible(root), 'dock not visible before Home route')
+    require(tap_dock('Home', 'tap-dock-home.txt'), 'dock Home not resolvable')
+    root = snap('50-home')
+    ts = texts_of(root)
+    require('Continue listening' in ts, 'Continue listening shelf missing on Home')
+    require('Sky' in ts, 'import-marked history entry not listed on Home shelf')
+    sky = row_for(root, 'Sky')
+    require(sky is not None, 'Sky tile not resolvable on Home')
+    tap_node(sky)
+    if not no_attempt_observed('51-home-sky-tap'):
+        accept_fail('home-sky-tap',
+                    'tapping an import-marked Home tile started a playback attempt\n')
+    root = dump_ui('51b-home-sky-tap')
+    if not dock_visible(root) or 'Continue listening' not in texts_of(root):
+        accept_fail('home-sky-tap-nav',
+                    'Home navigated away after import-marked tile tap; texts=%r\n'
+                    % texts_of(root)[:20])
+    print('ACCEPT: tapping an import-marked Home tile is a no-op (guard at playHistory)',
+          flush=True)
+
+
+def restart_route():
+    adb('shell', 'am', 'force-stop', PKG)
+    adb('shell', 'am', 'start', '-n', MAIN)
+    wait_label('Home', seconds=60)
+    root = open_playlists_list('restart')
+    ts = texts_of(root)
+    require(IMPORT_NAME in ts and 'Imported mix' in ts,
+            'playlists lost across restart; texts=%r' % ts[:20])
+    require(tap_label(IMPORT_NAME, 'tap-reopen-restart.txt'),
+            'created playlist row not resolvable after restart')
+    root = snap('60-restart-playlist')
+    ts = texts_of(root)
+    markers = sum(1 for t in ts if MARKER in t)
+    if not ('Midnight City' in ts and 'Aurora' in ts and markers >= 2
+            and CAPTION_ALL_META in ts):
+        accept_fail('restart-persistence',
+                    'created playlist lost rows/markers/caption across restart; texts=%r\n'
+                    % ts[:24])
+    print('ACCEPT: imported playlist, rows, markers and caption persist across '
+          'force-stop restart (actual storage reload)', flush=True)
+    require(tap_label('All playlists', 'tap-all-playlists-r.txt'),
+            'All playlists return action not resolvable after restart')
+
+
+def mixed_playlist_route():
+    root = open_playlist('Imported mix', 'mixed')
+    root = snap('70-mixed-playlist')
+    ts = texts_of(root)
+    require(CAPTION_MIXED in ts, 'mixed caption missing; texts=%r' % ts[:24])
+
+    aurora = row_for(root, 'Aurora')
+    midnight = row_for(root, 'Midnight City')
+    require(aurora is not None and midnight is not None, 'mixed playlist rows not resolvable')
+    if aurora.get('enabled') != 'false':
+        accept_fail('mixed-aurora-row',
+                    'metadata-only row not disabled; enabled=%s\n' % aurora.get('enabled'))
+    if midnight.get('enabled') != 'true':
+        accept_fail('mixed-midnight-row',
+                    'eligible row not enabled; enabled=%s\n' % midnight.get('enabled'))
+    print('ACCEPT: mixed playlist disables the metadata-only row, keeps the eligible row',
+          flush=True)
+
+    tap_node(aurora)
+    if not no_attempt_observed('71-mixed-aurora-tap'):
+        accept_fail('mixed-aurora-tap',
+                    'tapping the metadata-only row started a playback attempt\n')
+    root = dump_ui('71b-mixed-aurora-tap')
+    require('Aurora' in texts_of(root), 'playlist detail lost after metadata-only row tap')
+    print('ACCEPT: tapping the metadata-only row is a no-op', flush=True)
+
+    pmap = parent_map(root)
+    hits = [clickable_ancestor(n, pmap) for n in find_labelled(root, 'Play')]
+    hits = [h for h in hits if h is not None]
+    require(hits, 'no Play button on the mixed playlist detail')
+    require(any(h.get('enabled') == 'true' for h in hits), 'Play button not enabled')
+    tap_node(hits[0])
+    end = time.monotonic() + 30
+    seen = None
+    while time.monotonic() < end:
+        root = dump_ui('probe')
+        ts = texts_of(root)
+        if FAIL_PILL in ts:
+            seen = 'failure-pill'
+            break
+        if not dock_visible(root):
+            seen = 'player-opened'
+            break
+        time.sleep(1)
+    snap('72-mixed-eligible-attempt')
+    if seen is None:
+        accept_fail('mixed-eligible-attempt',
+                    'eligible Play tap produced neither failure feedback nor an opened '
+                    'player within 30s (network off)\n')
+    print('ACCEPT: eligible Play tap attempts playback; observed outcome (network off): %s'
+          % seen, flush=True)
+    open(OUT + '/mixed-attempt-outcome.txt', 'w').write(
+        'eligible attempt outcome: %s\n' % seen)
+
+
+route('import-full', import_full_route)
+route('import-reopen', import_reopen_route)
+route('import-unsupported', import_unsupported_route)
+route('liked-guard', liked_guard_route)
+route('home-guard', home_guard_route)
+route('restart-persistence', restart_route)
+route('mixed-playlist', mixed_playlist_route)
 
 conn = adb('shell', 'dumpsys', 'connectivity').decode()
 open(OUT + '/connectivity-after.txt', 'w').write(conn)
-print('CAPTURE-COMPLETE: functional acceptance session retained', flush=True)
+print('CAPTURE-COMPLETE: functional acceptance session v5 retained', flush=True)
