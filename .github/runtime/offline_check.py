@@ -41,10 +41,12 @@ leg fails. Final collection (connectivity-after, continuous logcat, results
 summary) runs regardless."""
 import glob
 import math
+import os
 import re
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
@@ -213,9 +215,22 @@ def self_test():
     except AssertionError as e:
         assert 'never settled off' in str(e) and 'LTE CONNECTED' in str(e)
     assert calls['disable'] > 1 and clock.t <= 31
+    # Span preflight end-to-end on a host sandbox: the exact production
+    # preflight_listing with only the adb run-as routing stripped. The same argv
+    # (mkdir -p, tee, find -type f, wc -c, rm -rf) runs through the host shell
+    # in a temp root, exercising derived parent creation, nested writes, the
+    # recursive listing contract, byte sizes, payload selection and cleanup.
+    with tempfile.TemporaryDirectory() as root:
+        def host_run(args, data=None):
+            return subprocess.run(' '.join(args), input=data,
+                                  capture_output=True, shell=True, cwd=root)
+        preflight_listing(runner=host_run)
+        assert not os.path.exists(os.path.join(root, 'files', 'span-probe')), \
+            'probe cleanup left files behind'
     print('SELF-TEST: recursive span parser, metadata exclusions, real-layout '
-          'positive payload, strict sampler verdicts, fixture bytes and '
-          'network-down gate traces all passed', flush=True)
+          'positive payload, strict sampler verdicts, fixture bytes, '
+          'network-down gate traces and host-sandbox preflight all passed',
+          flush=True)
 
 
 def await_network_down(disable, sample, sleep=time.sleep, now=time.monotonic,
@@ -245,10 +260,6 @@ def await_network_down(disable, sample, sleep=time.sleep, now=time.monotonic,
                                  % (timeout, repr(trace[-3:])))
         sleep(1)
 
-
-if '--self-test' in sys.argv[1:]:
-    self_test()
-    sys.exit(0)
 
 from playback_check import adb, tap, wait_label, screen, tree, back, tap_mini_player, OUT, PKG
 
@@ -308,15 +319,24 @@ def bounded(args, seconds=20):
         return 'evidence capture failed: ' + repr(e)
 
 
-def span_listing(cache_dir=CACHE_DIR):
+def run_as(args, data=None, runner=None):
+    """App-sandbox filesystem command: argv plus optional stdin. runner swaps the
+    adb run-as routing (host tests execute the same argv against a host
+    directory); argv construction is identical either way."""
+    if runner is not None:
+        return runner(args, data)
+    return subprocess.run(['adb', 'shell', 'run-as', PKG] + args, input=data,
+                          capture_output=True)
+
+
+def span_listing(cache_dir=CACHE_DIR, runner=None):
     """(raw evidence text, {path: bytes}) for every plain file under cache_dir,
     recursively. Defined contract instead of ls metadata parsing: `find <dir>
     -type f` emits exactly one path per line and `wc -c` per path prints the byte
     count as its first field. Grounded on actual device output by
     preflight_listing() before any span assertion. Evidence for span-payload
     comparison, not a status derivation."""
-    r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'find', cache_dir, '-type', 'f'],
-                       capture_output=True)
+    r = run_as(['find', cache_dir, '-type', 'f'], runner=runner)
     if r.returncode != 0:
         raw = r.stdout.decode(errors='replace') + r.stderr.decode(errors='replace')
         return raw, {}
@@ -325,8 +345,7 @@ def span_listing(cache_dir=CACHE_DIR):
     size_lines = []
     for path in parse_find_paths(paths_raw):
         quoted = "'" + path.replace("'", "'\\''") + "'"
-        s = subprocess.run(['adb', 'shell', 'run-as', PKG, 'wc', '-c', quoted],
-                           capture_output=True)
+        s = run_as(['wc', '-c', quoted], runner=runner)
         size_lines.append(s.stdout.decode(errors='replace').strip()
                           or s.stderr.decode(errors='replace').strip())
         if s.returncode != 0:
@@ -341,28 +360,31 @@ def save_listing(name, cache_dir=CACHE_DIR):
     return listing
 
 
-def preflight_listing():
+def preflight_listing(runner=None):
     """Grounds the recursive listing contract on ACTUAL device output before any
     span check: writes fixture files of known sizes into a scratch dir inside the
     app sandbox, INCLUDING a nested numeric subdirectory shaped like a real span,
     then asserts span_listing reports exactly those paths and sizes (dotfile kept)
-    and span_payloads selects only the nested .v3. Raw output saved either way."""
+    and span_payloads selects only the nested .v3.exo. Every fixture's parent
+    directory is derived from its name and created before any write. Raw output
+    saved either way. runner swaps only the adb run-as routing for host tests."""
     probe = 'files/span-probe'
-    subprocess.run(['adb', 'shell', 'run-as', PKG, 'rm', '-rf', probe],
-                   capture_output=True)
-    mk = subprocess.run(['adb', 'shell', 'run-as', PKG, 'mkdir', '-p', probe + '/4'],
-                        capture_output=True)
-    assert mk.returncode == 0, 'probe dir failed: ' + mk.stderr.decode(errors='replace')
     fixtures = {'alpha.bin': b'oris-probe-a', 'beta.v3': b'x', '.hidden': b'12345',
                 '3/0.0.1795630832855.v3.exo': b'span-payload'}
+    run_as(['rm', '-rf', probe], runner=runner)
+    parents = [probe] + sorted({probe + '/' + n.rsplit('/', 1)[0]
+                                for n in fixtures if '/' in n})
+    for d in parents:
+        mk = run_as(['mkdir', '-p', d], runner=runner)
+        assert mk.returncode == 0, 'probe dir failed: ' + mk.stderr.decode(errors='replace')
     for name, data in sorted(fixtures.items()):
-        w = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee', probe + '/' + name],
-                           input=data, capture_output=True)
+        parent = probe + '/' + name.rsplit('/', 1)[0] if '/' in name else probe
+        assert parent in parents, 'fixture parent was not created: ' + name
+        w = run_as(['tee', probe + '/' + name], data=data, runner=runner)
         assert w.returncode == 0, 'probe write failed for ' + name + ': ' \
             + w.stderr.decode(errors='replace')
-    raw, got = span_listing(probe)
-    subprocess.run(['adb', 'shell', 'run-as', PKG, 'rm', '-rf', probe],
-                   capture_output=True)
+    raw, got = span_listing(probe, runner=runner)
+    run_as(['rm', '-rf', probe], runner=runner)
     open(OUT + '/span-preflight.txt', 'w').write(raw + '\n' + repr(sorted(got.items())))
     expected = {probe + '/' + name: len(data) for name, data in fixtures.items()}
     assert got == expected, 'listing contract mismatch on actual device output: got ' \
@@ -902,6 +924,10 @@ LEGS = [
     ('B4-RETRY', leg_retry, ('B3-FAILED-ROUTE',)),
     ('B5-CANCEL', leg_cancel, ('SETUP-FIXTURE',)),
 ]
+
+if '--self-test' in sys.argv[1:]:
+    self_test()
+    sys.exit(0)
 
 try:
     for name, fn, requires in LEGS:
