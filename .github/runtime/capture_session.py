@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Capture-only UI session over the seeded local state. No assertions, no playback,
-no query typing: each step retains a raw uiautomator tree dump and a screenshot
-before and after one minimal navigation step. If a route's context differs from
-what the tree shows, the route stops with its evidence instead of guessing.
-Network stays off; Home renders its offline state (no feed fixture exists)."""
+"""Capture-only UI session v2 over the seeded local state. No assertions about product
+behavior, no playback, no query typing: each route retains a raw uiautomator tree dump
+and a screenshot. Selectors come from the retained v1 tree evidence: a label
+(content-desc or text) sits on a non-clickable child; the clickable ancestor is what
+gets tapped. Routes are independent: a route that finds a mismatched context stops
+ITSELF with tree+pixels evidence, recovers with a plain BACK key, re-anchors on the
+nav dock, and the next route proceeds only when the anchor holds. Network stays off;
+Home renders its offline state (no feed fixture exists)."""
 import glob
+import hashlib
 import re
 import subprocess
 import sys
@@ -12,7 +16,7 @@ import time
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
-from playback_check import adb, tap, wait_label, screen, OUT, PKG
+from playback_check import adb, wait_label, screen, OUT, PKG
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 
@@ -27,6 +31,7 @@ PLAYLIST = [
     ('import:aurora|bicep', 'Aurora', 'Bicep'),
 ]
 HINT = 'Search your liked songs'
+DOCK = ('Home', 'Search', 'Library')
 
 
 def songs_json(rows):
@@ -55,6 +60,77 @@ def seed():
     print('SEED: liked/history/counts/playlists written and read back identical', flush=True)
 
 
+def bounds_of(node):
+    return list(map(int, re.findall(r'\d+', node.get('bounds'))))
+
+
+def center(node):
+    p = bounds_of(node)
+    return (p[0] + p[2]) // 2, (p[1] + p[3]) // 2
+
+
+def parent_map(root):
+    return {c: p for p in root.iter('node') for c in p}
+
+
+def clickable_ancestor(node, pmap):
+    """Climb from a labelled (usually non-clickable) node to its nearest clickable
+    ancestor; returns None when no ancestor is clickable. Validates that the resolved
+    ancestor's bounds contain the labelled node's bounds (tree-shape guard)."""
+    cur = node
+    while cur is not None and cur.get('clickable') != 'true':
+        cur = pmap.get(cur)
+    if cur is None:
+        return None
+    a = bounds_of(cur)
+    b = bounds_of(node)
+    if not (a[0] <= b[0] and a[1] <= b[1] and a[2] >= b[2] and a[3] >= b[3]):
+        return None
+    return cur
+
+
+def find_labelled(root, label):
+    return [n for n in root.iter('node')
+            if n.get('content-desc') == label or n.get('text') == label]
+
+
+def resolve_tap(root, label):
+    """Resolve a label to the center of its clickable ancestor. Returns
+    (x, y, chosen_desc, candidates_note) or (None, None, None, candidates_note)."""
+    pmap = parent_map(root)
+    notes = []
+    hits = []
+    for n in find_labelled(root, label):
+        anc = clickable_ancestor(n, pmap)
+        notes.append('label-via=%s label-bounds=%s clickable=%s anc-bounds=%s'
+                     % ('desc' if n.get('content-desc') == label else 'text',
+                        n.get('bounds'), n.get('clickable'),
+                        anc.get('bounds') if anc is not None else 'NONE'))
+        if anc is not None:
+            hits.append(anc)
+    note = 'candidates for %r:\n' % label + ('\n'.join(notes) if notes else 'none')
+    if not hits:
+        return None, None, None, note
+    chosen = min(hits, key=lambda a: center(a)[1])
+    x, y = center(chosen)
+    return x, y, chosen.get('bounds'), note
+
+
+def tap_label(root_name, label, log_name):
+    """Tap the topmost clickable ancestor carrying this label, from the live tree.
+    All candidates are logged; returns False without tapping when none resolves."""
+    root = dump_ui(root_name)
+    x, y, chosen, note = resolve_tap(root, label)
+    with open(OUT + '/' + log_name, 'w') as f:
+        f.write(note + ('\nCHOSEN anc-bounds=%s tap=(%d,%d)' % (chosen, x, y)
+                        if x is not None else '\nNO TAP'))
+    if x is None:
+        return False
+    adb('shell', 'input', 'tap', str(x), str(y))
+    time.sleep(1.5)
+    return True
+
+
 def dump_ui(name):
     for _ in range(3):
         try:
@@ -73,60 +149,60 @@ def snap(name):
     return dump_ui(name)
 
 
-def tap_desc_clickable(desc):
-    """Tap a clickable node carrying this exact content-desc (e.g. the stats IconButton,
-    which shares its label with the Stats view title text)."""
-    end = time.monotonic() + 20
-    while time.monotonic() < end:
-        nodes = [n for n in dump_ui('probe').iter('node')
-                 if n.get('content-desc') == desc and n.get('clickable') == 'true']
-        if nodes:
-            p = list(map(int, re.findall(r'\d+', nodes[0].get('bounds'))))
-            adb('shell', 'input', 'tap', str((p[0] + p[2]) // 2), str((p[1] + p[3]) // 2))
-            time.sleep(1.5)
-            return True
-        time.sleep(1)
-    return False
+def frame_hash(name):
+    screen(name)
+    try:
+        return hashlib.sha256(open(OUT + '/' + name + '.png', 'rb').read()).hexdigest()
+    except OSError:
+        return 'missing'
 
 
-def tap_mode_chip(label):
-    """Tap the Search mode chip from the CURRENT captured tree, never from assumptions:
-    candidates carry the label as text or desc; the chip sits above the nav dock, so the
-    topmost candidate wins. Every candidate's attributes are logged for review."""
-    root = dump_ui('probe')
-    found = [n for n in root.iter('node')
-             if label in (n.get('text'), n.get('content-desc'))]
-    notes = []
-    for n in found:
-        p = list(map(int, re.findall(r'\d+', n.get('bounds'))))
-        notes.append('bounds=%s clickable=%s checkable=%s desc=%s text=%s'
-                     % (n.get('bounds'), n.get('clickable'), n.get('checkable'),
-                        n.get('content-desc'), n.get('text')))
-    open(OUT + '/mode-select.txt', 'w').write(
-        'candidates for %r (topmost tapped):\n' % label + '\n'.join(notes))
-    if not found:
-        return None
-    def center_y(n):
-        p = list(map(int, re.findall(r'\d+', n.get('bounds'))))
-        return (p[1] + p[3]) // 2
-    chosen = min(found, key=center_y)
-    p = list(map(int, re.findall(r'\d+', chosen.get('bounds'))))
-    adb('shell', 'input', 'tap', str((p[0] + p[2]) // 2), str((p[1] + p[3]) // 2))
-    time.sleep(1.5)
-    return chosen
+def anchored(root):
+    """True when the nav dock is visible, i.e. we are on a top-level screen."""
+    labels = set()
+    for n in root.iter('node'):
+        if n.get('content-desc') in DOCK:
+            labels.add(n.get('content-desc'))
+    return len(labels) >= 2
 
 
-def step(name, fn):
+class RouteAbort(Exception):
+    pass
+
+
+def route(name, fn):
+    """Run one independent route. On any failure: retain tree+pixels for the route,
+    BACK-key recover, and re-anchor on the dock. Returns True when the route completed."""
     try:
         fn()
+        print('ROUTE-OK %s' % name, flush=True)
+        return True
     except Exception as e:
-        open(OUT + '/ABORT.txt', 'w').write('step %s aborted: %r\n' % (name, e))
+        open(OUT + '/%s-ABORT.txt' % name, 'w').write('route %s aborted: %r\n' % (name, e))
         try:
-            snap('abort-' + name)
+            snap('abort-%s' % name)
         except Exception:
             pass
-        print('ABORT at %s: %r (evidence preserved, session stopped)' % (name, e), flush=True)
-        sys.exit(1)
+        print('ROUTE-ABORT %s: %r (evidence retained)' % (name, e), flush=True)
+        try:
+            adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+            time.sleep(1.5)
+            root = dump_ui('reanchor-%s' % name)
+            screen('reanchor-%s' % name)
+            if not anchored(root):
+                open(OUT + '/ANCHOR-LOST.txt', 'w').write(
+                    'after %s abort + BACK, dock not visible; remaining routes stopped\n' % name)
+                print('ANCHOR-LOST after %s; stopping remaining routes' % name, flush=True)
+                sys.exit(1)
+        except Exception as re:
+            open(OUT + '/ANCHOR-LOST.txt', 'w').write('recovery itself failed: %r\n' % re)
+            sys.exit(1)
+        return False
+
+
+def require(ok, msg):
+    if not ok:
+        raise RouteAbort(msg)
 
 
 adb('wait-for-device')
@@ -151,43 +227,136 @@ adb('shell', 'am', 'force-stop', PKG)
 seed()
 adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
-step('home', lambda: snap('01-home'))
 
-step('library', lambda: (tap('Library'), snap('02-library')))
 
-def stats_in():
-    if not tap_desc_clickable('Listening stats'):
-        raise AssertionError('stats icon not found as clickable desc')
-step('stats', lambda: (stats_in(), snap('03-stats')))
+def home_route():
+    snap('01-home')  # raw first frame, retained as evidence whatever it shows
+    # Settled frame: poll until two consecutive screencaps are byte-identical.
+    prev = frame_hash('settle-a')
+    settled = False
+    for _ in range(10):
+        time.sleep(2.5)
+        cur = frame_hash('settle-b')
+        if cur == prev and cur != 'missing':
+            settled = True
+            break
+        prev = cur
+    root = snap('01b-home-settled')
+    texts = [n.get('text') for n in root.iter('node') if n.get('text')]
+    import os
+    size = os.path.getsize(OUT + '/01b-home-settled.png')
+    open(OUT + '/home-settle.txt', 'w').write(
+        'settled=%s png-bytes=%d tree-texts=%r\n' % (settled, size, texts[:12]))
+route('home', home_route)
 
-def stats_scroll():
+
+def library_route():
+    require(tap_label('probe', 'Library', 'tap-library.txt'), 'dock Library not resolvable')
+    snap('02-library')
+route('library', library_route)
+
+
+def stats_route():
+    require(tap_label('probe', 'Listening stats', 'tap-stats.txt'),
+            'Listening stats label not resolvable to a clickable ancestor')
+    root = snap('03-stats')
     adb('shell', 'input', 'swipe', '540', '1500', '540', '700', '400')
     time.sleep(1)
-step('stats-scrolled', lambda: (stats_scroll(), snap('04-stats-scrolled')))
+    snap('04-stats-scrolled')
+    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    time.sleep(1.5)
+    back = snap('03b-stats-back')
+    if not anchored(back):
+        open(OUT + '/CONTEXT-MISMATCH-stats-back.txt', 'w').write(
+            'BACK from stats did not land on a dock-anchored screen\n')
+        raise RouteAbort('post-stats BACK context differs, evidence retained')
+route('stats', stats_route)
 
-def stats_out():
-    if not tap_desc_clickable('Listening stats'):
-        raise AssertionError('stats icon not found for exit')
-step('playlists', lambda: (stats_out(), tap('Playlists (1)'), snap('05-playlists')))
 
-step('playlist-open', lambda: (tap('Imported mix'), snap('06-playlist-open')))
+def playlists_route():
+    require(tap_label('probe', 'Library', 'tap-library2.txt'), 'dock Library not resolvable')
+    root = dump_ui('probe')
+    chips = [n.get('text') for n in root.iter('node')
+             if n.get('text') and n.get('text').startswith('Playlists')]
+    if not chips:
+        raise RouteAbort('no Playlists chip text on Library: %r' % chips)
+    require(tap_label('probe', chips[0], 'tap-playlists-chip.txt'), 'Playlists chip not resolvable')
+    snap('05-playlists')
+route('playlists', playlists_route)
 
-step('import-dialog', lambda: (tap('All playlists'), tap('Import playlist'), snap('07-import-dialog')))
 
-step('search-online', lambda: (tap('Cancel'), tap('Search'), snap('08-search-online')))
+def playlist_open_route():
+    require(tap_label('probe', 'Imported mix', 'tap-playlist.txt'),
+            'Imported mix row not resolvable')
+    snap('06-playlist-open')
+route('playlist-open', playlist_open_route)
 
-def library_mode():
+
+def import_route():
+    # Import affordances live outside an open playlist, so BACK to the enclosing
+    # list first (system key, not a guessed selector), then scan the live labels.
+    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    time.sleep(1.5)
+    root = dump_ui('probe')
+    labels = set()
+    for n in root.iter('node'):
+        for v in (n.get('content-desc'), n.get('text')):
+            if v:
+                labels.add(v)
+    open(OUT + '/import-candidates.txt', 'w').write(
+        'labels visible at import route entry:\n' + '\n'.join(sorted(labels)))
+    entries = [l for l in labels if 'import' in l.lower()]
+    if not entries:
+        raise RouteAbort('no import-labelled affordance visible; candidates logged')
+    require(tap_label('probe', sorted(entries)[0], 'tap-import.txt'),
+            'import affordance not resolvable')
+    snap('07-import-dialog')
+route('import-dialog', import_route)
+
+
+def search_route():
+    root = dump_ui('probe')
+    if not anchored(root):
+        adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        time.sleep(1.5)
+    require(tap_label('probe', 'Search', 'tap-search.txt'), 'dock Search not resolvable')
+    snap('08-search-online')
+route('search-online', search_route)
+
+
+def library_mode_route():
     snap('09-search-before-mode-tap')
-    if tap_mode_chip('Library') is None:
-        raise AssertionError('no Library-labelled node on the Search screen')
-    time.sleep(1)
-    root = snap('10-search-library-mode')
-    if not any(HINT in (n.get('text') or '') for n in root.iter('node')):
+    root = dump_ui('probe')
+    pmap = parent_map(root)
+    # Mode-chip disambiguation: 'Library' labels both the dock tab (bottom strip) and
+    # the mode chip (upper). Resolve every candidate's clickable ancestor and choose
+    # the topmost resolved target; dock candidates sit far lower and lose. All
+    # candidates and the choice are logged for review.
+    notes = []
+    hits = []
+    for n in find_labelled(root, 'Library'):
+        anc = clickable_ancestor(n, pmap)
+        notes.append('label-bounds=%s clickable=%s anc-bounds=%s'
+                     % (n.get('bounds'), n.get('clickable'),
+                        anc.get('bounds') if anc is not None else 'NONE'))
+        if anc is not None:
+            hits.append(anc)
+    open(OUT + '/mode-select.txt', 'w').write(
+        'candidates for Library-mode chip (topmost resolved target tapped):\n'
+        + ('\n'.join(notes) if notes else 'none'))
+    if not hits:
+        raise RouteAbort('no Library-labelled candidate resolves on the Search screen')
+    chosen = min(hits, key=lambda a: center(a)[1])
+    x, y = center(chosen)
+    adb('shell', 'input', 'tap', str(x), str(y))
+    time.sleep(1.5)
+    after = snap('10-search-library-mode')
+    if not any(HINT in (n.get('text') or '') for n in after.iter('node')):
         open(OUT + '/CONTEXT-MISMATCH.txt', 'w').write(
-            'post-tap tree lacks the Library-mode hint; mode state uncertain, route stopped\n')
-        raise AssertionError('post-tap context differs, route stopped with evidence')
-step('search-library-mode', library_mode)
+            'post-tap tree lacks the Library-mode hint %r; mode state uncertain\n' % HINT)
+        raise RouteAbort('post-tap context differs, evidence retained')
+route('search-library-mode', library_mode_route)
 
 conn = adb('shell', 'dumpsys', 'connectivity').decode()
 open(OUT + '/connectivity-after.txt', 'w').write(conn)
-print('CAPTURE-COMPLETE: 10 named tree+screenshot pairs retained', flush=True)
+print('CAPTURE-COMPLETE: named tree+screenshot pairs retained', flush=True)
