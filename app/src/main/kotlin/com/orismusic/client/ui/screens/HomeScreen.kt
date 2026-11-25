@@ -226,12 +226,22 @@ fun HomeScreen(
                                     modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(12.dp))
                                         .clickable { refreshTick++ }.padding(horizontal = 16.dp, vertical = 8.dp),
                                 )
+                                var showDetails by remember { mutableStateOf(false) }
                                 Text(
-                                    text = state.message,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                    modifier = Modifier.padding(top = 12.dp),
+                                    text = if (showDetails) "Hide details" else "Details",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+                                        .clickable { showDetails = !showDetails }.padding(horizontal = 16.dp, vertical = 6.dp),
                                 )
+                                if (showDetails) {
+                                    Text(
+                                        text = state.message,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
                             }
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {

@@ -68,7 +68,14 @@ import kotlinx.coroutines.delay
 fun rememberReducedMotion(): Boolean {
     val context = LocalContext.current
     return remember(context) {
-        Settings.System.getFloat(
+        // The OS "Remove animations" toggle writes the Global namespace; the System
+        // constant is deprecated. Read Global first, fall back to System on devices
+        // where the setting still lives there.
+        val global = Settings.Global.getFloat(
+            context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, Float.NaN,
+        )
+        if (!global.isNaN()) global == 0f
+        else Settings.System.getFloat(
             context.contentResolver, Settings.System.ANIMATOR_DURATION_SCALE, 1f,
         ) == 0f
     }

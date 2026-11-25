@@ -178,7 +178,7 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     Text("Equalizer", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Unavailable right now. This device or the current output does not support an equalizer.",
+                        "Unavailable right now.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

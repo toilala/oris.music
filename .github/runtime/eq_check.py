@@ -98,10 +98,24 @@ wait_label(ON_COPY)
 wait_label('Presets')
 screen('eq_enabled_controls')
 
-# 3. A preset writes band levels; persisted preferences are read back from disk.
+# 3. Bring the actual preset chips into view (this page exposes only composed nodes),
+# then a preset writes band levels; persisted preferences are read back from disk.
+for _ in range(8):
+    if has_text('Bass boost'):
+        break
+    adb('shell', 'input', 'swipe', '540', '1500', '540', '900', '350')
+    time.sleep(1.2)
+wait_label('Bass boost')
+screen('eq_presets_in_view')
 tap_clickable('Bass boost')
 time.sleep(2)
 screen('eq_preset_bass')
+for _ in range(8):
+    if any(re.fullmatch(r'\d+(\.\d+)? (Hz|kHz)', n.get('text') or '') for n in tree().iter('node')):
+        break
+    adb('shell', 'input', 'swipe', '540', '1500', '540', '900', '350')
+    time.sleep(1.2)
+screen('eq_band_sliders')
 prefs = read_prefs('eq-prefs-enabled.xml')
 assert 'enabled' in prefs and 'true' in prefs, 'equalizer enabled flag was not persisted'
 assert 'levels' in prefs, 'equalizer band levels were not persisted'

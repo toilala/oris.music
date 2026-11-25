@@ -27,7 +27,7 @@ class ControlStylesCheckActivity : ComponentActivity() {
         super.onCreate(state)
         setContent {
             OrisTheme {
-                Surface(color = androidx.compose.ui.graphics.Color(0xFF101010), contentColor = MaterialTheme.colorScheme.onSurface) {
+                Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
                     var playing by remember { mutableStateOf(false) }
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)) {
