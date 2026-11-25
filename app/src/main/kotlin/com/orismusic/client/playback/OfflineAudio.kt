@@ -14,6 +14,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheWriter
 import com.orismusic.client.di.DownloadCache
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.isUnmatchedImport
 import com.orismusic.client.utils.YTPlayerUtils
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -157,6 +158,8 @@ object OfflineAudio {
 
     @OptIn(UnstableApi::class)
     fun download(context: Context, song: SavedSong) {
+        // Provenance-marked metadata-only imports have no audio source to fetch.
+        if (song.isUnmatchedImport()) return
         load(context)
         val app = context.applicationContext
         if (song.id in busyFlow.value) return

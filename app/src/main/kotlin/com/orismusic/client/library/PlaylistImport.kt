@@ -1,8 +1,9 @@
 package com.orismusic.client.library
 
 /** One parsed song from pasted import text. videoId is present only when the
- *  source carried one; those entries can play directly. The rest are kept as
- *  metadata-only listings: the app cannot play them and has no matching for them. */
+ *  source carried one; those entries are eligible for playback, subject to the
+ *  video actually being available. The rest are kept as metadata-only listings:
+ *  the app cannot play them and has no matching for them. */
 data class ImportedSong(val title: String, val artist: String, val videoId: String?)
 
 enum class ImportFormat { TITLE_ARTIST_LINES, CSV }
@@ -135,12 +136,15 @@ fun ImportedSong.toSavedSong(): SavedSong = SavedSong(
     thumbnail = null,
 )
 
-/** A library song is unmatched when it carries an "import:" placeholder id, or any
- *  id that cannot be a YouTube video id at all (including entries persisted before
- *  video id validation existed). Unmatched songs stay listed but must never enter
- *  a playback or download queue. A shape-valid id is only syntactically plausible:
- *  an unavailable video still fails through ordinary playback errors. */
-fun SavedSong.isUnmatchedImport(): Boolean = id.startsWith("import:") || !id.matches(videoIdShape)
+/** A library song is unmatched only when it carries an "import:" placeholder id, the
+ *  provenance marker the importer writes for metadata-only entries. Any other id,
+ *  including ids persisted before video id validation existed, is eligible for a
+ *  playback attempt and fails through ordinary playback errors when unplayable; a
+ *  blank id has no identity at all and is guarded too. New imports can only gain a
+ *  non-shaped id through this marker, because CSV video ids are shape-checked at
+ *  parse time. Unmatched songs stay listed but never enter a playback or download
+ *  queue. */
+fun SavedSong.isUnmatchedImport(): Boolean = id.startsWith("import:") || id.isBlank()
 
 /** The playable subset of a library list, in the original order. Bulk actions
  *  (Play, Shuffle, search-result queues) run on this; callers surface the

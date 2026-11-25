@@ -119,9 +119,12 @@ class PlaylistImportTest {
     }
 
     @Test
-    fun `legacy entries with impossible ids persisted before validation stay guarded`() {
-        assertTrue(SavedSong("notavalidid!", "Song", "Artist", null).isUnmatchedImport())
+    fun `only import provenance and blank ids are guarded, legacy non-shaped ids stay attempt eligible`() {
+        assertTrue(SavedSong("import:song|artist", "Song", "Artist", null).isUnmatchedImport())
         assertTrue(SavedSong("", "Song", "Artist", null).isUnmatchedImport())
+        assertFalse(SavedSong("notavalidid!", "Song", "Artist", null).isUnmatchedImport())
+        assertFalse(SavedSong("lf-4", "Song", "Artist", null).isUnmatchedImport())
+        assertFalse(SavedSong("offline-fixture-tone", "Song", "Artist", null).isUnmatchedImport())
         assertFalse(SavedSong("dQw4w9WgXcQ", "Song", "Artist", null).isUnmatchedImport())
     }
 
@@ -133,6 +136,31 @@ class PlaylistImportTest {
             SavedSong("notavalidid!", "Third", "C", null),
             SavedSong("kJQP7kiw5Fk", "Fourth", "D", null),
         )
-        assertEquals(listOf("dQw4w9WgXcQ", "kJQP7kiw5Fk"), songs.matchedForPlayback().map { it.id })
+        assertEquals(listOf("dQw4w9WgXcQ", "notavalidid!", "kJQP7kiw5Fk"), songs.matchedForPlayback().map { it.id })
+    }
+
+    @Test
+    fun `an all-metadata list yields an empty playback queue`() {
+        val songs = listOf(
+            SavedSong("import:song one|a", "One", "A", null),
+            SavedSong("import:song two|b", "Two", "B", null),
+        )
+        assertTrue(songs.matchedForPlayback().isEmpty())
+    }
+
+    @Test
+    fun `row taps map to queue positions by identity after filtering`() {
+        val shown = listOf(
+            SavedSong("dQw4w9WgXcQ", "First", "A", null),
+            SavedSong("import:song two|b", "Second", "B", null),
+            SavedSong("lf-4", "Third", "C", null),
+            SavedSong("kJQP7kiw5Fk", "Fourth", "D", null),
+        )
+        val queue = shown.matchedForPlayback()
+        // The same mapping the list rows apply: queue position by identity, -1 when metadata only.
+        assertEquals(0, queue.indexOfFirst { it.id == shown[0].id })
+        assertEquals(-1, queue.indexOfFirst { it.id == shown[1].id })
+        assertEquals(1, queue.indexOfFirst { it.id == shown[2].id })
+        assertEquals(2, queue.indexOfFirst { it.id == shown[3].id })
     }
 }

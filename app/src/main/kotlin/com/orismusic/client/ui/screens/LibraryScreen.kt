@@ -340,7 +340,7 @@ fun LibraryScreen(
                 }
                 if (playable.size < shown.size) {
                     Text(
-                        "Play and Shuffle attempt the ${playable.size} ${if (playable.size == 1) "entry" else "entries"} with a video id; ${shown.size - playable.size} ${if (shown.size - playable.size == 1) "is" else "are"} metadata only and can't play.",
+                        "Play and Shuffle skip the ${shown.size - playable.size} metadata-only ${if (shown.size - playable.size == 1) "entry" else "entries"}; ${if (shown.size - playable.size == 1) "it" else "they"} can't play.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -396,6 +396,7 @@ fun LibraryScreen(
             }
         } else {
             val shown = songs.matching(query)
+            val playable = shown.matchedForPlayback()
             if (shown.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No matches.", style = MaterialTheme.typography.bodyLarge,
@@ -416,12 +417,12 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(onClick = { play(shown, 0) }, enabled = connection != null) {
+                Button(onClick = { play(playable, 0) }, enabled = connection != null && playable.isNotEmpty()) {
                     Icon(Icons.Filled.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Play")
                 }
-                OutlinedButton(onClick = { play(shown, 0, shuffle = true) }, enabled = connection != null) {
+                OutlinedButton(onClick = { play(playable, 0, shuffle = true) }, enabled = connection != null && playable.isNotEmpty()) {
                     Icon(Icons.Filled.Shuffle, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Shuffle")
@@ -432,10 +433,11 @@ fun LibraryScreen(
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
                 itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->
                     Box(Modifier.entrance(index)) {
+                    val playableIndex = playable.indexOfFirst { it.id == song.id }
                     SavedSongRow(
                         song = song,
                         liked = liked.any { it.id == song.id },
-                        onClick = { play(shown, index) },
+                        onClick = { if (playableIndex >= 0) play(playable, playableIndex) },
                         onToggleLike = { store.toggleLike(song) },
                         playlists = playlists.map { it.id to it.name },
                         onAddToPlaylist = { id -> playlistStore.add(id, song) },
@@ -543,7 +545,10 @@ private fun SavedSongRow(
     onRemoveOffline: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
-    SongRow(title = song.title, subtitle = song.artist, thumbnail = song.thumbnail, onClick = onClick) {
+    val unmatched = song.isUnmatchedImport()
+    SongRow(title = song.title,
+        subtitle = if (unmatched) listOf(song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" \u00b7 ") else song.artist,
+        thumbnail = song.thumbnail, onClick = onClick) {
         when (offline) {
             com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
                 androidx.compose.material3.CircularProgressIndicator(
@@ -568,7 +573,7 @@ private fun SavedSongRow(
                     tint = MaterialTheme.colorScheme.outline)
             }
             androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                when (offline) {
+                if (!unmatched) when (offline) {
                     com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text("Cancel download") },
