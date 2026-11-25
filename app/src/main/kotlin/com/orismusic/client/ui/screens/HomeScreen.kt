@@ -16,7 +16,6 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -182,7 +181,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
                     item(key = "header") {
-                        Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
+                        HomeHeader(scroll)
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)
                     if (heroSongs.isNotEmpty()) item(key = "discovery-hero") {
@@ -642,38 +641,5 @@ private fun GenericCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
-    }
-}
-
-
-/**
- * The Oris mark stays at the top while Home scrolls. At the top of the page it is just the mark.
- * Scrolling turns it into a small glass chip and the name slides out next to it.
- */
-@Composable
-private fun PinnedMark(listState: androidx.compose.foundation.lazy.LazyListState, modifier: Modifier) {
-    val target by remember {
-        androidx.compose.runtime.derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) 1f else (listState.firstVisibleItemScrollOffset / 260f).coerceIn(0f, 1f)
-        }
-    }
-    val p by androidx.compose.animation.core.animateFloatAsState(target, androidx.compose.animation.core.tween(220), label = "mark")
-    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "mark spin")
-    val angle by spin.animateFloat(
-        0f, 360f,
-        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing)),
-        label = "mark angle",
-    )
-    // Bare mark: no chip or container, just the logo and name over the artwork.
-    Row(
-        modifier.statusBarsPadding().padding(start = 16.dp, top = 10.dp)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OrisLogo(Modifier.size(24.dp).graphicsLayer { rotationZ = angle; alpha = 0.55f + 0.45f * p }, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
-        androidx.compose.animation.AnimatedVisibility(visible = p > 0.6f) {
-            Text("Oris", style = MaterialTheme.typography.titleSmall, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f),
-                modifier = Modifier.padding(start = 8.dp, end = 6.dp))
-        }
     }
 }

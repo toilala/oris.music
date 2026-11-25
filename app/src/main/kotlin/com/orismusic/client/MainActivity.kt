@@ -289,7 +289,7 @@ class MainActivity : ComponentActivity() {
                                     connection = connection,
                                     onBack = { detail = detailBack; detailBack = null },
                                     onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = d; detail = it } } },
-                                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = innerPadding.calculateTopPadding()),
+                                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
                                 )
                                 }
                             }
@@ -318,8 +318,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenPlayer = { navigation = navigation.openPlayer() },
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .statusBarsPadding()
-                                        .padding(top = innerPadding.calculateTopPadding()),
+                                        .statusBarsPadding(),
                                     connection = connection,
                                 )
                                 MainTab.Search -> SearchScreen(
@@ -327,8 +326,7 @@ class MainActivity : ComponentActivity() {
                                     onOpen = { t -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(t, connection) { detail = it; detailBack = null } } },
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .statusBarsPadding()
-                                        .padding(top = innerPadding.calculateTopPadding()),
+                                        .statusBarsPadding(),
                                 )
                                 MainTab.Library -> com.orismusic.client.ui.screens.LibraryScreen(
                                     connection = connection,
@@ -336,8 +334,7 @@ class MainActivity : ComponentActivity() {
                                     onSettings = { settingsOpen = true },
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .statusBarsPadding()
-                                        .padding(top = innerPadding.calculateTopPadding()),
+                                        .statusBarsPadding(),
                                 )
                             }
                             }
