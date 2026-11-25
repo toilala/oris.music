@@ -21,6 +21,11 @@ import kotlinx.coroutines.launch
  * - Cancel with no owner is a no-op: no state residue, no deletion of completed work.
  * - Busy clears only inside the owner's teardown, so the key stays visibly owned until
  *   cleanup has settled.
+ * - Removal is atomic: the caller's saved-state and persisted-record edits (onRemove)
+ *   run inside the same critical section that records the eviction intent, so no
+ *   commit and no successor start can interleave between span handling and those
+ *   edits. A start after removal is a clean new lifecycle whose commit lands strictly
+ *   after onRemove, never erased by it.
  */
 class DownloadRegistry<ID : Any, P>(
     private val scope: CoroutineScope,
@@ -29,6 +34,7 @@ class DownloadRegistry<ID : Any, P>(
     private val onFailed: (ID, P) -> Unit,
     private val onBusyChange: (ID, Boolean) -> Unit,
     private val onCleanupFailed: (ID, Exception) -> Unit,
+    private val onRemove: (ID) -> Unit = {},
 ) {
 
     inner class Record internal constructor(val id: ID, val payload: P) {
@@ -81,9 +87,14 @@ class DownloadRegistry<ID : Any, P>(
     }
 
     /**
-     * Drops whatever the key holds: cancels the current owner when one exists (its
-     * teardown drops the spans once the writer has unwound), otherwise drops the spans
-     * now, under the ownership lock, so no new writer can interleave with the deletion.
+     * Removes the key completely and atomically. [onRemove] (the caller's saved-state
+     * and persisted-record edits) runs inside the same critical section that records
+     * the eviction intent, so no commit and no successor start can interleave between
+     * span handling and those edits. With an owner in flight the intent is a
+     * cancellation: the owning teardown drops the spans once the writer has unwound,
+     * and the key stays owned (starts are refused) until then. With no owner the spans
+     * are dropped now, under the ownership lock. The eviction intent is recorded before
+     * [onRemove] runs, so a failing removal callback cannot leave the key unmarked.
      */
     fun evict(id: ID) {
         val record = synchronized(lock) {
@@ -97,6 +108,7 @@ class DownloadRegistry<ID : Any, P>(
             } else {
                 r.cancelRequested = true
             }
+            onRemove(id)
             r
         } ?: return
         record.cancelWrite.invoke()

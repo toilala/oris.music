@@ -140,6 +140,15 @@ object OfflineAudio {
             },
             // A span cleanup that failed is logged, never treated as proven removal.
             onCleanupFailed = { id, e -> Timber.w(e, "Could not clear the cached copy for %s", id) },
+            // Removal's state and persistence edits run inside the registry's ownership
+            // critical section (see DownloadRegistry.evict), so no commit or successor
+            // start can interleave with them.
+            onRemove = { id ->
+                doneFlow.value = doneFlow.value.filterNot { it.id == id }
+                failedFlow.value = failedFlow.value - id
+                statusFlow.value = statusFlow.value - id
+                save(app)
+            },
         ).also { registryInstance = it }
 
     fun load(context: Context) {
@@ -219,15 +228,13 @@ object OfflineAudio {
         registry(context.applicationContext).cancel(songId)
     }
 
-    @OptIn(UnstableApi::class)
     fun remove(context: Context, songId: String) {
         load(context)
-        val app = context.applicationContext
-        doneFlow.value = doneFlow.value.filterNot { it.id == songId }
-        failedFlow.value = failedFlow.value - songId
-        statusFlow.value = statusFlow.value - songId
-        save(app)
-        registry(app).evict(songId)
+        // Everything a removal touches - saved list, failed/status state, persisted
+        // record and cache spans - moves through the registry's atomic eviction, so a
+        // concurrent commit or a successor download can never resurrect the entry or
+        // have its own state erased by it.
+        registry(context.applicationContext).evict(songId)
     }
 
     private fun prefs(context: Context) =

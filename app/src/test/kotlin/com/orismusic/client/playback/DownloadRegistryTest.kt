@@ -36,6 +36,7 @@ class DownloadRegistryTest {
         onFailed = { id, _ -> events.add("failed:$id") },
         onBusyChange = { id, busy -> events.add("busy:$busy") },
         onCleanupFailed = { id, _ -> events.add("cleanupFailed:$id") },
+        onRemove = { id -> events.add("remove:$id") },
     )
 
     @After
@@ -155,9 +156,9 @@ class DownloadRegistryTest {
     }
 
     @Test
-    fun `evict with no owner drops spans immediately under the ownership lock`() {
+    fun `evict with no owner drops spans immediately and runs removal under the ownership lock`() {
         registry.evict("a")
-        assertEquals(listOf("drop:a"), events.toList())
+        assertEquals(listOf("drop:a", "remove:a"), events.toList())
     }
 
     @Test
@@ -178,11 +179,15 @@ class DownloadRegistryTest {
     }
 
     @Test
-    fun `evict cannot delete a successor's spans`() {
+    fun `evict cannot delete a successor's spans and settles removal before the successor commits`() {
         registry.evict("a")
         assertTrue(registry.start("a", "p", instantWrite()))
         awaitActive("a", false)
-        assertEquals(listOf("drop:a", "busy:true", "commit:a", "busy:false"), events.toList())
+        // The successor is a clean new lifecycle: its commit lands strictly after the
+        // removal's side effects, and its spans are never dropped by the removal.
+        assertEquals(
+            listOf("drop:a", "remove:a", "busy:true", "commit:a", "busy:false"),
+            events.toList())
         assertEquals(1, events.count { it == "drop:a" })
     }
 
@@ -190,7 +195,7 @@ class DownloadRegistryTest {
     fun `span cleanup failure is reported and never treated as proven removal`() {
         dropThrows = true
         registry.evict("bad")
-        assertEquals(listOf("cleanupFailed:bad"), events.toList())
+        assertEquals(listOf("cleanupFailed:bad", "remove:bad"), events.toList())
 
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -203,6 +208,67 @@ class DownloadRegistryTest {
         assertEquals(2, events.count { it == "cleanupFailed:bad" })
         assertFalse(registry.isActive("bad"))
         assertEquals("busy:false", events.last())
+    }
+
+    @Test
+    fun `evict pinned at the pre-commit boundary runs removal atomically and suppresses the commit`() {
+        val atBoundary = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        assertTrue(registry.start("a", "p") {
+            cancelWrite = { events.add("cancelWrite") }
+            // The write's work is done; the job is pinned before the commit section.
+            atBoundary.countDown()
+            release.await(5, TimeUnit.SECONDS)
+        })
+        atBoundary.awaitLatched()
+
+        // Removal lands while the job sits at the exact post-write/pre-commit boundary:
+        // its side effects run atomically with the eviction intent and the commit is
+        // suppressed, so a removed entry can never be resurrected by this job.
+        registry.evict("a")
+        assertEquals(listOf("busy:true", "remove:a", "cancelWrite"), events.toList())
+
+        release.countDown()
+        awaitActive("a", false)
+        assertEquals(
+            listOf("busy:true", "remove:a", "cancelWrite", "drop:a", "busy:false"),
+            events.toList())
+        assertFalse(events.contains("commit:a"))
+    }
+
+    @Test
+    fun `commit before evict commits then removes in one ownership order`() {
+        assertTrue(registry.start("a", "p", instantWrite()))
+        awaitActive("a", false)
+
+        // The commit already retired the owner: removal still clears the saved state
+        // and drops the spans, strictly after the commit it undoes.
+        registry.evict("a")
+        assertEquals(
+            listOf("busy:true", "commit:a", "busy:false", "drop:a", "remove:a"),
+            events.toList())
+    }
+
+    @Test
+    fun `a successor start is refused while the evicted owner unwinds then commits after settlement`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        assertTrue(registry.start("a", "p", blockingWrite(entered, release)))
+        entered.awaitLatched()
+
+        registry.evict("a")
+        // The evicted key stays owned until its teardown finishes: the successor is
+        // refused, never overlapped, so removal cannot erase a successor's state.
+        assertFalse(registry.start("a", "p2", instantWrite()))
+
+        release.countDown()
+        awaitActive("a", false)
+        assertTrue(registry.start("a", "p2", instantWrite()))
+        awaitActive("a", false)
+        assertEquals(
+            listOf("busy:true", "remove:a", "cancelWrite", "drop:a", "busy:false",
+                "busy:true", "commit:a", "busy:false"),
+            events.toList())
     }
 
     @Test

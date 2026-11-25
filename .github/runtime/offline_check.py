@@ -133,6 +133,11 @@ def seed_liked():
                + '<string name="counts">{}</string>'
                + '</map>')
     data = library.encode()
+    # On a fresh install the app's shared_prefs directory does not exist until the
+    # first SharedPreferences access, so create it before tee writes the seed file.
+    mk = subprocess.run(['adb', 'shell', 'run-as', PKG, 'mkdir', '-p', 'shared_prefs'],
+                        capture_output=True)
+    assert mk.returncode == 0, 'seed dir failed: ' + mk.stderr.decode(errors='replace')
     r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee',
                         'shared_prefs/oris-library.xml'],
                        input=data, capture_output=True)
