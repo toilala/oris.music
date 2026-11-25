@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -104,6 +105,7 @@ object OfflineAudio {
     private val busyFlow = MutableStateFlow<Set<String>>(emptySet())
     private val failedFlow = MutableStateFlow<Set<String>>(emptySet())
     private val statusFlow = MutableStateFlow<Map<String, OfflineStatus>>(emptyMap())
+    private val gate = OfflineRefreshGate(statusFlow, busyFlow)
     private var registryInstance: DownloadRegistry<String, SavedSong>? = null
     @Volatile private var loaded = false
 
@@ -125,18 +127,30 @@ object OfflineAudio {
                     .downloadCache().removeResource(id)
             },
             onCommit = { id, song ->
+                // The cache read stays out of the gate but inside the registry's
+                // critical section: the key is exclusively owned until commit, so
+                // this status is exact at the moment the edits below are applied.
                 val cache = EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java)
                     .downloadCache()
-                doneFlow.value = listOf(song) + doneFlow.value.filterNot { it.id == song.id }
+                val status = cacheStatus(cache, id)
+                gate.mutate {
+                    doneFlow.value = listOf(song) + doneFlow.value.filterNot { it.id == song.id }
+                    statusFlow.value = statusFlow.value + (id to status)
+                }
+                // Still under the registry lock, so saves serialize with the flow
+                // edits above and can never land out of order across keys.
                 save(app)
-                statusFlow.value = statusFlow.value + (id to cacheStatus(cache, id))
             },
             onFailed = { id, _ ->
                 Timber.w("Download failed for %s", id)
-                failedFlow.value = failedFlow.value + id
+                failedFlow.update { it + id }
             },
             onBusyChange = { id, busy ->
-                busyFlow.value = if (busy) busyFlow.value + id else busyFlow.value - id
+                // Busy edits and the refresh-invalidation version land in one gate
+                // critical section, so a refresh can never publish across them.
+                gate.mutate {
+                    busyFlow.value = if (busy) busyFlow.value + id else busyFlow.value - id
+                }
             },
             // A span cleanup that failed is logged, never treated as proven removal.
             onCleanupFailed = { id, e -> Timber.w(e, "Could not clear the cached copy for %s", id) },
@@ -144,9 +158,11 @@ object OfflineAudio {
             // critical section (see DownloadRegistry.evict), so no commit or successor
             // start can interleave with them.
             onRemove = { id ->
-                doneFlow.value = doneFlow.value.filterNot { it.id == id }
-                failedFlow.value = failedFlow.value - id
-                statusFlow.value = statusFlow.value - id
+                gate.mutate {
+                    doneFlow.value = doneFlow.value.filterNot { it.id == id }
+                    statusFlow.value = statusFlow.value - id
+                }
+                failedFlow.update { it - id }
                 save(app)
             },
         ).also { registryInstance = it }
@@ -155,6 +171,9 @@ object OfflineAudio {
         if (loaded) return
         synchronized(this) {
             if (loaded) return
+            // Saved-membership load is a mutation in the refresh ordering: version
+            // and edit land together (OfflineAudio monitor > gate lock).
+            gate.mutate {
             doneFlow.value = runCatching {
                 val array = JSONArray(prefs(context).getString("songs", "[]"))
                 (0 until array.length()).map { i ->
@@ -163,6 +182,7 @@ object OfflineAudio {
                         if (o.has("thumb")) o.getString("thumb") else null)
                 }
             }.getOrDefault(emptyList())
+            }
             loaded = true
         }
         refreshStatus(context)
@@ -184,11 +204,18 @@ object OfflineAudio {
     fun refreshStatus(context: Context) {
         val app = context.applicationContext
         scope.launch {
-            val map = runCatching {
-                val cache = EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java).downloadCache()
-                doneFlow.value.associate { it.id to cacheStatus(cache, it.id) }
-            }.getOrElse { emptyMap() }
-            statusFlow.value = map
+            // One retry: a rejected publication means a mutation landed during the
+            // slow reads, so a single re-read converges; a second rejection defers
+            // to the next natural trigger (mutations write their own truth).
+            repeat(2) {
+                val ticket = gate.begin { doneFlow.value.map { it.id }.toSet() }
+                // Slow cache reads stay outside every lock, off the main thread.
+                val computed = runCatching {
+                    val cache = EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java).downloadCache()
+                    ticket.savedIds.associateWith { cacheStatus(cache, it) }
+                }.getOrNull() ?: return@launch
+                if (gate.publish(ticket, computed)) return@launch
+            }
         }
     }
 
@@ -201,7 +228,9 @@ object OfflineAudio {
         // A complete copy needs no second download; a partial or unverified one may be retried.
         if (doneFlow.value.any { it.id == song.id }
             && statusFlow.value[song.id] == OfflineStatus.READY) return
-        failedFlow.value = failedFlow.value - song.id
+        // Atomic per-flow update: a concurrent failure marker or removal for another
+        // key can never be lost by this clear.
+        failedFlow.update { it - song.id }
         // The registry refuses the start when this key is already owned, including a
         // previous download's cleanup window, so two writers never share a cache key.
         registry(app).start(song.id, song) {
