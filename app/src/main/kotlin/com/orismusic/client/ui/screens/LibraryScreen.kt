@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.filled.Add
@@ -64,6 +66,8 @@ import coil3.compose.AsyncImage
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.ListeningStats
+import com.orismusic.client.library.listeningStats
 import com.orismusic.client.library.matching
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.OfflineAudio
@@ -89,12 +93,15 @@ fun LibraryScreen(
     val offlineStatus by OfflineAudio.status.collectAsState()
     val playlistStore = PlaylistStore.get(LocalContext.current)
     val playlists by playlistStore.playlists.collectAsState()
+    val playCounts by store.playCounts.collectAsState()
     var section by rememberSaveable { mutableIntStateOf(0) }
+    var showStats by rememberSaveable { mutableStateOf(false) }
     var openPlaylist by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     val opened = playlists.firstOrNull { it.id == openPlaylist }
+    val stats = listeningStats(playCounts, history + liked + saved + playlists.flatMap { it.songs })
     val songs = when {
         section == 0 -> liked
         section == 1 -> history
@@ -144,6 +151,14 @@ fun LibraryScreen(
                 style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = { showStats = !showStats }) {
+                Icon(
+                    Icons.Rounded.Insights,
+                    contentDescription = "Listening stats",
+                    tint = if (showStats) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = onQueue) {
                 Icon(Icons.Rounded.QueueMusic, contentDescription = "Queue")
             }
@@ -151,6 +166,9 @@ fun LibraryScreen(
                 Icon(Icons.Rounded.Settings, contentDescription = "Settings")
             }
         }
+        if (showStats) {
+            StatsContent(stats)
+        } else {
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -338,6 +356,83 @@ fun LibraryScreen(
                         onRemoveOffline = { OfflineAudio.remove(appContext, song.id) },
                     )
                     }
+                }
+            }
+        }
+        }
+    }
+}
+
+/** Recorded listening totals and rankings, kept on the phone. */
+@Composable
+private fun StatsContent(stats: ListeningStats) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 4.dp)
+            .padding(com.orismusic.client.ui.bottomInsetPadding()),
+    ) {
+        Text("Listening stats", style = MaterialTheme.typography.titleLarge)
+        if (stats.totalStarts == 0) {
+            Text(
+                "Play some songs and your counts will show up here.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            return@Column
+        }
+        Text(
+            "${stats.totalStarts} recorded starts · ${stats.countedSongs} ${if (stats.countedSongs == 1) "song" else "songs"}",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        val unnamed = stats.countedSongs - stats.namedSongs
+        Text(
+            "A start is counted each time a song began playing; back to back repeats of the same song count once. Recording began with the version that added counting, and clearing the library history resets it, so this is what this phone has recorded since then, not an all time history." +
+                if (unnamed > 0) " $unnamed counted ${if (unnamed == 1) "song no longer has" else "songs no longer have"} details here, so ${if (unnamed == 1) "it adds" else "they add"} to the totals but cannot appear below." else "",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (stats.topSongs.isNotEmpty()) {
+            Text("Top songs", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+            stats.topSongs.forEachIndexed { i, sp ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("${i + 1}", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(24.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(sp.song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                        Text(sp.song.artist, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        if (sp.starts == 1) "1 start" else "${sp.starts} starts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (stats.topArtists.isNotEmpty()) {
+            Text("Top artists", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+            stats.topArtists.forEachIndexed { i, ap ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("${i + 1}", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(24.dp))
+                    Text(ap.artist, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(
+                        if (ap.starts == 1) "1 start" else "${ap.starts} starts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
