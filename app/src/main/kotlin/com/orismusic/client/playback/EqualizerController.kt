@@ -17,6 +17,25 @@ data class EqState(
     val levels: List<Int> = emptyList(),
 )
 
+/** Levels a preset shape produces for a device band layout, stretched across however many
+ *  bands the device has. Used both to apply a preset and to recognize it afterwards. */
+fun presetLevels(shape: List<Float>, bandCount: Int, minLevel: Int, maxLevel: Int): List<Int> =
+    List(bandCount) { i ->
+        val pos = if (bandCount == 1) 0f else i * (shape.size - 1f) / (bandCount - 1f)
+        val lo = pos.toInt().coerceAtMost(shape.size - 1)
+        val hi = (lo + 1).coerceAtMost(shape.size - 1)
+        val v = shape[lo] + (shape[hi] - shape[lo]) * (pos - lo)
+        if (v >= 0) (v * maxLevel).toInt() else (-v * minLevel).toInt()
+    }
+
+/** The preset whose computed levels match the current ones exactly, or null when the mix
+ *  no longer matches any preset (a custom mix). */
+fun eqPresetNameFor(presets: Map<String, List<Float>>, levels: List<Int>, minLevel: Int, maxLevel: Int): String? =
+    if (levels.isEmpty()) null
+    else presets.entries.firstOrNull { (_, shape) ->
+        presetLevels(shape, levels.size, minLevel, maxLevel) == levels
+    }?.key
+
 /** Wraps the system equalizer on the player's audio session and remembers the settings. */
 object EqualizerController {
     private var eq: Equalizer? = null
@@ -84,12 +103,7 @@ object EqualizerController {
     fun applyPreset(shape: List<Float>) {
         val s = _state.value
         if (!s.available || s.levels.isEmpty()) return
-        s.levels.indices.forEach { i ->
-            val pos = if (s.levels.size == 1) 0f else i * (shape.size - 1f) / (s.levels.size - 1f)
-            val lo = pos.toInt().coerceAtMost(shape.size - 1)
-            val hi = (lo + 1).coerceAtMost(shape.size - 1)
-            val v = shape[lo] + (shape[hi] - shape[lo]) * (pos - lo)
-            val level = if (v >= 0) (v * s.maxLevel).toInt() else (-v * s.minLevel).toInt()
+        presetLevels(shape, s.levels.size, s.minLevel, s.maxLevel).forEachIndexed { i, level ->
             setLevel(i, level)
         }
     }

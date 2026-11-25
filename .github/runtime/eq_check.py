@@ -12,13 +12,42 @@ import xml.etree.ElementTree as ET
 from playback_check import adb, tap, wait_label, screen, tree, PKG
 
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
+MAIN = PKG + '/com.orismusic.client.MainActivity'
 UNAVAILABLE = 'Unavailable right now.'
 OFF_COPY = 'Off: sound passes through unchanged.'
 ON_COPY = 'On: shaping the sound of the current output.'
 
 
+def current_focus():
+    out = adb('shell', 'dumpsys', 'window', 'windows').decode()
+    m = re.search(r'mCurrentFocus=Window\{[^}]*\s([A-Za-z0-9_.]+)/\.?([A-Za-z0-9_.]+)\}', out)
+    return (m.group(1), m.group(2)) if m else ('', '')
+
+
+def resume_main():
+    """Bring MainActivity forward and verify the resumed activity before touching anything.
+    Never force-stops the app: the live audio session under test must survive navigation."""
+    for _ in range(3):
+        # CLEAR_TOP pops the check activity sitting above MainActivity in the one task.
+        adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
+        for _ in range(40):
+            pkg, activity = current_focus()
+            if pkg == PKG and activity.endswith('MainActivity'):
+                return
+            time.sleep(0.5)
+    screen('failure')
+    raise AssertionError('MainActivity never resumed to the foreground')
+
+
 def open_playback_settings():
-    adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+    resume_main()
+    # A resumed singleTop activity lands wherever it was left; walk back to the root
+    # page (the only page without a Back affordance) before navigating down.
+    for _ in range(8):
+        if not has_text('Back'):
+            break
+        adb('shell', 'input', 'keyevent', '4')
+        time.sleep(1)
     wait_label('Home', seconds=60)
     tap('Library')
     tap('Settings', bottom=False)
@@ -39,6 +68,18 @@ def scroll_to_eq():
 
 def has_text(fragment):
     return any(fragment in (n.get('text') or '') for n in tree().iter('node'))
+
+
+def chip_state(label):
+    """The selected attribute of the clickable ancestor carrying the label, or None when
+    the label is absent. Compose maps a FilterChip's selected state onto that ancestor."""
+    root = tree()
+    parents = {c: p for p in root.iter('node') for c in p}
+    target = next((n for n in root.iter('node') if n.get('text') == label), None)
+    node = target
+    while node is not None and node.get('clickable') != 'true':
+        node = parents.get(node)
+    return node.get('selected') if node is not None else None
 
 
 def tap_clickable(label):
@@ -109,6 +150,7 @@ wait_label('Bass boost')
 screen('eq_presets_in_view')
 tap_clickable('Bass boost')
 time.sleep(2)
+assert chip_state('Bass boost') == 'true', 'Bass boost chip did not read as selected after its tap'
 screen('eq_preset_bass')
 for _ in range(8):
     if any(re.fullmatch(r'\d+(\.\d+)? (Hz|kHz)', n.get('text') or '') for n in tree().iter('node')):
@@ -116,18 +158,33 @@ for _ in range(8):
     adb('shell', 'input', 'swipe', '540', '1500', '540', '900', '350')
     time.sleep(1.2)
 screen('eq_band_sliders')
+# The band sliders carry accessible labels; drag one off its preset value and the chip
+# row must fall back to Custom, derived from the band values rather than a stored name.
+slider = next((n for n in tree().iter('node') if n.get('content-desc') == 'Equalizer band 60 Hz'), None)
+assert slider is not None, 'no accessible Equalizer band 60 Hz slider in the tree'
+x1, y1, x2, y2 = map(int, re.findall(r'\d+', slider.get('bounds')))
+adb('shell', 'input', 'swipe', str((x1 + x2) // 2), str((y1 + y2) // 2), str(x1 + (x2 - x1) // 4), str((y1 + y2) // 2), '400')
+time.sleep(1.5)
+assert has_text('Custom'), 'Custom chip never appeared after a hand-tweaked band'
+screen('eq_custom_mix')
 prefs = read_prefs('eq-prefs-enabled.xml')
 assert 'enabled' in prefs and 'true' in prefs, 'equalizer enabled flag was not persisted'
 assert 'levels' in prefs, 'equalizer band levels were not persisted'
 
-# 4. Platform read-back while the debug tone plays through the real service.
-adb('shell', 'am', 'start', '-n', COMPONENT, '-f', '0x10008000')
+# 4. Platform read-back while the debug tone plays through the real service. The check
+# activity starts in the app's own task (no CLEAR_TASK), so the way back is a plain
+# resume of MainActivity instead of a process restart.
+adb('shell', 'am', 'start', '-n', COMPONENT)
 wait_label('Local audio playing', seconds=30)
 time.sleep(3)
 dump_audio('dumpsys-audio-eq-playing.txt')
 
 # 5. Settings still show the equalizer during playback; toggle off; persisted off state.
-open_playback_settings()
+# The activity may resume straight onto the playback page; only navigate when it did not.
+resume_main()
+time.sleep(1)
+if not has_text('Playback speed'):
+    open_playback_settings()
 scroll_to_eq()
 wait_label(ON_COPY)
 tap_clickable('Equalizer')

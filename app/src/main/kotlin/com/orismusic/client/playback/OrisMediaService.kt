@@ -459,7 +459,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var originalQueueSize: Int = 0
 
-    private var consecutivePlaybackErr = 0
+    private val skipWalkGuard = ConsecutiveFailureGuard()
+    private var pausedBySkipGuard = false
     private var retryJob: Job? = null
     private var retryCount = 0
     private var silenceSkipJob: Job? = null
@@ -999,6 +1000,17 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 player.playWhenReady = keepPlaying
             } else if (!pinned && player.hasNextMediaItem()) {
                 errorRetries = 0
+                if (skipWalkGuard.onSongGaveUp()) {
+                    // Stop walking the queue silently: pause and say why. A fresh user
+                    // action starts a fresh streak, so reset here too.
+                    skipWalkGuard.onUserAction()
+                    pausedBySkipGuard = true
+                    player.pause()
+                    com.orismusic.client.utils.PlaybackDiagnostic.reportFailure(
+                        "Playback paused: ${skipWalkGuard.limit} songs failed in a row. Tap play to try again.",
+                    )
+                    return@launch
+                }
                 player.seekToNextMediaItem()
                 player.prepare()
                 player.playWhenReady = keepPlaying
@@ -1027,9 +1039,24 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var positionPersistJob: kotlinx.coroutines.Job? = null
 
+    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        // The guard's pause is retried by tapping play again. PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+        // cannot tell that tap apart from the service's own retry calls (ExoPlayer reports
+        // USER_REQUEST for every setPlayWhenReady), so only the explicit pausedBySkipGuard
+        // flag marks this path. An error drops the player to IDLE, where play() alone is a
+        // no-op, so the failed song needs a fresh prepare to actually retry.
+        if (playWhenReady && pausedBySkipGuard) {
+            pausedBySkipGuard = false
+            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        }
+    }
+
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         refreshMediaNotification()
-        if (isPlaying) com.orismusic.client.utils.PlaybackDiagnostic.reportStarted(player.currentMediaItem?.mediaId)
+        if (isPlaying) {
+            com.orismusic.client.utils.PlaybackDiagnostic.reportStarted(player.currentMediaItem?.mediaId)
+            skipWalkGuard.onPlaybackStarted()
+        }
         if (!isPlaying) {
             positionPersistJob?.cancel()
             positionPersistJob = null
@@ -1086,6 +1113,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     // Queue methods for PlayerConnection
     fun playQueue(queue: Queue, playWhenReady: Boolean = true) {
+        skipWalkGuard.onUserAction()
+        pausedBySkipGuard = false
         queueGeneration++
         val generation = queueGeneration
         runwayJob?.cancel()

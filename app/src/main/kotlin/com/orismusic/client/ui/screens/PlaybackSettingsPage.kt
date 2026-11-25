@@ -26,6 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import com.orismusic.client.settings.PlaybackPreferences
@@ -191,6 +194,10 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     eq.enabled,
                 ) { com.orismusic.client.playback.EqualizerController.setEnabled(it) }
                 if (eq.enabled) {
+                    val activePreset = com.orismusic.client.playback.eqPresetNameFor(
+                        com.orismusic.client.playback.EqualizerController.presets,
+                        eq.levels, eq.minLevel, eq.maxLevel,
+                    )
                     Column {
                         Text("Presets", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
@@ -200,9 +207,16 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                         ) {
                             com.orismusic.client.playback.EqualizerController.presets.forEach { (name, shape) ->
                                 FilterChip(
-                                    selected = false,
+                                    selected = activePreset == name,
                                     onClick = { com.orismusic.client.playback.EqualizerController.applyPreset(shape) },
                                     label = { Text(name) },
+                                )
+                            }
+                            if (activePreset == null) {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { },
+                                    label = { Text("Custom") },
                                 )
                             }
                         }
@@ -218,6 +232,10 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                                 value = level.toFloat(),
                                 onValueChange = { com.orismusic.client.playback.EqualizerController.setLevel(band, it.toInt()) },
                                 valueRange = eq.minLevel.toFloat()..eq.maxLevel.toFloat(),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Equalizer band ${eqBandLabel(eq.centerHz.getOrNull(band) ?: 0)}"
+                                    stateDescription = eqLevelDescription(level)
+                                },
                             )
                         }
                     }
@@ -232,6 +250,14 @@ private fun eqBandLabel(centerHz: Int): String =
     if (centerHz < 1000) "$centerHz Hz"
     else if (centerHz % 1000 == 0) "${centerHz / 1000} kHz"
     else "${centerHz / 1000f} kHz"
+
+/** Spoken slider value: platform levels are millibels, people hear decibels. */
+private fun eqLevelDescription(levelMb: Int): String {
+    val db = levelMb / 100.0
+    val text = if (db == db.toLong().toDouble()) "${db.toLong()}"
+    else java.lang.String.format(java.util.Locale.US, "%.1f", db)
+    return (if (db > 0) "+$text" else text) + " decibels"
+}
 
 /** Best-effort path to the phone's battery allowlist: the standard battery-optimization
  *  exemption first, then the list page when a build refuses the direct request. */

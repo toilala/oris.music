@@ -77,6 +77,8 @@ fun diagnosticSummary(raw: String): String {
         "timed out" in t -> "Taking too long. Check your connection and try again."
         "refused" in t -> "The music service refused this request. Try again shortly."
         "no playable stream" in t -> "This song can't play right now. Try another one."
+        // The skip guard's pause message is already human wording; show it as-is.
+        "failed in a row" in t -> raw
         else -> "This song couldn't play. Try again."
     }
 }
@@ -89,6 +91,7 @@ fun diagnosticShort(raw: String): String {
         "timed out" in t -> "Taking too long"
         "refused" in t -> "Playback refused"
         "no playable stream" in t -> "Can't play this song"
+        "failed in a row" in t -> "Paused after failures"
         else -> "Couldn't play"
     }
 }
