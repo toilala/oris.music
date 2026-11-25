@@ -39,7 +39,11 @@ class OfflineCheckActivity : Activity() {
                 busy = OfflineAudio.inProgress.value,
                 failed = OfflineAudio.failed.value,
                 validated = OfflineAudio.status.value)
-            status.text = "Offline state: " + (state?.name ?: "NOT SAVED")
+            val label = "Offline state: " + (state?.name ?: "NOT SAVED")
+            // Rewrite only on real transitions: a 400ms unconditional setText keeps
+            // accessibility events flowing, so uiautomator never reaches idle and
+            // every hierarchy dump comes back empty.
+            if (status.text.toString() != label) status.text = label
             handler.postDelayed(this, 400)
         }
     }
