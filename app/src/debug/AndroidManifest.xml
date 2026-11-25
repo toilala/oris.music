@@ -8,5 +8,6 @@
         <activity android:name="com.orismusic.client.debug.HomePicksCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.ControlStylesCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.SettingsCheckActivity" android:exported="true" />
+        <activity android:name="com.orismusic.client.debug.OfflineCheckActivity" android:exported="true" />
     </application>
 </manifest>

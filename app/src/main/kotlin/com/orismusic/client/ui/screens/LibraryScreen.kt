@@ -22,9 +22,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
@@ -81,6 +84,9 @@ fun LibraryScreen(
     val appContext = LocalContext.current
     remember { OfflineAudio.load(appContext) }
     val saved by OfflineAudio.downloaded.collectAsState()
+    val offlineBusy by OfflineAudio.inProgress.collectAsState()
+    val offlineFailed by OfflineAudio.failed.collectAsState()
+    val offlineStatus by OfflineAudio.status.collectAsState()
     val playlistStore = PlaylistStore.get(LocalContext.current)
     val playlists by playlistStore.playlists.collectAsState()
     var section by rememberSaveable { mutableIntStateOf(0) }
@@ -325,6 +331,11 @@ fun LibraryScreen(
                         onToggleLike = { store.toggleLike(song) },
                         playlists = playlists.map { it.id to it.name },
                         onAddToPlaylist = { id -> playlistStore.add(id, song) },
+                        offline = com.orismusic.client.playback.offlineRowStatus(
+                            song.id, saved.any { it.id == song.id }, offlineBusy, offlineFailed, offlineStatus),
+                        onSaveOffline = { OfflineAudio.download(appContext, song) },
+                        onCancelOffline = { OfflineAudio.cancel(appContext, song.id) },
+                        onRemoveOffline = { OfflineAudio.remove(appContext, song.id) },
                     )
                     }
                 }
@@ -341,15 +352,64 @@ private fun SavedSongRow(
     onToggleLike: () -> Unit,
     playlists: List<Pair<String, String>> = emptyList(),
     onAddToPlaylist: (String) -> Unit = {},
+    offline: com.orismusic.client.playback.OfflineStatus? = null,
+    onSaveOffline: () -> Unit = {},
+    onCancelOffline: () -> Unit = {},
+    onRemoveOffline: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
     SongRow(title = song.title, subtitle = song.artist, thumbnail = song.thumbnail, onClick = onClick) {
+        when (offline) {
+            com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
+                androidx.compose.material3.CircularProgressIndicator(
+                    Modifier.size(18.dp), strokeWidth = 2.dp)
+            com.orismusic.client.playback.OfflineStatus.FAILED ->
+                Icon(Icons.Filled.Close, contentDescription = "Offline download failed",
+                    tint = MaterialTheme.colorScheme.error)
+            com.orismusic.client.playback.OfflineStatus.READY ->
+                Icon(Icons.Filled.Check, contentDescription = "Saved for offline",
+                    tint = MaterialTheme.colorScheme.primary)
+            com.orismusic.client.playback.OfflineStatus.PARTIAL ->
+                Icon(Icons.Filled.Warning, contentDescription = "Only partly saved for offline",
+                    tint = MaterialTheme.colorScheme.outline)
+            com.orismusic.client.playback.OfflineStatus.UNKNOWN ->
+                Icon(Icons.Filled.Info, contentDescription = "Offline copy not verified yet",
+                    tint = MaterialTheme.colorScheme.outline)
+            null -> Unit
+        }
         Box {
             IconButton(onClick = { menu = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "Add to playlist",
                     tint = MaterialTheme.colorScheme.outline)
             }
             androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                when (offline) {
+                    com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Cancel download") },
+                            onClick = { onCancelOffline(); menu = false })
+                    com.orismusic.client.playback.OfflineStatus.FAILED ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Retry download") },
+                            onClick = { onSaveOffline(); menu = false })
+                    com.orismusic.client.playback.OfflineStatus.READY ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Remove from offline") },
+                            onClick = { onRemoveOffline(); menu = false })
+                    com.orismusic.client.playback.OfflineStatus.PARTIAL,
+                    com.orismusic.client.playback.OfflineStatus.UNKNOWN -> {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Retry download") },
+                            onClick = { onSaveOffline(); menu = false })
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Remove from offline") },
+                            onClick = { onRemoveOffline(); menu = false })
+                    }
+                    null ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Save for offline") },
+                            onClick = { onSaveOffline(); menu = false })
+                }
                 if (playlists.isEmpty()) {
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text("Make a playlist first") }, onClick = { menu = false })
