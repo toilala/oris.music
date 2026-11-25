@@ -12,6 +12,7 @@ on:
           - diagnostics
           - local
           - offline
+          - localsearch
 permissions:
   contents: read
 jobs:
@@ -53,7 +54,7 @@ jobs:
           ram-size: 3072M
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: python3 .github/runtime/${{ inputs.check == 'diagnostics' && 'diagnostic_check.py' || inputs.check == 'local' && 'local_check.py' || inputs.check == 'offline' && 'offline_check.py' || 'playback_check.py' }}
+          script: python3 .github/runtime/${{ inputs.check == 'diagnostics' && 'diagnostic_check.py' || inputs.check == 'local' && 'local_check.py' || inputs.check == 'offline' && 'offline_check.py' || inputs.check == 'localsearch' && 'local_search_check.py' || 'playback_check.py' }}
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
