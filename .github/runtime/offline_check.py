@@ -163,9 +163,87 @@ def self_test():
     assert len(fixture_wav_bytes(2)) == 44 + 8000 * 2 * 2
     assert len(fixture_wav_bytes(30)) == 44 + 8000 * 2 * 30
     assert fixture_wav_bytes(30)[:4] == b'RIFF' and fixture_wav_bytes(30)[8:12] == b'WAVE'
+    # Network-down gate against the real helper, with a scripted sampler and a
+    # fake clock: stable-clean, delayed-connect, clean-then-connect, and
+    # persistent-connect (fail closed) traces.
+    class FakeClock:
+        def __init__(self):
+            self.t = 0.0
+        def now(self):
+            return self.t
+        def sleep(self, s):
+            self.t += s
+
+    def gate_rig(trace):
+        samples = iter(trace)
+        calls = {'disable': 0}
+        def disable():
+            calls['disable'] += 1
+        def sample():
+            return 'raw', next(samples)
+        return calls, disable, sample
+
+    # Stable clean: one disable, returns once the clean window holds.
+    clock = FakeClock()
+    calls, disable, sample = gate_rig([[], [], [], []])
+    trace = await_network_down(disable, sample, sleep=clock.sleep, now=clock.now)
+    assert calls['disable'] == 1 and trace[-1][0] >= 3 and len(trace) == 4
+    # Delayed connect: a late agent connects after the first disable; the gate
+    # re-disables and restarts the clean window.
+    clock = FakeClock()
+    calls, disable, sample = gate_rig(
+        [[' LTE CONNECTED'], [' LTE CONNECTED'], [], [], [], []])
+    trace = await_network_down(disable, sample, sleep=clock.sleep, now=clock.now)
+    assert calls['disable'] == 3, calls
+    assert trace[-1][0] - trace[2][0] >= 3 and trace[-1][1] == []
+    # Clean-then-connect: an early clean streak must not pass; the gate returns
+    # only after a stable window following the last observed connection.
+    clock = FakeClock()
+    calls, disable, sample = gate_rig(
+        [[], [], [' LTE CONNECTED'], [], [], [], []])
+    trace = await_network_down(disable, sample, sleep=clock.sleep, now=clock.now)
+    assert calls['disable'] == 2, calls
+    assert trace[-1][0] - trace[3][0] >= 3, trace
+    # Persistent connect: fail closed on timeout, raw samples retained.
+    clock = FakeClock()
+    calls, disable, sample = gate_rig([[' LTE CONNECTED']] * 60)
+    try:
+        await_network_down(disable, sample, sleep=clock.sleep, now=clock.now)
+        raise SystemExit('gate must fail closed on persistent connection')
+    except AssertionError as e:
+        assert 'never settled off' in str(e) and 'LTE CONNECTED' in str(e)
+    assert calls['disable'] > 1 and clock.t <= 31
     print('SELF-TEST: recursive span parser, metadata exclusions, real-layout '
-          'positive payload, strict sampler verdicts and fixture bytes all passed',
-          flush=True)
+          'positive payload, strict sampler verdicts, fixture bytes and '
+          'network-down gate traces all passed', flush=True)
+
+
+def await_network_down(disable, sample, sleep=time.sleep, now=time.monotonic,
+                       timeout=30, stable=3):
+    """Fail-closed network-off gate. Disable, then poll connectivity until no
+    CONNECTED agent is observed for a stable clean window; re-disable on any
+    observed connection (a late-registering telephony agent can connect AFTER
+    the first disable lands). Every raw sample is retained in the returned
+    trace; on timeout the gate fails closed with the tail of the trace."""
+    disable()
+    trace = []
+    clean_since = None
+    end = now() + timeout
+    while True:
+        t = now()
+        conn, live = sample()
+        trace.append((round(t, 3), [l.strip()[:80] for l in live]))
+        if live:
+            disable()
+            clean_since = None
+        elif clean_since is None:
+            clean_since = t
+        if clean_since is not None and t - clean_since >= stable:
+            return trace
+        if t >= end:
+            raise AssertionError('network never settled off within %ds: %s'
+                                 % (timeout, repr(trace[-3:])))
+        sleep(1)
 
 
 if '--self-test' in sys.argv[1:]:
@@ -193,6 +271,11 @@ def connected_lines():
     conn = adb('shell', 'dumpsys', 'connectivity').decode()
     return conn, [line for line in conn.splitlines()
                   if re.search(r'\bCONNECTED\b', line) and 'DISCONNECTED' not in line]
+
+
+def disable_network():
+    adb('shell', 'svc', 'wifi', 'disable')
+    adb('shell', 'svc', 'data', 'disable')
 
 
 def source_present():
@@ -494,9 +577,8 @@ def leg(name, requires=(), unverified_ok=False):
 def leg_setup_install():
     adb('wait-for-device')
     adb('shell', 'input', 'keyevent', '82')
-    adb('shell', 'svc', 'wifi', 'disable')
-    adb('shell', 'svc', 'data', 'disable')
-    time.sleep(3)
+    trace = await_network_down(disable_network, connected_lines)
+    open(OUT + '/network-down-trace.txt', 'w').write(repr(trace))
     conn, live = connected_lines()
     open(OUT + '/connectivity-before.txt', 'w').write(conn)
     assert not live, 'network still live, refusing to run: ' + repr(live[:2])
