@@ -18,9 +18,6 @@ import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.offlineRowStatus
 import androidx.media3.common.Player
 import com.orismusic.client.playback.OrisMediaService
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import kotlin.math.sin
 
 /** Exercises the real save-for-offline pipeline against a generated local tone instead of
  * YouTube: real cache write, state flows, restart validation, offline playback from cache and
@@ -63,16 +60,16 @@ class OfflineCheckActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        // A short generated tone becomes the fixture payload, served from file:// so the real
-        // CacheWriter and download cache do their normal work without any network.
-        val rate = 8000
-        val samples = rate * 2
-        val bytes = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN)
-        bytes.put("RIFF".toByteArray()).putInt(36 + samples * 2).put("WAVEfmt ".toByteArray())
-        bytes.putInt(16).putShort(1).putShort(1).putInt(rate).putInt(rate * 2).putShort(2).putShort(16)
-        bytes.put("data".toByteArray()).putInt(samples * 2)
-        repeat(samples) { bytes.putShort((sin(it * 2.0 * Math.PI * 440 / rate) * 2000).toInt().toShort()) }
-        val file = java.io.File(cacheDir, "offline-fixture-tone.wav").apply { writeBytes(bytes.array()) }
+        // Recreation diagnosis: every onCreate is recorded so the harness can
+        // correlate recreations with its own actions. Recreation restores the
+        // fixture URI but NEVER rewrites the source bytes: this activity carries
+        // no generation path at all. Only OfflineFixtureSetupReceiver writes the
+        // bytes, and a broadcast is a one-shot event no task restoration can replay.
+        java.io.File(filesDir, "offline-check-recreations.log").appendText(
+            "pid=" + android.os.Process.myPid() +
+                " elapsed=" + android.os.SystemClock.elapsedRealtime() +
+                " extras=" + (intent?.extras != null) + "\n")
+        val file = java.io.File(cacheDir, "offline-fixture-tone.wav")
         OfflineAudio.fixtureUri = file.toURI().toString()
         OfflineAudio.load(this)
 
