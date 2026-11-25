@@ -1,8 +1,8 @@
 package com.orismusic.client.library
 
 /** One parsed song from pasted import text. videoId is present only when the
- *  source carried one; those entries can play directly, the rest are kept as
- *  listed songs that still need matching. */
+ *  source carried one; those entries can play directly. The rest are kept as
+ *  metadata-only listings: the app cannot play them and has no matching for them. */
 data class ImportedSong(val title: String, val artist: String, val videoId: String?)
 
 enum class ImportFormat { TITLE_ARTIST_LINES, CSV }
@@ -126,7 +126,8 @@ fun parsePlaylistImport(text: String): ImportPreview {
 /** Imported songs join playlists with a stable identity: the video id when the
  *  source had one, otherwise a key from the normalized title and artist, so a
  *  repeated import of the same song lands on the same id and dedupes. Songs on
- *  an "import:" id are not playable until matched. */
+ *  an "import:" id are metadata only: not playable, and the app has no matching
+ *  for them. */
 fun ImportedSong.toSavedSong(): SavedSong = SavedSong(
     id = videoId ?: ("import:" + normalize(title) + "|" + normalize(artist)),
     title = title,
@@ -143,5 +144,6 @@ fun SavedSong.isUnmatchedImport(): Boolean = id.startsWith("import:") || !id.mat
 
 /** The playable subset of a library list, in the original order. Bulk actions
  *  (Play, Shuffle, search-result queues) run on this; callers surface the
- *  difference as "not matched yet" so nothing is silently omitted. */
+ *  difference as metadata-only entries that can't play, so nothing is silently
+ *  omitted. */
 fun List<SavedSong>.matchedForPlayback(): List<SavedSong> = filter { !it.isUnmatchedImport() }

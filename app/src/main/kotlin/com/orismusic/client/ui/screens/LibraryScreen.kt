@@ -173,12 +173,16 @@ fun LibraryScreen(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                     importPreview?.let { p ->
+                        val playableCount = p.songs.count { it.videoId != null }
+                        val metaCount = p.songs.size - playableCount
+                        val summary = mutableListOf<String>()
+                        summary += "${p.songs.size} ${if (p.songs.size == 1) "entry" else "entries"} ready to import" +
+                            (if (p.duplicates > 0) ", ${p.duplicates} ${if (p.duplicates == 1) "duplicate" else "duplicates"} collapsed" else "") +
+                            (if (p.skipped.isNotEmpty()) ", ${p.skipped.size} ${if (p.skipped.size == 1) "line" else "lines"} couldn't be read" else "")
+                        if (playableCount > 0) summary += "$playableCount ${if (playableCount == 1) "entry has" else "entries have"} a usable video id and can play"
+                        if (metaCount > 0) summary += "$metaCount ${if (metaCount == 1) "entry is" else "entries are"} metadata only: listed in the playlist, but the app can't match ${if (metaCount == 1) "it" else "them"} to playable audio, so ${if (metaCount == 1) "it" else "they"} can't play"
                         Text(
-                            text = p.unsupportedReason
-                                ?: ("${p.songs.size} songs ready" +
-                                    (if (p.duplicates > 0) ", ${p.duplicates} ${if (p.duplicates == 1) "duplicate" else "duplicates"} collapsed" else "") +
-                                    (if (p.skipped.isNotEmpty()) ", ${p.skipped.size} ${if (p.skipped.size == 1) "line" else "lines"} couldn't be read" else "") +
-                                    (if (p.songs.any { it.videoId == null }) ". Songs without a video id are listed but can't play until matched." else "")),
+                            text = p.unsupportedReason ?: (summary.joinToString(". ") + "."),
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (p.unsupportedReason != null) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -336,7 +340,7 @@ fun LibraryScreen(
                 }
                 if (playable.size < shown.size) {
                     Text(
-                        "Play and Shuffle cover the ${playable.size} matched ${if (playable.size == 1) "song" else "songs"}; ${shown.size - playable.size} ${if (shown.size - playable.size == 1) "is" else "are"} not matched yet and can't play.",
+                        "Play and Shuffle cover the ${playable.size} playable ${if (playable.size == 1) "song" else "songs"}; ${shown.size - playable.size} ${if (shown.size - playable.size == 1) "is" else "are"} metadata only and can't play.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -364,7 +368,7 @@ fun LibraryScreen(
                                     overflow = TextOverflow.Ellipsis)
                                 Text(
                                     if (song.isUnmatchedImport())
-                                        listOf(song.artist, "Not matched yet").filter { it.isNotBlank() }.joinToString(" · ")
+                                        listOf(song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" · ")
                                     else song.artist,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,

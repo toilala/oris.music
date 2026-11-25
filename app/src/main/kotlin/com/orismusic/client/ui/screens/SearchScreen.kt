@@ -393,7 +393,7 @@ fun SearchScreen(
                             SongRow(
                                 title = result.song.title,
                                 subtitle = if (result.song.isUnmatchedImport())
-                                    listOf(result.song.artist, "Not matched yet").filter { it.isNotBlank() }.joinToString(" \u00b7 ")
+                                    listOf(result.song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" \u00b7 ")
                                 else result.song.artist,
                                 thumbnail = result.song.thumbnail,
                                 highlight = currentId == result.song.id,
