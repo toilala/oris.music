@@ -195,7 +195,10 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
             } else {
                 ToggleRow(
                     "Equalizer",
-                    if (eq.enabled) "On: shaping the sound of the current output."
+                    // Stale means the shown values are the last verified ones and the
+                    // platform could not be read back: never presented as confirmed.
+                    if (eq.stale) "Unknown: the equalizer state could not be confirmed on this output."
+                    else if (eq.enabled) "On: shaping the sound of the current output."
                     else "Off: sound passes through unchanged.",
                     eq.enabled,
                 ) { com.orismusic.client.playback.EqualizerController.setEnabled(it) }
