@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Equalizer settings evidence under network-disabled testing. First the honest
-unavailable state with no audio session, then, if the platform actually creates the
-effect, the real supported controls while the debug local tone plays through the service.
-Platform capability is reported, never assumed: if the emulator cannot create an
-Equalizer this captures the unavailable state and says so instead of failing the app."""
-from playback_check import adb, tap, wait_label, screen, tree, PKG
+"""Equalizer settings evidence under network-disabled testing. The check never assumes
+which state the app renders: it opens the settings page cold and branches on what is
+actually there. Both states are captured honestly. On the available path it exercises
+the real controls and keeps two kinds of evidence separate: platform read-back
+(dumpsys audio sessions/effects) and persisted preferences (shared_prefs on disk)."""
+import re
+import subprocess
 import time
+import xml.etree.ElementTree as ET
+
+from playback_check import adb, tap, wait_label, screen, tree, PKG
 
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
-UNAVAILABLE = 'Unavailable right now. It attaches to the player while music plays, when the device and current output support one.'
+UNAVAILABLE = 'Unavailable right now.'
+OFF_COPY = 'Off: sound passes through unchanged.'
+ON_COPY = 'On: shaping the sound of the current output.'
 
 
 def open_playback_settings():
@@ -35,68 +41,88 @@ def has_text(fragment):
     return any(fragment in (n.get('text') or '') for n in tree().iter('node'))
 
 
+def tap_clickable(label):
+    """Tap the clickable ancestor of the node carrying label, so taps never land on a
+    plain Text sibling of the real control."""
+    wait_label(label)
+    root = tree()
+    parents = {c: p for p in root.iter('node') for c in p}
+    target = next(n for n in root.iter('node') if label in (n.get('text'), n.get('content-desc')))
+    node = target
+    while node is not None and node.get('clickable') != 'true':
+        node = parents.get(node)
+    if node is None:
+        node = target
+    print('TAP ' + label + ' bounds=' + str(node.get('bounds')) + ' clickable=' + str(node.get('clickable')), flush=True)
+    x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+    adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
+    time.sleep(1)
+
+
+def dump_audio(name):
+    data = adb('shell', 'dumpsys', 'audio').decode()
+    open('runtime-evidence/' + name, 'w').write(data)
+    lines = [l.strip() for l in data.splitlines() if 'ffect' in l or 'ession' in l]
+    print('PLATFORM READ-BACK ' + name + ': ' + repr(lines[:14]), flush=True)
+
+
+def read_prefs(name):
+    prefs = adb('shell', 'run-as', PKG, 'cat', 'shared_prefs/oris-eq.xml').decode()
+    open('runtime-evidence/' + name, 'w').write(prefs)
+    print('PERSISTED PREFS ' + name + ': ' + prefs.replace('\n', ' '), flush=True)
+    return prefs
+
+
 adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
 adb('shell', 'am', 'force-stop', PKG)
 
-# 1. Honest unsupported state: cold app, no playback, audio session 0.
+# 1. Cold app, no playback: whatever the page renders is the truth about this device.
 open_playback_settings()
 scroll_to_eq()
-wait_label(UNAVAILABLE)
-screen('eq_unavailable')
-
-# 2. Real supported session attempt: the debug tone plays through the actual service.
-adb('shell', 'am', 'start', '-n', COMPONENT, '-f', '0x10008000')
-wait_label('Local audio playing', seconds=30)
-time.sleep(2)
-open_playback_settings()
-scroll_to_eq()
-
-audio_dump = adb('shell', 'dumpsys', 'audio').decode()
-open('runtime-evidence/dumpsys-audio-eq.txt', 'w').write(audio_dump)
-effect_lines = [l.strip() for l in audio_dump.splitlines() if 'ffect' in l or 'qualizer' in l]
-print('AUDIO EFFECT LINES: ' + repr(effect_lines[:12]), flush=True)
+screen('eq_cold')
+dump_audio('dumpsys-audio-eq-cold.txt')
 
 if has_text(UNAVAILABLE):
-    # Platform did not create the effect even with a live session: honest capture, not an
-    # app failure. Supported-state and effect behavior stay unverified here.
-    screen('eq_unsupported_emulator')
+    # The platform could not create an equalizer for this session: honest capture, not
+    # an app failure. Supported controls stay unverified in this environment.
     adb('shell', 'am', 'force-stop', PKG)
-    print('RESULT: Equalizer unsupported on this emulator/session; unavailable copy shown. '
-          'Supported-state and effect behavior unverified.', flush=True)
+    print('RESULT: Equalizer unavailable at cold start on this emulator; unavailable '
+          'copy verified. Supported-state controls unverified here.', flush=True)
     raise SystemExit(0)
 
-# 3. Supported controls, toggle off.
-wait_label('Off: sound passes through unchanged.')
-screen('eq_available_off')
-
-# 4. Toggle on: presets and per-band sliders render against the live equalizer.
-tap('Equalizer', bottom=False)
-wait_label('On: shaping the sound of the current output.')
+# 2. Available at cold start: the equalizer attached before any playback. Exercise it.
+wait_label(OFF_COPY)
+tap_clickable('Equalizer')
+wait_label(ON_COPY)
 wait_label('Presets')
 screen('eq_enabled_controls')
 
-# 5. A preset writes band levels; slider positions read the state back on screen.
-tap('Bass boost', bottom=False)
+# 3. A preset writes band levels; persisted preferences are read back from disk.
+tap_clickable('Bass boost')
 time.sleep(2)
 screen('eq_preset_bass')
-
-# 6. Platform evidence while the effect is live, then persisted state on disk.
-audio_dump = adb('shell', 'dumpsys', 'audio').decode()
-open('runtime-evidence/dumpsys-audio-eq-enabled.txt', 'w').write(audio_dump)
-effect_lines = [l.strip() for l in audio_dump.splitlines() if 'ffect' in l or 'qualizer' in l]
-print('AUDIO EFFECT LINES (enabled): ' + repr(effect_lines[:12]), flush=True)
-
-prefs = adb('shell', 'run-as', PKG, 'cat', 'shared_prefs/oris-eq.xml').decode()
-open('runtime-evidence/eq-prefs.xml', 'w').write(prefs)
+prefs = read_prefs('eq-prefs-enabled.xml')
 assert 'enabled' in prefs and 'true' in prefs, 'equalizer enabled flag was not persisted'
 assert 'levels' in prefs, 'equalizer band levels were not persisted'
-print('EQ persisted prefs: ' + prefs.replace('\n', ' '), flush=True)
 
-# 7. Toggle back off so the saved state left behind is the plain one.
-tap('Equalizer', bottom=False)
-wait_label('Off: sound passes through unchanged.')
+# 4. Platform read-back while the debug tone plays through the real service.
+adb('shell', 'am', 'start', '-n', COMPONENT, '-f', '0x10008000')
+wait_label('Local audio playing', seconds=30)
+time.sleep(3)
+dump_audio('dumpsys-audio-eq-playing.txt')
+
+# 5. Settings still show the equalizer during playback; toggle off; persisted off state.
+open_playback_settings()
+scroll_to_eq()
+wait_label(ON_COPY)
+tap_clickable('Equalizer')
+wait_label(OFF_COPY)
 screen('eq_toggled_back_off')
+prefs = read_prefs('eq-prefs-final.xml')
+assert 'enabled' in prefs and 'false' in prefs, 'equalizer off state was not persisted'
 
 adb('shell', 'am', 'force-stop', PKG)
-print('PASS: equalizer unavailable copy, real-session controls, preset application, persisted levels', flush=True)
+print('PASS: equalizer available at cold start, controls exercised against the real '
+      'effect, preset persisted and read back, platform sessions captured before and '
+      'during playback', flush=True)

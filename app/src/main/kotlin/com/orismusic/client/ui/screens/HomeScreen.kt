@@ -214,8 +214,8 @@ fun HomeScreen(
                             ) {
                                 Text("Could not load your home feed", style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    text = state.message,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = "You're offline, or the service can't be reached right now.",
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp),
                                 )
@@ -225,6 +225,12 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(12.dp))
                                         .clickable { refreshTick++ }.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                                Text(
+                                    text = state.message,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                    modifier = Modifier.padding(top = 12.dp),
                                 )
                             }
                         }
@@ -380,7 +386,7 @@ private fun HomeHeader(scroll: () -> Int) {
         in 5..11 -> "Good morning"
         in 12..16 -> "Good afternoon"
         in 17..21 -> "Good evening"
-        else -> "Your late-night soundtrack"
+        else -> "Late-night soundtrack"
     }
     val reveal = remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -400,7 +406,7 @@ private fun HomeHeader(scroll: () -> Int) {
         }, contentAlignment = Alignment.Center) {
             OrisLogo(Modifier.size(38.dp), tint = MaterialTheme.colorScheme.primary)
         }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")).uppercase() },
                 style = MaterialTheme.typography.labelMedium,
