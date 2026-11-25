@@ -1,6 +1,8 @@
 package com.orismusic.client.library
 
-/** One song found in the on-device library, with its offline availability kept distinct. */
+// One song found in the on-device library. The downloaded flag is set only from validated
+// READY ids (full cached coverage), so a partially cached or unvalidated save is never
+// advertised as available offline.
 data class LocalSearchResult(
     val song: SavedSong,
     val downloaded: Boolean,
@@ -19,10 +21,10 @@ fun localLibrarySearch(
     history: List<SavedSong>,
     playlists: List<UserPlaylist>,
     downloaded: List<SavedSong>,
+    readyIds: Set<String>,
 ): List<LocalSearchResult> {
     val q = query.trim().lowercase()
     if (q.isEmpty()) return emptyList()
-    val downloadedIds = downloaded.mapTo(HashSet()) { it.id }
     val merged = LinkedHashMap<String, SavedSong>()
     fun addAll(songs: List<SavedSong>) {
         for (song in songs) if (!merged.containsKey(song.id)) merged[song.id] = song
@@ -47,5 +49,5 @@ fun localLibrarySearch(
     return merged.values
         .mapNotNull { song -> rank(song).takeIf { it >= 0 }?.let { song to it } }
         .sortedBy { it.second }
-        .map { LocalSearchResult(it.first, it.first.id in downloadedIds) }
+        .map { LocalSearchResult(it.first, it.first.id in readyIds) }
 }

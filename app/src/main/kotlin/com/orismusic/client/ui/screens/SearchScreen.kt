@@ -7,6 +7,7 @@ import com.orismusic.client.library.SavedSong
 import com.orismusic.client.library.localLibrarySearch
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.OfflineAudio
+import com.orismusic.client.playback.OfflineStatus
 import com.orismusic.client.playback.queues.ListQueue
 import android.content.Context
 import org.json.JSONArray
@@ -146,9 +147,14 @@ fun SearchScreen(
     val history by libraryStore.history.collectAsState()
     val userPlaylists by playlistStore.playlists.collectAsState()
     val savedOffline by OfflineAudio.downloaded.collectAsState()
+    val offlineStatus by OfflineAudio.status.collectAsState()
+    // The badge follows validated cache coverage, never mere membership in the saves list.
+    val readyOffline = remember(savedOffline, offlineStatus) {
+        savedOffline.mapNotNull { s -> s.id.takeIf { offlineStatus[it] == OfflineStatus.READY } }.toSet()
+    }
     // Library mode derives results straight from the query, so edits and clears can never go stale.
-    val localResults = remember(query, mode, liked, history, userPlaylists, savedOffline) {
-        if (mode == SearchMode.Library) localLibrarySearch(query, liked, history, userPlaylists, savedOffline) else emptyList()
+    val localResults = remember(query, mode, liked, history, userPlaylists, savedOffline, readyOffline) {
+        if (mode == SearchMode.Library) localLibrarySearch(query, liked, history, userPlaylists, savedOffline, readyOffline) else emptyList()
     }
     var recent by remember {
         mutableStateOf(runCatching {
