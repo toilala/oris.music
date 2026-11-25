@@ -84,6 +84,23 @@ def wait_gone(text, seconds=15):
     raise AssertionError('still visible: ' + text)
 
 
+def tap_checkable(label):
+    """Tap a FilterChip by label: the checkable node, never a bottom-nav tab of the
+    same name (the nav 'Library' tab outranks the mode chip under tap(bottom=True))."""
+    wait_label(label)
+    end = time.monotonic() + 15
+    while time.monotonic() < end:
+        nodes = [n for n in tree().iter('node')
+                 if n.get('checkable') == 'true' and label in (n.get('text'), n.get('content-desc'))]
+        if nodes:
+            points = list(map(int, re.findall(r'\d+', nodes[0].get('bounds'))))
+            adb('shell', 'input', 'tap', str((points[0]+points[2])//2), str((points[1]+points[3])//2))
+            time.sleep(1)
+            return
+        time.sleep(1)
+    raise AssertionError('no checkable node labelled ' + label)
+
+
 def type_query(text):
     tap('Songs, albums, artists')
     adb('shell', 'input', 'text', text.replace(' ', '%s'))
@@ -155,7 +172,9 @@ wait_visible('Library')
 wait_visible('Online')
 print('MODES: Library and Online chips both render', flush=True)
 
-tap('Library')
+tap_checkable('Library')
+# Still on the Search screen - the nav tab of the same name leads elsewhere.
+wait_visible('Songs, albums, artists')
 wait_visible(HINT)
 screen('search_library_blank')
 print('MODE-ENTRY: Library mode shows its offline hint on a blank query', flush=True)
