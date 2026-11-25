@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.shadow
 import com.orismusic.client.ui.components.shimmer
@@ -142,7 +143,7 @@ fun DetailScreen(
     val tint by androidx.compose.animation.animateColorAsState(
         targetValue = com.orismusic.client.ui.components.rememberArtworkColor(target.thumbnail)
             ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = androidx.compose.animation.core.tween(600),
+        animationSpec = OrisMotion.slow(),
         label = "detail tint",
     )
     Column(

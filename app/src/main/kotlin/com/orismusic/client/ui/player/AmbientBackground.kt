@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import com.orismusic.client.ui.theme.OrisMotion
 import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -52,9 +53,9 @@ fun AmbientBackground(a: Color, b: Color, c: Color, modifier: Modifier = Modifie
     }
     val shader = remember { android.graphics.RuntimeShader(AMBIENT_SHADER) }
     // Colours ease over a beat so a song change never pops.
-    val animA by animateColorAsState(a, tween(900), label = "ambient a")
-    val animB by animateColorAsState(b, tween(900), label = "ambient b")
-    val animC by animateColorAsState(c, tween(900), label = "ambient c")
+    val animA by animateColorAsState(a, OrisMotion.entrance(), label = "ambient a")
+    val animB by animateColorAsState(b, OrisMotion.entrance(), label = "ambient b")
+    val animC by animateColorAsState(c, OrisMotion.entrance(), label = "ambient c")
     // Free-running clock in seconds; the shader's drift loops wrap cleanly at 100s.
     val clock = produceState(0f) {
         val start = withFrameNanos { it }

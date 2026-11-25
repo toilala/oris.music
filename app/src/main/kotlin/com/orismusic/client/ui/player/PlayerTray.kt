@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -172,7 +173,7 @@ private fun ActionTile(
 ) {
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tile press")
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, OrisMotion.press(), label = "tile press")
     val container = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHighest
     val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Surface(

@@ -6,6 +6,7 @@ package com.orismusic.client.ui.player
  * https://github.com/EchoMusicApp/Echo-Music). All code here is Oris's own.
  */
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -115,11 +116,11 @@ fun MiniPlayer(
                 MaterialTheme.colorScheme.surfaceContainerHigh, it, if (isPlaying) 0.40f else 0.26f,
             )
         } ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = tween(700), label = "mini pill colour",
+        animationSpec = OrisMotion.slow(), label = "mini pill colour",
     )
     val ringColor by androidx.compose.animation.animateColorAsState(
         targetValue = artworkTint?.let { androidx.compose.ui.graphics.lerp(primary, it, 0.65f) } ?: primary,
-        animationSpec = tween(700), label = "mini ring colour",
+        animationSpec = OrisMotion.slow(), label = "mini ring colour",
     )
 
     val pillShape = RoundedCornerShape(50)
@@ -137,11 +138,11 @@ fun MiniPlayer(
                         scope.launch {
                             val x = offX.value; val y = offY.value
                             when {
-                                x > skipThreshold -> { offX.animateTo(900f, tween(140)); connection.seekToPrevious(); offX.snapTo(-900f); offX.animateTo(0f, spring(0.7f, 300f)) }
-                                x < -skipThreshold -> { offX.animateTo(-900f, tween(140)); connection.seekToNext(); offX.snapTo(900f); offX.animateTo(0f, spring(0.7f, 300f)) }
-                                y < -90f -> { launch { offY.animateTo(0f, spring(0.75f, 320f)) }; onExpand() }
-                                y > 100f -> { offY.animateTo(500f, tween(160)); connection.pause(); dismissed = true; offY.snapTo(0f) }
-                                else -> { launch { offX.animateTo(0f, spring(0.6f, 400f)) }; offY.animateTo(0f, spring(0.6f, 400f)) }
+                                x > skipThreshold -> { offX.animateTo(900f, OrisMotion.micro()); connection.seekToPrevious(); offX.snapTo(-900f); offX.animateTo(0f, OrisMotion.soft()) }
+                                x < -skipThreshold -> { offX.animateTo(-900f, OrisMotion.micro()); connection.seekToNext(); offX.snapTo(900f); offX.animateTo(0f, OrisMotion.soft()) }
+                                y < -90f -> { launch { offY.animateTo(0f, OrisMotion.soft()) }; onExpand() }
+                                y > 100f -> { offY.animateTo(500f, OrisMotion.micro()); connection.pause(); dismissed = true; offY.snapTo(0f) }
+                                else -> { launch { offX.animateTo(0f, OrisMotion.settle()) }; offY.animateTo(0f, OrisMotion.settle()) }
                             }
                         }
                     },
@@ -168,7 +169,7 @@ fun MiniPlayer(
             // Artwork with a progress ring around it.
             val progress by animateFloatAsState(
                 targetValue = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                animationSpec = tween(400),
+                animationSpec = OrisMotion.standard(),
                 label = "mini progress",
             )
             Box(
@@ -233,9 +234,9 @@ fun MiniPlayer(
             }
             Spacer(Modifier.width(12.dp))
             // Mini orbit play button, matching the full player's disc and satellite dot.
-            val ringAlpha by animateFloatAsState(if (isPlaying) 1f else 0f, tween(300, easing = LinearEasing), label = "mini orbit ring")
+            val ringAlpha by animateFloatAsState(if (isPlaying) 1f else 0f, OrisMotion.standard(easing = LinearEasing), label = "mini orbit ring")
             val spin = rememberInfiniteTransition(label = "mini orbit spin")
-            val degrees by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing)), label = "mini orbit degrees")
+            val degrees by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(OrisMotion.OrbitPeriod, easing = LinearEasing)), label = "mini orbit degrees")
             val ended = playbackState == Player.STATE_ENDED
             Box(
                 contentAlignment = Alignment.Center,

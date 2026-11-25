@@ -5,6 +5,7 @@
  */
 package com.orismusic.client.ui.components
 
+import com.orismusic.client.ui.theme.OrisMotion
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -87,7 +88,7 @@ fun Modifier.pressClickable(onClick: () -> Unit, pressedScale: Float = 0.96f): M
     val pressed by source.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = if (rememberReducedMotion()) snap() else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (rememberReducedMotion()) snap() else OrisMotion.press(),
         label = "press",
     )
     this
@@ -106,7 +107,7 @@ fun Modifier.pressCombinedClickable(
     val pressed by source.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = if (rememberReducedMotion()) snap() else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (rememberReducedMotion()) snap() else OrisMotion.press(),
         label = "press",
     )
     this
@@ -120,7 +121,7 @@ fun Modifier.shimmer(): Modifier = composed {
     val x by transition.animateFloat(
         initialValue = -400f,
         targetValue = 1200f,
-        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(OrisMotion.ShimmerPeriod, easing = LinearEasing), RepeatMode.Restart),
         label = "shimmer x",
     )
     val base = MaterialTheme.colorScheme.surfaceVariant
@@ -139,7 +140,7 @@ fun Modifier.entrance(index: Int = 0): Modifier = composed {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay((index.coerceAtMost(8) * 45).toLong())
-        progress.animateTo(1f, tween(380))
+        progress.animateTo(1f, OrisMotion.standard())
     }
     this.graphicsLayer {
         alpha = progress.value
@@ -182,7 +183,7 @@ fun Artwork(
     val pulse = if (loaded || failed || url.isNullOrBlank()) base else {
         val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "cover pulse")
         val a by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing),
+            OrisMotion.entrance(easing = androidx.compose.animation.core.LinearEasing),
             androidx.compose.animation.core.RepeatMode.Reverse), label = "cover pulse alpha")
         androidx.compose.ui.graphics.lerp(base, MaterialTheme.colorScheme.surfaceContainerHigh, a)
     }

@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -337,7 +338,7 @@ private fun SavedSongRow(
         }
         val heart by androidx.compose.animation.core.animateFloatAsState(
             targetValue = if (liked) 1.15f else 1f,
-            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.35f, stiffness = 400f),
+            animationSpec = OrisMotion.press(),
             label = "heart",
         )
         IconButton(onClick = onToggleLike) {

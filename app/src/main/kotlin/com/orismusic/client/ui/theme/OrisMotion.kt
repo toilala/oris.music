@@ -2,7 +2,7 @@ package com.orismusic.client.ui.theme
 
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -24,19 +24,19 @@ object OrisMotion {
     const val Drift = 13000
     const val SlowDrift = 17000
 
-    fun <T> micro(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): FiniteAnimationSpec<T> =
+    fun <T> micro(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): TweenSpec<T> =
         tween(Micro, delayMillis, easing)
 
-    fun <T> quick(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): FiniteAnimationSpec<T> =
+    fun <T> quick(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): TweenSpec<T> =
         tween(Quick, delayMillis, easing)
 
-    fun <T> standard(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): FiniteAnimationSpec<T> =
+    fun <T> standard(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): TweenSpec<T> =
         tween(Standard, delayMillis, easing)
 
-    fun <T> slow(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): FiniteAnimationSpec<T> =
+    fun <T> slow(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): TweenSpec<T> =
         tween(Slow, delayMillis, easing)
 
-    fun <T> entrance(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): FiniteAnimationSpec<T> =
+    fun <T> entrance(delayMillis: Int = 0, easing: Easing = FastOutSlowInEasing): TweenSpec<T> =
         tween(Entrance, delayMillis, easing)
 
     /** Playful pop: no overshoot, low stiffness (player open/close). */

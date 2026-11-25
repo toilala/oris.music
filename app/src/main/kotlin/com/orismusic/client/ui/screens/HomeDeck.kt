@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -69,14 +70,14 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
         while (true) {
             delay(7000)
             if (!pager.isScrollInProgress && songs.size > 1) {
-                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = tween(700))
+                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = OrisMotion.slow())
             }
         }
     }
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(Modifier.fillMaxWidth().height(500.dp + topInset)) {
         Crossfade(
-            targetState = pager.currentPage, animationSpec = tween(700), label = "deck-bg",
+            targetState = pager.currentPage, animationSpec = OrisMotion.slow(), label = "deck-bg",
             modifier = Modifier.fillMaxSize()
                 .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                 .drawWithContent {
@@ -124,7 +125,7 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
                 }
             }
             val cur = songs[pager.currentPage.coerceIn(0, songs.lastIndex)]
-            Crossfade(targetState = cur, animationSpec = tween(350), label = "deck-title") { song ->
+            Crossfade(targetState = cur, animationSpec = OrisMotion.standard(), label = "deck-title") { song ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Picked for you", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.7f))
                     Text(song.title, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1,
@@ -146,7 +147,7 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
             Row {
                 repeat(songs.size) { i ->
                     val active = pager.currentPage == i
-                    val w by animateDpAsState(if (active) 20.dp else 6.dp, spring(0.6f, 400f), label = "dot")
+                    val w by animateDpAsState(if (active) 20.dp else 6.dp, OrisMotion.settle(), label = "dot")
                     Box(
                         Modifier.padding(horizontal = 2.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
                             .background(Color.White.copy(alpha = if (active) 0.95f else 0.35f)),

@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.components
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -134,11 +135,11 @@ fun OrisDock(
         Row {
             repeat(count) { i ->
                 val active = i == sel && !none
-                val pop by animateFloatAsState(if (active) 1.08f else 1f, spring(0.38f, 520f), label = "pop")
+                val pop by animateFloatAsState(if (active) 1.08f else 1f, OrisMotion.press(), label = "pop")
                 // A finger on a tab dips the icon, so taps answer before the lens arrives.
                 val pressSrc = remember { MutableInteractionSource() }
                 val pressed by pressSrc.collectIsPressedAsState()
-                val pressScale by animateFloatAsState(if (pressed) 0.82f else 1f, spring(0.5f, 600f), label = "tab press")
+                val pressScale by animateFloatAsState(if (pressed) 0.82f else 1f, OrisMotion.press(), label = "tab press")
                 val activeTint = if (effect == NavEffect.Dot) accent else onAccent
                 val tint by animateColorAsState(if (active) activeTint else scheme.onSurfaceVariant, label = "tint")
                 Column(

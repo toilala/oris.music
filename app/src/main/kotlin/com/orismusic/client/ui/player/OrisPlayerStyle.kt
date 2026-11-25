@@ -6,6 +6,7 @@ package com.orismusic.client.ui.player
  * Replaced the earlier reference-influenced blob and segmented cluster shapes.
  */
 
+import com.orismusic.client.ui.theme.OrisMotion
 import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -97,12 +98,12 @@ internal fun OrbitPlayButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "play press")
-    val ringAlpha by animateFloatAsState(if (orbit && style == com.orismusic.client.settings.PlayButtonStyle.Orbit && playing) 1f else 0f, tween(350), label = "orbit ring")
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, OrisMotion.press(), label = "play press")
+    val ringAlpha by animateFloatAsState(if (orbit && style == com.orismusic.client.settings.PlayButtonStyle.Orbit && playing) 1f else 0f, OrisMotion.standard(), label = "orbit ring")
     val spin = rememberInfiniteTransition(label = "orbit spin")
     val degrees by spin.animateFloat(
         0f, 360f,
-        infiniteRepeatable(tween(6000, easing = LinearEasing)),
+        infiniteRepeatable(tween(OrisMotion.OrbitPeriod, easing = LinearEasing)),
         label = "orbit degrees",
     )
     val btnText = PlayerTextButtonColor
@@ -115,8 +116,8 @@ internal fun OrbitPlayButton(
     ) {
         // Disc.
         val phase by spin.animateFloat(0f, 1f,
-            infiniteRepeatable(tween(4200, easing = LinearEasing)), label = "shape breath")
-        val active by animateFloatAsState(if (playing) 1f else 0f, tween(500), label = "shape active")
+            infiniteRepeatable(tween(OrisMotion.BreathPeriod, easing = LinearEasing)), label = "shape breath")
+        val active by animateFloatAsState(if (playing) 1f else 0f, OrisMotion.standard(), label = "shape active")
         Canvas(Modifier.size(76.dp)) {
             val c = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension / 2f
@@ -181,9 +182,9 @@ internal fun GhostSkipButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.88f else 1f, spring(dampingRatio = 0.55f, stiffness = 500f), label = "skip press")
-    val lean by animateFloatAsState(if (pressed) 5f * direction else 0f, spring(dampingRatio = 0.5f, stiffness = 450f), label = "skip lean")
-    val ringAlpha by animateFloatAsState(if (pressed) 0.8f else 0.35f, tween(180), label = "skip ring")
+    val scale by animateFloatAsState(if (pressed) 0.88f else 1f, OrisMotion.press(), label = "skip press")
+    val lean by animateFloatAsState(if (pressed) 5f * direction else 0f, OrisMotion.press(), label = "skip lean")
+    val ringAlpha by animateFloatAsState(if (pressed) 0.8f else 0.35f, OrisMotion.micro(), label = "skip ring")
     val btnText = PlayerTextButtonColor
     Box(
         modifier.size(88.dp).graphicsLayer { scaleX = scale; scaleY = scale; translationX = lean.dp.toPx() }
@@ -219,7 +220,7 @@ internal fun ClusterButton(
     content: (@Composable () -> Unit)? = null,
 ) {
     val border = if (active) null else androidx.compose.foundation.BorderStroke(1.dp, PlayerTextButtonColor.copy(alpha = 0.22f))
-    val container by animateColorAsState(if (active) PlayerTextButtonColor else Color.Transparent, tween(200), label = "chip bg")
+    val container by animateColorAsState(if (active) PlayerTextButtonColor else Color.Transparent, OrisMotion.quick(), label = "chip bg")
     val contentColor = if (active) PlayerIconButtonColor else PlayerTextButtonColor
     val view = LocalView.current
     androidx.compose.material3.Surface(
@@ -277,8 +278,8 @@ internal fun HeartBurstIcon(liked: Boolean, tint: Color, modifier: Modifier = Mo
             scale.snapTo(0.6f)
             ring.snapTo(0f)
             kotlinx.coroutines.coroutineScope {
-                launch { scale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 400f)) }
-                launch { ring.animateTo(1f, tween(450)) }
+                launch { scale.animateTo(1f, OrisMotion.press()) }
+                launch { ring.animateTo(1f, OrisMotion.standard()) }
             }
         }
     }
