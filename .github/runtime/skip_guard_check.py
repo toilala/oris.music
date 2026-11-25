@@ -9,7 +9,7 @@ failure pauses instead of advancing to good2; a real banner Retry tap in the app
 programmatic playWhenReady) retries bad5, which fails once more and advances to good2."""
 import re
 import time
-from playback_check import adb, screen, tree, wait_label, PKG
+from playback_check import adb, screen, tree, wait_label, tap_mini_player, PKG
 
 COMPONENT = PKG + '/com.orismusic.client.debug.SkipGuardCheckActivity'
 MAIN = PKG + '/com.orismusic.client.MainActivity'
@@ -118,31 +118,6 @@ assert 'playback started: sg-good-2' not in log, 'queue advanced past the guard 
 # Playing; the banner's Retry button prepares and plays the failed item, which exhausts
 # once more (streak 1 after the pause-time reset) and advances to good2.
 resume_main()
-
-
-def tap_mini_player(title):
-    """Tap the mini-player pill: the clickable ancestor of the title text whose subtree
-    owns a transport button (content-desc Play/Pause/Replay). Home's 'Continue listening'
-    row carries the same title but no transport buttons, so title alone is ambiguous."""
-    end = time.monotonic() + 30
-    while time.monotonic() < end:
-        root = tree()
-        parents = {c: p for p in root.iter('node') for c in p}
-        for label_node in [n for n in root.iter('node') if n.get('text') == title]:
-            node = label_node
-            while node is not None and node.get('clickable') != 'true':
-                node = parents.get(node)
-            if node is None:
-                continue
-            descs = [d.get('content-desc') for d in node.iter('node')]
-            if any(d in ('Play', 'Pause', 'Replay') for d in descs):
-                x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
-                print('TAP mini player ' + title + ' bounds=' + node.get('bounds'), flush=True)
-                adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
-                return
-        time.sleep(1)
-    screen('failure')
-    raise AssertionError('mini player pill for ' + title + ' never found')
 
 
 tap_mini_player('SkipGuard bad 5')

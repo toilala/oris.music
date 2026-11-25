@@ -74,8 +74,10 @@ def has_text(fragment):
 
 
 def chip_state(label):
-    """The selected attribute of the clickable ancestor carrying the label, or None when
-    the label is absent. Compose maps a FilterChip's selected state onto that ancestor."""
+    """The checked attribute of the clickable ancestor carrying the label, or None when
+    the label is absent. Compose maps a FilterChip's state onto a11y checkable/checked,
+    never onto selected (runtime 130 forensics: tree-wide zero selected nodes while the
+    active chip's clickable ancestor read checkable=true checked=true)."""
     root = tree()
     states = [n.get('content-desc') for n in root.iter('node')
               if (n.get('content-desc') or '').startswith('Active preset:')]
@@ -86,7 +88,7 @@ def chip_state(label):
     node = target
     while node is not None and node.get('clickable') != 'true':
         node = parents.get(node)
-    return node.get('selected') if node is not None else None
+    return node.get('checked') if node is not None else None
 
 
 def chip_state_wait(label, seconds=6):
@@ -113,6 +115,8 @@ def chip_state_wait(label, seconds=6):
         node = m
         while node is not None:
             chain.append(node.get('class') + ' sel=' + str(node.get('selected'))
+                         + ' checked=' + str(node.get('checked'))
+                         + ' checkable=' + str(node.get('checkable'))
                          + ' click=' + str(node.get('clickable')) + ' ' + str(node.get('bounds')))
             node = parents.get(node)
         print('EQ-FORENSICS chain: ' + ' <- '.join(chain), flush=True)
@@ -124,7 +128,7 @@ def chip_state_wait(label, seconds=6):
               if (n.get('content-desc') or '').startswith('Active preset:')]
     print('EQ-FORENSICS app state line: ' + repr(states), flush=True)
     raise AssertionError(
-        label + ' chip did not read as selected after its tap (last seen: '
+        label + ' chip did not read as checked after its tap (last seen: '
         + repr(last) + '); post-tap capture is eq_preset_failed.png, tree is eq-preset-tree.xml')
 
 
@@ -179,8 +183,17 @@ if unavailable is not None:
           + '); unavailable copy verified. Supported-state controls unverified here.', flush=True)
     raise SystemExit(0)
 
-# 2. Available at cold start: the equalizer attached before any playback. Exercise it.
-wait_label(OFF_COPY)
+# 2. Available at cold start: the equalizer attached before any playback. App data
+# survives reinstall on this emulator, so report the persisted state first, then
+# establish the off baseline explicitly before exercising the toggle.
+initial_on = has_text(ON_COPY)
+if not initial_on and not has_text(OFF_COPY):
+    screen('failure')
+    raise AssertionError('equalizer row shows neither the on nor the off copy')
+print('EQ-INITIAL enabled=' + str(initial_on) + ' (persisted state)', flush=True)
+if initial_on:
+    tap_clickable('Equalizer')
+    wait_label(OFF_COPY)
 tap_clickable('Equalizer')
 wait_label(ON_COPY)
 wait_label('Presets')
@@ -195,10 +208,32 @@ for _ in range(8):
     time.sleep(1.2)
 wait_label('Bass boost')
 screen('eq_presets_in_view')
-tap_clickable('Bass boost')
+# Tapping the already-active preset proves nothing about state change: read the current
+# preset from the app's own state line and tap a different chip, then verify both the
+# chip's checked attribute and the app state line move to the tapped preset.
+current = next((n.get('content-desc') for n in tree().iter('node')
+                if (n.get('content-desc') or '').startswith('Active preset:')), None)
+current_name = current.split(': ', 1)[1] if current else None
+print('EQ-INITIAL preset=' + repr(current_name) + ' (persisted state)', flush=True)
+target = 'Flat' if current_name == 'Bass boost' else 'Bass boost'
+print('EQ-TARGET ' + target + ' (differs from current ' + repr(current_name) + ')', flush=True)
+tap_clickable(target)
 time.sleep(2)
-chip_state_wait('Bass boost')
-screen('eq_preset_bass')
+chip_state_wait(target)
+end = time.monotonic() + 8
+moved = False
+while time.monotonic() < end:
+    if any((n.get('content-desc') or '') == 'Active preset: ' + target
+           for n in tree().iter('node')):
+        moved = True
+        break
+    time.sleep(0.7)
+if not moved:
+    screen('eq_preset_failed')
+    raise AssertionError('app state line never moved to Active preset: ' + target
+                         + ' after one tap; capture is eq_preset_failed.png')
+print('EQ-VERIFIED preset moved to ' + target + ' after one tap', flush=True)
+screen('eq_preset_tapped')
 for _ in range(8):
     if any(re.fullmatch(r'\d+(\.\d+)? (Hz|kHz)', n.get('text') or '') for n in tree().iter('node')):
         break

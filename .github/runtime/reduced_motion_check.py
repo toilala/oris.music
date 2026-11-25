@@ -13,6 +13,8 @@ from playback_check import adb, wait_label, screen, tree, PKG
 
 adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
+original_scale = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
+print('SCALE initial=' + original_scale, flush=True)
 adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
 read_global = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
 read_system = adb('shell', 'settings', 'get', 'system', 'animator_duration_scale').decode().strip()
@@ -44,16 +46,18 @@ def burst(tag, count=8):
         screen(f'reduced_motion_{tag}_{i:02d}')
 
 
-wait_label('Preview state: paused')
-tap_clickable('Soft pebble')
-burst('playing')
-wait_label('Preview state: playing', seconds=15)
-tap_clickable('Soft pebble')
-burst('paused')
-wait_label('Preview state: paused', seconds=15)
-screen('reduced_motion_after_toggles')
-adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
+try:
+    wait_label('Preview state: paused')
+    tap_clickable('Soft pebble')
+    burst('playing')
+    wait_label('Preview state: playing', seconds=15)
+    tap_clickable('Soft pebble')
+    burst('paused')
+    wait_label('Preview state: paused', seconds=15)
+    screen('reduced_motion_after_toggles')
+finally:
+    adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', original_scale)
 left = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
-assert left in ('1', '1.0'), 'animator scale was not restored: ' + left
+assert left == original_scale, 'animator scale was not restored: ' + left
 adb('shell', 'am', 'force-stop', PKG)
-print('PASS: production control toggled under the OS reduced-motion setting, burst captured, scale restored', flush=True)
+print('PASS: production control toggled under the OS reduced-motion setting, burst captured, scale restored to ' + left, flush=True)
