@@ -94,16 +94,17 @@ fun offlineRowStatus(songId: String, saved: Boolean, busy: Set<String>, failed: 
     else -> validated[songId] ?: OfflineStatus.UNKNOWN
 }
 
-/** Songs saved for offline listening. Audio lives in the download cache, keyed by song id. */
+/** Songs saved for offline listening. Audio lives in the download cache, keyed by song id.
+ * Download lifecycle (who may write a cache key, when a completed write commits, what
+ * cancel and removal touch) belongs to the DownloadRegistry; this object holds the
+ * persisted list and the state flows the UI reads. */
 object OfflineAudio {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val doneFlow = MutableStateFlow<List<SavedSong>>(emptyList())
     private val busyFlow = MutableStateFlow<Set<String>>(emptySet())
     private val failedFlow = MutableStateFlow<Set<String>>(emptySet())
     private val statusFlow = MutableStateFlow<Map<String, OfflineStatus>>(emptyMap())
-    private val jobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
-    private val writers = java.util.concurrent.ConcurrentHashMap<String, CacheWriter>()
-    private val cancelling = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private var registryInstance: DownloadRegistry<String, SavedSong>? = null
     @Volatile private var loaded = false
 
     /** Debug builds point downloads at a local fixture instead of YouTube; never set in release. */
@@ -114,6 +115,32 @@ object OfflineAudio {
     val failed: StateFlow<Set<String>> = failedFlow
     /** Per-song truth about what is cached, re-derived from the cache itself, never persisted. */
     val status: StateFlow<Map<String, OfflineStatus>> = statusFlow
+
+    @OptIn(UnstableApi::class)
+    private fun registry(app: Context): DownloadRegistry<String, SavedSong> =
+        registryInstance ?: DownloadRegistry<String, SavedSong>(
+            scope = scope,
+            dropSpans = { id ->
+                EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java)
+                    .downloadCache().removeResource(id)
+            },
+            onCommit = { id, song ->
+                val cache = EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java)
+                    .downloadCache()
+                doneFlow.value = listOf(song) + doneFlow.value.filterNot { it.id == song.id }
+                save(app)
+                statusFlow.value = statusFlow.value + (id to cacheStatus(cache, id))
+            },
+            onFailed = { id, _ ->
+                Timber.w("Download failed for %s", id)
+                failedFlow.value = failedFlow.value + id
+            },
+            onBusyChange = { id, busy ->
+                busyFlow.value = if (busy) busyFlow.value + id else busyFlow.value - id
+            },
+            // A span cleanup that failed is logged, never treated as proven removal.
+            onCleanupFailed = { id, e -> Timber.w(e, "Could not clear the cached copy for %s", id) },
+        ).also { registryInstance = it }
 
     fun load(context: Context) {
         if (loaded) return
@@ -162,80 +189,45 @@ object OfflineAudio {
         if (song.isUnmatchedImport()) return
         load(context)
         val app = context.applicationContext
-        if (song.id in busyFlow.value) return
         // A complete copy needs no second download; a partial or unverified one may be retried.
         if (doneFlow.value.any { it.id == song.id }
             && statusFlow.value[song.id] == OfflineStatus.READY) return
-        busyFlow.value = busyFlow.value + song.id
         failedFlow.value = failedFlow.value - song.id
-        jobs[song.id] = scope.launch {
-            try {
-                val cache: Cache = EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java).downloadCache()
-                val factory = CacheDataSource.Factory()
-                    .setCache(cache)
-                    .setUpstreamDataSourceFactory(createResolvingFactory(app))
-                val uri = fixtureUri
-                    ?: ("https://music.youtube.com/watch?v=" + Uri.encode(song.id))
-                val spec = DataSpec.Builder()
-                    .setUri(Uri.parse(uri))
-                    .setKey(song.id)
-                    .build()
-                val writer = CacheWriter(factory.createDataSource(), spec, null, null)
-                writers[song.id] = writer
-                writer.cache()
-                doneFlow.value = listOf(song) + doneFlow.value.filterNot { it.id == song.id }
-                save(app)
-                statusFlow.value = statusFlow.value + (song.id to cacheStatus(cache, song.id))
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                if (song.id !in cancelling) {
-                    Timber.w(e, "Download failed for %s", song.id)
-                    failedFlow.value = failedFlow.value + song.id
-                }
-            } finally {
-                busyFlow.value = busyFlow.value - song.id
-                jobs.remove(song.id)
-                writers.remove(song.id)
-                cancelling.remove(song.id)
-            }
+        // The registry refuses the start when this key is already owned, including a
+        // previous download's cleanup window, so two writers never share a cache key.
+        registry(app).start(song.id, song) {
+            val cache: Cache = EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java).downloadCache()
+            val factory = CacheDataSource.Factory()
+                .setCache(cache)
+                .setUpstreamDataSourceFactory(createResolvingFactory(app))
+            val uri = fixtureUri
+                ?: ("https://music.youtube.com/watch?v=" + Uri.encode(song.id))
+            val spec = DataSpec.Builder()
+                .setUri(Uri.parse(uri))
+                .setKey(song.id)
+                .build()
+            val writer = CacheWriter(factory.createDataSource(), spec, null, null)
+            cancelWrite = { writer.cancel() }
+            writer.cache()
         }
     }
 
-    /** Stop an in-flight download and drop whatever partial spans it wrote. Cancelling is
-     *  not failure: the failed state is left alone. */
-    @OptIn(UnstableApi::class)
+    /** Stop the in-flight download for this song; its partial spans are dropped by the
+     * owning job once the writer has unwound. Cancelling is not failure: the failed state
+     * is left alone. A song with no download in flight is untouched. */
     fun cancel(context: Context, songId: String) {
-        cancelling.add(songId)
-        writers[songId]?.cancel()
-        jobs[songId]?.cancel()
-        busyFlow.value = busyFlow.value - songId
-        val app = context.applicationContext
-        scope.launch {
-            runCatching {
-                EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java).downloadCache()
-                    .removeResource(songId)
-            }
-        }
+        registry(context.applicationContext).cancel(songId)
     }
 
     @OptIn(UnstableApi::class)
     fun remove(context: Context, songId: String) {
         load(context)
-        cancelling.add(songId)
-        writers[songId]?.cancel()
-        jobs[songId]?.cancel()
         val app = context.applicationContext
         doneFlow.value = doneFlow.value.filterNot { it.id == songId }
-        busyFlow.value = busyFlow.value - songId
         failedFlow.value = failedFlow.value - songId
         statusFlow.value = statusFlow.value - songId
         save(app)
-        scope.launch {
-            runCatching {
-                EntryPointAccessors.fromApplication(app, OfflineCacheEntryPoint::class.java).downloadCache()
-                    .removeResource(songId)
-            }
-        }
+        registry(app).evict(songId)
     }
 
     private fun prefs(context: Context) =
