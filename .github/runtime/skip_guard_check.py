@@ -16,20 +16,29 @@ MAIN = PKG + '/com.orismusic.client.MainActivity'
 PAUSE_MSG = 'Playback paused: 3 songs failed in a row'
 
 
-def current_focus():
-    out = adb('shell', 'dumpsys', 'window', 'windows').decode()
-    m = re.search(r'mCurrentFocus=Window\{[^}]*\s([A-Za-z0-9_.]+)/\.?([A-Za-z0-9_.]+)\}', out)
-    return (m.group(1), m.group(2)) if m else ('', '')
+def pause_count(log):
+    """Count canonical guard-pause report lines: logcat lines carrying the pause message,
+    excluding the warn-level 'failure active:' mirror that reportFailure emits for the
+    same event (one real pause logs one line of each kind)."""
+    return sum(1 for line in log.splitlines() if PAUSE_MSG in line and 'failure active' not in line)
+
+
+def resumed_activity():
+    out = adb('shell', 'dumpsys', 'activity', 'activities').decode()
+    return out.split('mResumedActivity:')[-1].splitlines()[0]
 
 
 def resume_main():
     """Bring MainActivity forward and verify the resumed activity before touching anything.
-    Never force-stops the app: the live audio session under test must survive navigation."""
+    Uses mResumedActivity (the same dumpsys parse as playback_check.still_open), never a
+    focus-window regex, and never force-stops the app: the live audio session under test
+    must survive navigation."""
     for _ in range(3):
+        # CLEAR_TOP pops the check activity sitting above MainActivity in the one task.
         adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
         for _ in range(40):
-            pkg, activity = current_focus()
-            if pkg == PKG and activity.endswith('MainActivity'):
+            resumed = resumed_activity()
+            if PKG in resumed and 'MainActivity' in resumed:
                 return
             time.sleep(0.5)
     screen('failure')
@@ -94,10 +103,16 @@ screen('skip_guard_after_success_reset')
 # failure pauses instead of advancing to good2.
 wait_status('item=sg-bad-5', 180)
 wait_status('pwr=false', 60)
-log = diag_log()
-assert log.count(PAUSE_MSG) == 1, 'expected exactly one guard pause, got ' + str(log.count(PAUSE_MSG))
-assert 'playback started: sg-good-2' not in log, 'queue advanced past the guard pause'
 screen('skip_guard_paused')
+# Bounded no-advance observation: the guard must HOLD the pause, not resume or skip on.
+time.sleep(20)
+held = status_text()
+print('STATUS after 20s hold: ' + held, flush=True)
+log = diag_log()
+pauses = pause_count(log)
+assert pauses == 1, 'expected exactly one guard pause, got ' + str(pauses)
+assert 'item=sg-bad-5' in held and 'pwr=false' in held, 'guard pause did not hold for 20s: ' + held
+assert 'playback started: sg-good-2' not in log, 'queue advanced past the guard pause'
 
 # Phase 3: a real banner Retry tap in the app UI recovers. The mini player pill opens Now
 # Playing; the banner's Retry button prepares and plays the failed item, which exhausts

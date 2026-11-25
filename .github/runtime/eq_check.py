@@ -18,21 +18,22 @@ OFF_COPY = 'Off: sound passes through unchanged.'
 ON_COPY = 'On: shaping the sound of the current output.'
 
 
-def current_focus():
-    out = adb('shell', 'dumpsys', 'window', 'windows').decode()
-    m = re.search(r'mCurrentFocus=Window\{[^}]*\s([A-Za-z0-9_.]+)/\.?([A-Za-z0-9_.]+)\}', out)
-    return (m.group(1), m.group(2)) if m else ('', '')
+def resumed_activity():
+    out = adb('shell', 'dumpsys', 'activity', 'activities').decode()
+    return out.split('mResumedActivity:')[-1].splitlines()[0]
 
 
 def resume_main():
     """Bring MainActivity forward and verify the resumed activity before touching anything.
-    Never force-stops the app: the live audio session under test must survive navigation."""
+    Uses mResumedActivity (the same dumpsys parse as playback_check.still_open), never a
+    focus-window regex, and never force-stops the app: the live audio session under test
+    must survive navigation."""
     for _ in range(3):
         # CLEAR_TOP pops the check activity sitting above MainActivity in the one task.
         adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
         for _ in range(40):
-            pkg, activity = current_focus()
-            if pkg == PKG and activity.endswith('MainActivity'):
+            resumed = resumed_activity()
+            if PKG in resumed and 'MainActivity' in resumed:
                 return
             time.sleep(0.5)
     screen('failure')

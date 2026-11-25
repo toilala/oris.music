@@ -16,6 +16,11 @@ def connected_lines():
                   if re.search(r'\bCONNECTED\b', line) and 'DISCONNECTED' not in line]
 
 
+def active_default(conn):
+    m = re.search(r'Active default network.*', conn)
+    return m.group(0).strip() if m else 'Active default network: (line absent)'
+
+
 adb('wait-for-device')
 adb('shell', 'input', 'keyevent', '82')
 adb('shell', 'svc', 'wifi', 'disable')
@@ -23,6 +28,7 @@ adb('shell', 'svc', 'data', 'disable')
 time.sleep(3)
 conn, live = connected_lines()
 open(OUT + '/connectivity-before.txt', 'w').write(conn)
+print('ACTIVE DEFAULT NETWORK before: ' + active_default(conn), flush=True)
 assert not live, 'network still live, refusing to run: ' + repr(live[:2])
 print('NETWORK-DISABLED: no connected network before the checks', flush=True)
 
@@ -36,6 +42,7 @@ for check in ['eq_check.py', 'large_text_check.py', 'reduced_motion_check.py', '
 
 conn, live = connected_lines()
 open(OUT + '/connectivity-after.txt', 'w').write(conn)
+print('ACTIVE DEFAULT NETWORK after: ' + active_default(conn), flush=True)
 assert not live, 'network RECONNECTED during the session: ' + repr(live[:2])
 print('NETWORK-DISABLED: still no connected network after the checks', flush=True)
 
