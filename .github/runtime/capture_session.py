@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Capture-only UI session v2 over the seeded local state. No assertions about product
-behavior, no playback, no query typing: each route retains a raw uiautomator tree dump
-and a screenshot. Selectors come from the retained v1 tree evidence: a label
-(content-desc or text) sits on a non-clickable child; the clickable ancestor is what
-gets tapped. Routes are independent: a route that finds a mismatched context stops
-ITSELF with tree+pixels evidence, recovers with a plain BACK key, re-anchors on the
-nav dock, and the next route proceeds only when the anchor holds. Network stays off;
-Home renders its offline state (no feed fixture exists)."""
+"""Acceptance capture session v3 for the stats-back fix and the remaining screens.
+Each route establishes its own current screen from the live tree before acting,
+verifies the expected post-action context, and retains before/after tree+pixels.
+Selectors resolve labels to their clickable ancestor (shape learned from retained
+v1/v2 trees). No repeated root BACK as a reset: recovery re-anchors via the dock,
+and a route with a mismatched context stops itself with evidence. No playback,
+no query typing, network stays off."""
 import glob
-import hashlib
 import re
 import subprocess
 import sys
@@ -31,6 +29,7 @@ PLAYLIST = [
     ('import:aurora|bicep', 'Aurora', 'Bicep'),
 ]
 HINT = 'Search your liked songs'
+CHIP_RE = re.compile(r'^(Liked|Recent|Playlists|Saved) \(\d+\)$')
 DOCK = ('Home', 'Search', 'Library')
 
 
@@ -74,9 +73,6 @@ def parent_map(root):
 
 
 def clickable_ancestor(node, pmap):
-    """Climb from a labelled (usually non-clickable) node to its nearest clickable
-    ancestor; returns None when no ancestor is clickable. Validates that the resolved
-    ancestor's bounds contain the labelled node's bounds (tree-shape guard)."""
     cur = node
     while cur is not None and cur.get('clickable') != 'true':
         cur = pmap.get(cur)
@@ -95,8 +91,6 @@ def find_labelled(root, label):
 
 
 def resolve_tap(root, label):
-    """Resolve a label to the center of its clickable ancestor. Returns
-    (x, y, chosen_desc, candidates_note) or (None, None, None, candidates_note)."""
     pmap = parent_map(root)
     notes = []
     hits = []
@@ -116,10 +110,8 @@ def resolve_tap(root, label):
     return x, y, chosen.get('bounds'), note
 
 
-def tap_label(root_name, label, log_name):
-    """Tap the topmost clickable ancestor carrying this label, from the live tree.
-    All candidates are logged; returns False without tapping when none resolves."""
-    root = dump_ui(root_name)
+def tap_label(label, log_name):
+    root = dump_ui('probe')
     x, y, chosen, note = resolve_tap(root, label)
     with open(OUT + '/' + log_name, 'w') as f:
         f.write(note + ('\nCHOSEN anc-bounds=%s tap=(%d,%d)' % (chosen, x, y)
@@ -149,34 +141,40 @@ def snap(name):
     return dump_ui(name)
 
 
-def frame_hash(name):
-    screen(name)
-    try:
-        return hashlib.sha256(open(OUT + '/' + name + '.png', 'rb').read()).hexdigest()
-    except OSError:
-        return 'missing'
+def texts_of(root):
+    return [n.get('text') for n in root.iter('node') if n.get('text')]
 
 
-def anchored(root):
-    """True when the nav dock is visible, i.e. we are on a top-level screen."""
-    labels = set()
-    for n in root.iter('node'):
-        if n.get('content-desc') in DOCK:
-            labels.add(n.get('content-desc'))
-    return len(labels) >= 2
+def descs_of(root):
+    return [n.get('content-desc') for n in root.iter('node') if n.get('content-desc')]
+
+
+def chips_present(root):
+    return any(CHIP_RE.match(t) for t in texts_of(root))
+
+
+def stats_open(root):
+    return 'Listening stats' in texts_of(root) and not chips_present(root)
+
+
+def dock_visible(root):
+    return len(set(descs_of(root)) & set(DOCK)) >= 2
 
 
 class RouteAbort(Exception):
     pass
 
 
+class SessionAbort(Exception):
+    pass
+
+
 def route(name, fn):
-    """Run one independent route. On any failure: retain tree+pixels for the route,
-    BACK-key recover, and re-anchor on the dock. Returns True when the route completed."""
     try:
         fn()
         print('ROUTE-OK %s' % name, flush=True)
-        return True
+    except SessionAbort:
+        raise
     except Exception as e:
         open(OUT + '/%s-ABORT.txt' % name, 'w').write('route %s aborted: %r\n' % (name, e))
         try:
@@ -184,25 +182,44 @@ def route(name, fn):
         except Exception:
             pass
         print('ROUTE-ABORT %s: %r (evidence retained)' % (name, e), flush=True)
-        try:
-            adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-            time.sleep(1.5)
-            root = dump_ui('reanchor-%s' % name)
-            screen('reanchor-%s' % name)
-            if not anchored(root):
-                open(OUT + '/ANCHOR-LOST.txt', 'w').write(
-                    'after %s abort + BACK, dock not visible; remaining routes stopped\n' % name)
-                print('ANCHOR-LOST after %s; stopping remaining routes' % name, flush=True)
-                sys.exit(1)
-        except Exception as re:
-            open(OUT + '/ANCHOR-LOST.txt', 'w').write('recovery itself failed: %r\n' % re)
-            sys.exit(1)
-        return False
 
 
 def require(ok, msg):
     if not ok:
         raise RouteAbort(msg)
+
+
+def back_once():
+    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    time.sleep(1.5)
+
+
+def ensure_library_list(tag):
+    """Establish the Library chip-list screen from wherever the session is, using the
+    dock and (only if stats is showing) its own in-view return action. Aborts the
+    whole session when the dock itself is gone; raises RouteAbort when Library shows
+    an unexpected state."""
+    root = dump_ui('anchor-%s' % tag)
+    if not dock_visible(root):
+        snap('anchor-lost-%s' % tag)
+        open(OUT + '/ANCHOR-LOST.txt', 'w').write(
+            'dock not visible while anchoring for %s; session stopped\n' % tag)
+        raise SessionAbort(tag)
+    if chips_present(root):
+        return root
+    require(tap_label('Library', 'tap-dock-library-%s.txt' % tag),
+            'dock Library not resolvable while anchoring for %s' % tag)
+    root = dump_ui('anchor2-%s' % tag)
+    if chips_present(root):
+        return root
+    if stats_open(root):
+        require(tap_label('Back to Library', 'tap-backtolib-%s.txt' % tag),
+                'stats open and its in-view return action not resolvable')
+        root = dump_ui('anchor3-%s' % tag)
+        if chips_present(root):
+            return root
+    snap('anchor-mismatch-%s' % tag)
+    raise RouteAbort('Library did not show the chip list while anchoring for %s' % tag)
 
 
 adb('wait-for-device')
@@ -220,7 +237,6 @@ open(OUT + '/display.txt', 'w').write(
     adb('shell', 'wm', 'size').decode() + adb('shell', 'wm', 'density').decode())
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
 
-# First launch creates the data directories; seed, then restart on the seeded stores.
 adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
 adb('shell', 'am', 'force-stop', PKG)
@@ -229,109 +245,105 @@ adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
 
 
-def home_route():
-    snap('01-home')  # raw first frame, retained as evidence whatever it shows
-    # Settled frame: poll until two consecutive screencaps are byte-identical.
-    prev = frame_hash('settle-a')
-    settled = False
-    for _ in range(10):
-        time.sleep(2.5)
-        cur = frame_hash('settle-b')
-        if cur == prev and cur != 'missing':
-            settled = True
-            break
-        prev = cur
-    root = snap('01b-home-settled')
-    texts = [n.get('text') for n in root.iter('node') if n.get('text')]
-    import os
-    size = os.path.getsize(OUT + '/01b-home-settled.png')
-    open(OUT + '/home-settle.txt', 'w').write(
-        'settled=%s png-bytes=%d tree-texts=%r\n' % (settled, size, texts[:12]))
-route('home', home_route)
-
-
 def library_route():
-    require(tap_label('probe', 'Library', 'tap-library.txt'), 'dock Library not resolvable')
-    snap('02-library')
+    root = ensure_library_list('library')
+    require(tap_label('Library', 'tap-library.txt'), 'dock Library not resolvable')
+    root = snap('02-library')
+    require(chips_present(root), 'Library screen lacks filter chips')
 route('library', library_route)
 
 
-def stats_route():
-    require(tap_label('probe', 'Listening stats', 'tap-stats.txt'),
-            'Listening stats label not resolvable to a clickable ancestor')
-    root = snap('03-stats')
-    adb('shell', 'input', 'swipe', '540', '1500', '540', '700', '400')
-    time.sleep(1)
-    snap('04-stats-scrolled')
-    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-    time.sleep(1.5)
-    back = snap('03b-stats-back')
-    if not anchored(back):
-        open(OUT + '/CONTEXT-MISMATCH-stats-back.txt', 'w').write(
-            'BACK from stats did not land on a dock-anchored screen\n')
-        raise RouteAbort('post-stats BACK context differs, evidence retained')
-route('stats', stats_route)
+def stats_back_route():
+    ensure_library_list('sb')
+    require(tap_label('Listening stats', 'tap-stats.txt'),
+            'Listening stats label not resolvable')
+    root = snap('03-stats-open')
+    require(stats_open(root), 'stats view did not open')
+    back_once()
+    root = snap('04-stats-system-back')
+    if not chips_present(root):
+        open(OUT + '/ACCEPTANCE-FAIL-stats-back.txt', 'w').write(
+            'system Back from stats did NOT return to the Library chip list; texts=%r\n'
+            % texts_of(root)[:12])
+        raise RouteAbort('acceptance failed: stats system Back did not reach chip list')
+    print('ACCEPT: system Back from stats returns to Library list', flush=True)
+route('stats-system-back', stats_back_route)
+
+
+def stats_button_route():
+    ensure_library_list('btn')
+    require(tap_label('Listening stats', 'tap-stats2.txt'),
+            'Listening stats label not resolvable (reopen)')
+    root = snap('05-stats-reopen')
+    require(stats_open(root), 'stats view did not reopen')
+    require(tap_label('Back to Library', 'tap-backtolib.txt'),
+            'in-view Back to Library action not resolvable')
+    root = snap('06-stats-button-back')
+    if not chips_present(root):
+        open(OUT + '/ACCEPTANCE-FAIL-stats-button.txt', 'w').write(
+            'in-view Back to Library did NOT return to the chip list; texts=%r\n'
+            % texts_of(root)[:12])
+        raise RouteAbort('acceptance failed: in-view return did not reach chip list')
+    print('ACCEPT: in-view Back to Library returns to Library list', flush=True)
+route('stats-button-back', stats_button_route)
+
+
+def open_playlists_list(tag):
+    root = ensure_library_list(tag)
+    chip = next((t for t in texts_of(root)
+                 if t.startswith('Playlists') and CHIP_RE.match(t)), None)
+    require(chip, 'no Playlists chip text on Library list (%s)' % tag)
+    require(tap_label(chip, 'tap-playlists-chip-%s.txt' % tag),
+            'Playlists chip not resolvable (%s)' % tag)
+    return dump_ui('playlists-list-%s' % tag)
 
 
 def playlists_route():
-    require(tap_label('probe', 'Library', 'tap-library2.txt'), 'dock Library not resolvable')
-    root = dump_ui('probe')
-    chips = [n.get('text') for n in root.iter('node')
-             if n.get('text') and n.get('text').startswith('Playlists')]
-    if not chips:
-        raise RouteAbort('no Playlists chip text on Library: %r' % chips)
-    require(tap_label('probe', chips[0], 'tap-playlists-chip.txt'), 'Playlists chip not resolvable')
-    snap('05-playlists')
+    open_playlists_list('pl')
+    snap('07-playlists')
 route('playlists', playlists_route)
 
 
 def playlist_open_route():
-    require(tap_label('probe', 'Imported mix', 'tap-playlist.txt'),
+    root = open_playlists_list('plopen')
+    if 'Imported mix' not in texts_of(root):
+        raise RouteAbort('Imported mix row not visible on playlists list')
+    require(tap_label('Imported mix', 'tap-playlist.txt'),
             'Imported mix row not resolvable')
-    snap('06-playlist-open')
+    snap('08-playlist-open')
 route('playlist-open', playlist_open_route)
 
 
 def import_route():
-    # Import affordances live outside an open playlist, so BACK to the enclosing
-    # list first (system key, not a guessed selector), then scan the live labels.
-    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-    time.sleep(1.5)
-    root = dump_ui('probe')
-    labels = set()
-    for n in root.iter('node'):
-        for v in (n.get('content-desc'), n.get('text')):
-            if v:
-                labels.add(v)
-    open(OUT + '/import-candidates.txt', 'w').write(
-        'labels visible at import route entry:\n' + '\n'.join(sorted(labels)))
-    entries = [l for l in labels if 'import' in l.lower()]
-    if not entries:
-        raise RouteAbort('no import-labelled affordance visible; candidates logged')
-    require(tap_label('probe', sorted(entries)[0], 'tap-import.txt'),
-            'import affordance not resolvable')
-    snap('07-import-dialog')
+    root = open_playlists_list('imp')
+    if 'Import playlist' not in texts_of(root):
+        open(OUT + '/import-candidates.txt', 'w').write(
+            'texts at import entry:\n' + '\n'.join(sorted(texts_of(root))))
+        raise RouteAbort('no Import playlist affordance visible; candidates logged')
+    require(tap_label('Import playlist', 'tap-import.txt'),
+            'Import playlist affordance not resolvable')
+    root = snap('09-import-dialog')
+    require('Import playlist' in texts_of(root), 'import dialog did not open')
+    require(tap_label('Cancel', 'tap-import-cancel.txt'), 'dialog Cancel not resolvable')
+    dump_ui('09b-import-dismissed')
 route('import-dialog', import_route)
 
 
 def search_route():
-    root = dump_ui('probe')
-    if not anchored(root):
-        adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-        time.sleep(1.5)
-    require(tap_label('probe', 'Search', 'tap-search.txt'), 'dock Search not resolvable')
-    snap('08-search-online')
+    root = dump_ui('anchor-search')
+    if not dock_visible(root):
+        snap('anchor-lost-search')
+        open(OUT + '/ANCHOR-LOST.txt', 'w').write('dock not visible before search route\n')
+        raise SessionAbort('search')
+    require(tap_label('Search', 'tap-search.txt'), 'dock Search not resolvable')
+    snap('10-search-online')
 route('search-online', search_route)
 
 
 def library_mode_route():
-    snap('09-search-before-mode-tap')
+    snap('11-search-before-mode-tap')
     root = dump_ui('probe')
     pmap = parent_map(root)
-    # Mode-chip disambiguation: 'Library' labels both the dock tab (bottom strip) and
-    # the mode chip (upper). Resolve every candidate's clickable ancestor and choose
-    # the topmost resolved target; dock candidates sit far lower and lose. All
-    # candidates and the choice are logged for review.
     notes = []
     hits = []
     for n in find_labelled(root, 'Library'):
@@ -350,7 +362,7 @@ def library_mode_route():
     x, y = center(chosen)
     adb('shell', 'input', 'tap', str(x), str(y))
     time.sleep(1.5)
-    after = snap('10-search-library-mode')
+    after = snap('12-search-library-mode')
     if not any(HINT in (n.get('text') or '') for n in after.iter('node')):
         open(OUT + '/CONTEXT-MISMATCH.txt', 'w').write(
             'post-tap tree lacks the Library-mode hint %r; mode state uncertain\n' % HINT)
@@ -359,4 +371,4 @@ route('search-library-mode', library_mode_route)
 
 conn = adb('shell', 'dumpsys', 'connectivity').decode()
 open(OUT + '/connectivity-after.txt', 'w').write(conn)
-print('CAPTURE-COMPLETE: named tree+screenshot pairs retained', flush=True)
+print('CAPTURE-COMPLETE: acceptance session retained', flush=True)
