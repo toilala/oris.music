@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Acceptance capture session v3 for the stats-back fix and the remaining screens.
-Each route establishes its own current screen from the live tree before acting,
-verifies the expected post-action context, and retains before/after tree+pixels.
-Selectors resolve labels to their clickable ancestor (shape learned from retained
-v1/v2 trees). No repeated root BACK as a reset: recovery re-anchors via the dock,
-and a route with a mismatched context stops itself with evidence. No playback,
-no query typing, network stays off."""
+"""Functional acceptance session v4: Library search query/results/change/clear and
+import Preview/create/reopen persistence, on seeded local data only. Each route
+establishes its own current screen from the live tree before acting, verifies the
+expected post-action context, and retains before/after tree+pixels. Selectors
+resolve labels to their clickable ancestor or to the EditText containing the label
+(shapes validated offline against retained v2/v3 trees). No repeated root BACK as
+a reset: recovery re-anchors via the dock. A failing route writes ACCEPTANCE-FAIL
+evidence and stops itself; nothing is retried or repaired. Network stays off for
+the whole session; no playback, no live-service requests."""
 import glob
 import re
 import subprocess
@@ -29,8 +31,15 @@ PLAYLIST = [
     ('import:aurora|bicep', 'Aurora', 'Bicep'),
 ]
 HINT = 'Search your liked songs'
+NOMATCH = 'Nothing in your library matches'
 CHIP_RE = re.compile(r'^(Liked|Recent|Playlists|Saved) \(\d+\)$')
 DOCK = ('Home', 'Search', 'Library')
+
+IMPORT_LINES = ['Midnight City - M83', 'Aurora - Bicep', 'Aurora - Bicep', 'broken line']
+IMPORT_NAME = 'Acceptance check'
+SONGS_LABEL = 'Songs as Title - Artist, one per line, or a CSV export'
+UNSUPPORTED_LINK = 'https://music.youtube.com/playlist'
+UNSUPPORTED_REASON = "Playlist links can't be read offline"
 
 
 def songs_json(rows):
@@ -123,6 +132,87 @@ def tap_label(label, log_name):
     return True
 
 
+def edit_texts(root):
+    return [n for n in root.iter('node') if (n.get('class') or '').endswith('EditText')]
+
+
+def edit_text_containing(root, node):
+    b = bounds_of(node)
+    for e in edit_texts(root):
+        eb = bounds_of(e)
+        if eb[0] <= b[0] and eb[1] <= b[1] and eb[2] >= b[2] and eb[3] >= b[3]:
+            return e
+    return None
+
+
+def focus_field(label, log_name):
+    """Tap the EditText whose bounds contain the given label/placeholder, then verify
+    an EditText actually holds focus. Returns False without tapping when no field
+    contains the label."""
+    root = dump_ui('probe')
+    hits = find_labelled(root, label)
+    target = None
+    for n in hits:
+        target = edit_text_containing(root, n)
+        if target is not None:
+            break
+    if target is None:
+        open(OUT + '/' + log_name, 'w').write(
+            'focus_field %r: %d label hit(s), none contained in an EditText\nNO TAP'
+            % (label, len(hits)))
+        return False
+    x, y = center(target)
+    adb('shell', 'input', 'tap', str(x), str(y))
+    time.sleep(1.2)
+    after = dump_ui('focus-' + log_name.replace('.txt', ''))
+    focused = [e.get('bounds') for e in edit_texts(after) if e.get('focused') == 'true']
+    open(OUT + '/' + log_name, 'w').write(
+        'focus_field %r: target=%s tap=(%d,%d) focused-after=%s'
+        % (label, target.get('bounds'), x, y, focused))
+    return bool(focused)
+
+
+def type_text(s):
+    adb('shell', 'input', 'text', s.replace(' ', '%s'))
+    time.sleep(0.6)
+
+
+def type_lines(lines):
+    for i, ln in enumerate(lines):
+        type_text(ln)
+        if i < len(lines) - 1:
+            adb('shell', 'input', 'keyevent', 'KEYCODE_ENTER')
+            time.sleep(0.4)
+
+
+def field_with_text(sub):
+    root = dump_ui('probe')
+    return any(sub in (e.get('text') or '') for e in edit_texts(root))
+
+
+def tap_dock(label, log_name):
+    """Tap a dock entry: the BOTTOMMOST clickable ancestor of the label, so the
+    Search screen's own Library mode chip (higher on screen) is never mistaken
+    for the dock's Library entry."""
+    root = dump_ui('probe')
+    pmap = parent_map(root)
+    hits = []
+    for n in find_labelled(root, label):
+        anc = clickable_ancestor(n, pmap)
+        if anc is not None:
+            hits.append(anc)
+    with open(OUT + '/' + log_name, 'w') as f:
+        f.write('dock candidates for %r: %s'
+                % (label, [h.get('bounds') for h in hits] or 'none'))
+    if not hits:
+        return False
+    chosen = max(hits, key=lambda a: center(a)[1])
+    x, y = center(chosen)
+    adb('shell', 'input', 'tap', str(x), str(y))
+    time.sleep(1.5)
+    return True
+
+
 def dump_ui(name):
     for _ in range(3):
         try:
@@ -189,9 +279,9 @@ def require(ok, msg):
         raise RouteAbort(msg)
 
 
-def back_once():
-    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-    time.sleep(1.5)
+def accept_fail(name, body):
+    open(OUT + '/ACCEPTANCE-FAIL-%s.txt' % name, 'w').write(body)
+    raise RouteAbort('acceptance failed: %s' % name)
 
 
 def ensure_library_list(tag):
@@ -207,7 +297,7 @@ def ensure_library_list(tag):
         raise SessionAbort(tag)
     if chips_present(root):
         return root
-    require(tap_label('Library', 'tap-dock-library-%s.txt' % tag),
+    require(tap_dock('Library', 'tap-dock-library-%s.txt' % tag),
             'dock Library not resolvable while anchoring for %s' % tag)
     root = dump_ui('anchor2-%s' % tag)
     if chips_present(root):
@@ -220,6 +310,68 @@ def ensure_library_list(tag):
             return root
     snap('anchor-mismatch-%s' % tag)
     raise RouteAbort('Library did not show the chip list while anchoring for %s' % tag)
+
+
+def open_playlists_list(tag):
+    root = ensure_library_list(tag)
+    chip = next((t for t in texts_of(root)
+                 if t.startswith('Playlists') and CHIP_RE.match(t)), None)
+    require(chip, 'no Playlists chip text on Library list (%s)' % tag)
+    require(tap_label(chip, 'tap-playlists-chip-%s.txt' % tag),
+            'Playlists chip not resolvable (%s)' % tag)
+    return dump_ui('playlists-list-%s' % tag)
+
+
+def ensure_search_screen(tag):
+    root = dump_ui('anchor-%s' % tag)
+    if not dock_visible(root):
+        snap('anchor-lost-%s' % tag)
+        open(OUT + '/ANCHOR-LOST.txt', 'w').write(
+            'dock not visible while anchoring for %s; session stopped\n' % tag)
+        raise SessionAbort(tag)
+    require(tap_dock('Search', 'tap-search-%s.txt' % tag),
+            'dock Search not resolvable (%s)' % tag)
+    return dump_ui('search-screen-%s' % tag)
+
+
+def select_library_mode(log_name):
+    """Tap the Search-screen Library mode chip: the topmost clickable ancestor of a
+    Library label (the dock's Library sits lower). Validated against retained trees."""
+    root = dump_ui('probe')
+    pmap = parent_map(root)
+    notes = []
+    hits = []
+    for n in find_labelled(root, 'Library'):
+        anc = clickable_ancestor(n, pmap)
+        notes.append('label-bounds=%s clickable=%s anc-bounds=%s'
+                     % (n.get('bounds'), n.get('clickable'),
+                        anc.get('bounds') if anc is not None else 'NONE'))
+        if anc is not None:
+            hits.append(anc)
+    open(OUT + '/' + log_name, 'w').write(
+        'candidates for Library-mode chip (topmost resolved target tapped):\n'
+        + ('\n'.join(notes) if notes else 'none'))
+    if not hits:
+        return False
+    chosen = min(hits, key=lambda a: center(a)[1])
+    x, y = center(chosen)
+    adb('shell', 'input', 'tap', str(x), str(y))
+    time.sleep(1.5)
+    return True
+
+
+def hint_visible(root):
+    return any(HINT in (n.get('text') or '') for n in root.iter('node'))
+
+
+def clear_and_retype(query, tap_log, field_log):
+    require(tap_label('Clear search', tap_log), 'Clear search action not resolvable')
+    root = dump_ui('probe')
+    require(hint_visible(root), 'clear did not restore the blank-query hint')
+    require(focus_field('Songs, albums, artists', field_log),
+            'search field not focusable for %r' % query)
+    type_text(query)
+    time.sleep(2)
 
 
 adb('wait-for-device')
@@ -245,130 +397,158 @@ adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
 
 
-def library_route():
-    root = ensure_library_list('library')
-    require(tap_label('Library', 'tap-library.txt'), 'dock Library not resolvable')
-    root = snap('02-library')
-    require(chips_present(root), 'Library screen lacks filter chips')
-route('library', library_route)
+def search_functional_route():
+    ensure_search_screen('sf')
+    require(select_library_mode('mode-select.txt'),
+            'no Library-labelled candidate resolves on the Search screen')
+    root = snap('20-search-library-mode')
+    require(hint_visible(root), 'Library-mode blank-query hint missing after mode tap')
+
+    require(focus_field('Songs, albums, artists', 'tap-field-1.txt'),
+            'search field not focusable for first query')
+    type_text('midnight')
+    time.sleep(2)
+    root = snap('21-search-results-midnight')
+    ts = texts_of(root)
+    if not ('Midnight City' in ts and 'M83' in ts):
+        accept_fail('search-query',
+                    'query "midnight" did not surface the seeded liked song; texts=%r\n'
+                    % ts[:20])
+    if 'One More Time' in ts:
+        accept_fail('search-query',
+                    'query "midnight" leaked a non-matching song; texts=%r\n' % ts[:20])
+    print('ACCEPT: Library search query "midnight" returns the seeded Midnight City row',
+          flush=True)
+
+    clear_and_retype('nuvole', 'tap-clear-1.txt', 'tap-field-2.txt')
+    root = snap('22-search-results-changed')
+    ts = texts_of(root)
+    if not ('Nuvole Bianche' in ts and 'Ludovico Einaudi' in ts):
+        accept_fail('search-change',
+                    'changed query "nuvole" did not surface the seeded history song; texts=%r\n'
+                    % ts[:20])
+    if 'Midnight City' in ts:
+        accept_fail('search-change',
+                    'stale Midnight City row after query change; texts=%r\n' % ts[:20])
+    print('ACCEPT: query change replaces results (history song found, prior result gone)',
+          flush=True)
+
+    clear_and_retype('zzzz', 'tap-clear-2.txt', 'tap-field-3.txt')
+    root = snap('23-search-nomatch')
+    ts = texts_of(root)
+    if not any(NOMATCH in t for t in ts):
+        accept_fail('search-nomatch',
+                    'no-match state text missing for "zzzz"; texts=%r\n' % ts[:20])
+    print('ACCEPT: no-match query renders the empty state', flush=True)
+
+    require(tap_label('Clear search', 'tap-clear-3.txt'),
+            'Clear search action not resolvable (final)')
+    root = snap('24-search-cleared')
+    if not hint_visible(root):
+        accept_fail('search-clear',
+                    'clear did not restore the blank-query hint; texts=%r\n'
+                    % texts_of(root)[:20])
+    print('ACCEPT: clear restores the initial Library-mode state', flush=True)
+route('search-functional', search_functional_route)
 
 
-def stats_back_route():
-    ensure_library_list('sb')
-    require(tap_label('Listening stats', 'tap-stats.txt'),
-            'Listening stats label not resolvable')
-    root = snap('03-stats-open')
-    require(stats_open(root), 'stats view did not open')
-    back_once()
-    root = snap('04-stats-system-back')
-    if not chips_present(root):
-        open(OUT + '/ACCEPTANCE-FAIL-stats-back.txt', 'w').write(
-            'system Back from stats did NOT return to the Library chip list; texts=%r\n'
-            % texts_of(root)[:12])
-        raise RouteAbort('acceptance failed: stats system Back did not reach chip list')
-    print('ACCEPT: system Back from stats returns to Library list', flush=True)
-route('stats-system-back', stats_back_route)
-
-
-def stats_button_route():
-    ensure_library_list('btn')
-    require(tap_label('Listening stats', 'tap-stats2.txt'),
-            'Listening stats label not resolvable (reopen)')
-    root = snap('05-stats-reopen')
-    require(stats_open(root), 'stats view did not reopen')
-    require(tap_label('Back to Library', 'tap-backtolib.txt'),
-            'in-view Back to Library action not resolvable')
-    root = snap('06-stats-button-back')
-    if not chips_present(root):
-        open(OUT + '/ACCEPTANCE-FAIL-stats-button.txt', 'w').write(
-            'in-view Back to Library did NOT return to the chip list; texts=%r\n'
-            % texts_of(root)[:12])
-        raise RouteAbort('acceptance failed: in-view return did not reach chip list')
-    print('ACCEPT: in-view Back to Library returns to Library list', flush=True)
-route('stats-button-back', stats_button_route)
-
-
-def open_playlists_list(tag):
-    root = ensure_library_list(tag)
-    chip = next((t for t in texts_of(root)
-                 if t.startswith('Playlists') and CHIP_RE.match(t)), None)
-    require(chip, 'no Playlists chip text on Library list (%s)' % tag)
-    require(tap_label(chip, 'tap-playlists-chip-%s.txt' % tag),
-            'Playlists chip not resolvable (%s)' % tag)
-    return dump_ui('playlists-list-%s' % tag)
-
-
-def playlists_route():
-    open_playlists_list('pl')
-    snap('07-playlists')
-route('playlists', playlists_route)
-
-
-def playlist_open_route():
-    root = open_playlists_list('plopen')
-    if 'Imported mix' not in texts_of(root):
-        raise RouteAbort('Imported mix row not visible on playlists list')
-    require(tap_label('Imported mix', 'tap-playlist.txt'),
-            'Imported mix row not resolvable')
-    snap('08-playlist-open')
-route('playlist-open', playlist_open_route)
-
-
-def import_route():
-    root = open_playlists_list('imp')
+def import_functional_route():
+    root = open_playlists_list('impf')
     if 'Import playlist' not in texts_of(root):
         open(OUT + '/import-candidates.txt', 'w').write(
             'texts at import entry:\n' + '\n'.join(sorted(texts_of(root))))
         raise RouteAbort('no Import playlist affordance visible; candidates logged')
     require(tap_label('Import playlist', 'tap-import.txt'),
             'Import playlist affordance not resolvable')
-    root = snap('09-import-dialog')
+    root = snap('30-import-dialog')
     require('Import playlist' in texts_of(root), 'import dialog did not open')
-    require(tap_label('Cancel', 'tap-import-cancel.txt'), 'dialog Cancel not resolvable')
-    dump_ui('09b-import-dismissed')
-route('import-dialog', import_route)
 
+    require(focus_field('Name', 'tap-name.txt'), 'Name field not focusable')
+    type_text(IMPORT_NAME)
+    require(field_with_text(IMPORT_NAME), 'Name field did not take the typed value')
 
-def search_route():
-    root = dump_ui('anchor-search')
-    if not dock_visible(root):
-        snap('anchor-lost-search')
-        open(OUT + '/ANCHOR-LOST.txt', 'w').write('dock not visible before search route\n')
-        raise SessionAbort('search')
-    require(tap_label('Search', 'tap-search.txt'), 'dock Search not resolvable')
-    snap('10-search-online')
-route('search-online', search_route)
+    require(focus_field(SONGS_LABEL, 'tap-songs.txt'), 'songs field not focusable')
+    type_lines(IMPORT_LINES)
+    require(field_with_text('Midnight City - M83'),
+            'songs field did not take the typed lines')
 
+    require(tap_label('Preview', 'tap-preview.txt'), 'Preview action not resolvable')
+    root = snap('31-import-preview')
+    ts = texts_of(root)
+    ok = (any('3 songs ready' in t for t in ts)
+          and any('1 duplicate collapsed' in t for t in ts)
+          and any("1 line couldn't be read" in t for t in ts)
+          and any("can't play until matched" in t for t in ts))
+    if not ok:
+        accept_fail('import-preview',
+                    'preview summary mismatch (expected 3 ready, 1 duplicate, 1 skipped, '
+                    'unmatched warning); texts=%r\n' % ts[:24])
+    print('ACCEPT: preview reports 3 ready, 1 duplicate collapsed, 1 line skipped, '
+          'unmatched-play warning', flush=True)
 
-def library_mode_route():
-    snap('11-search-before-mode-tap')
-    root = dump_ui('probe')
-    pmap = parent_map(root)
-    notes = []
-    hits = []
-    for n in find_labelled(root, 'Library'):
-        anc = clickable_ancestor(n, pmap)
-        notes.append('label-bounds=%s clickable=%s anc-bounds=%s'
-                     % (n.get('bounds'), n.get('clickable'),
-                        anc.get('bounds') if anc is not None else 'NONE'))
+    require(tap_label('Import', 'tap-import-confirm.txt'),
+            'Import confirm action not resolvable')
+    root = snap('32-import-created')
+    ts = texts_of(root)
+    if not (IMPORT_NAME in ts and any('Not matched yet' in t for t in ts)):
+        accept_fail('import-create',
+                    'created playlist detail missing name or unmatched markers; texts=%r\n'
+                    % ts[:24])
+    print('ACCEPT: import creates the playlist and lists songs with unmatched markers',
+          flush=True)
+
+    chip = next((t for t in ts if t.startswith('Playlists') and CHIP_RE.match(t)), None)
+    require(chip, 'no Playlists chip on the created playlist detail')
+    require(tap_label(chip, 'tap-playlists-chip-impf.txt'),
+            'Playlists chip not resolvable on detail')
+    root = snap('33-playlists-after-create')
+    require(IMPORT_NAME in texts_of(root), 'created playlist not listed on Playlists')
+    require(tap_label(IMPORT_NAME, 'tap-reopen.txt'),
+            'created playlist row not resolvable')
+    root = snap('34-import-reopened')
+    ts = texts_of(root)
+    if not (IMPORT_NAME in ts and 'Midnight City' in ts
+            and ts.count('Aurora') >= 1 and any('Not matched yet' in t for t in ts)):
+        accept_fail('import-reopen',
+                    'reopened playlist lost rows or unmatched markers; texts=%r\n'
+                    % ts[:24])
+    print('ACCEPT: reopened playlist persists rows and unmatched markers', flush=True)
+
+    require(tap_label(chip, 'tap-playlists-chip-impf2.txt'),
+            'Playlists chip not resolvable (unsupported-input pass)')
+    require(tap_label('Import playlist', 'tap-import2.txt'),
+            'Import playlist affordance not resolvable (second pass)')
+    snap('35-import-dialog-2')
+    require(focus_field(SONGS_LABEL, 'tap-songs2.txt'),
+            'songs field not focusable (unsupported input)')
+    type_text(UNSUPPORTED_LINK)
+    require(field_with_text('music.youtube.com'),
+            'songs field did not take the link text')
+    require(tap_label('Preview', 'tap-preview2.txt'),
+            'Preview action not resolvable (unsupported input)')
+    root = snap('36-import-unsupported')
+    ts = texts_of(root)
+    if not any(UNSUPPORTED_REASON in t for t in ts):
+        accept_fail('import-unsupported',
+                    'unsupported link input was not rejected with its reason; texts=%r\n'
+                    % ts[:24])
+    imp = []
+    for n in find_labelled(root, 'Import'):
+        anc = clickable_ancestor(n, parent_map(root))
         if anc is not None:
-            hits.append(anc)
-    open(OUT + '/mode-select.txt', 'w').write(
-        'candidates for Library-mode chip (topmost resolved target tapped):\n'
-        + ('\n'.join(notes) if notes else 'none'))
-    if not hits:
-        raise RouteAbort('no Library-labelled candidate resolves on the Search screen')
-    chosen = min(hits, key=lambda a: center(a)[1])
-    x, y = center(chosen)
-    adb('shell', 'input', 'tap', str(x), str(y))
-    time.sleep(1.5)
-    after = snap('12-search-library-mode')
-    if not any(HINT in (n.get('text') or '') for n in after.iter('node')):
-        open(OUT + '/CONTEXT-MISMATCH.txt', 'w').write(
-            'post-tap tree lacks the Library-mode hint %r; mode state uncertain\n' % HINT)
-        raise RouteAbort('post-tap context differs, evidence retained')
-route('search-library-mode', library_mode_route)
+            imp.append('enabled=%s bounds=%s' % (anc.get('enabled'), anc.get('bounds')))
+    open(OUT + '/import-unsupported-button.txt', 'w').write(
+        'Import confirm candidates after unsupported preview:\n'
+        + ('\n'.join(imp) if imp else 'none'))
+    print('ACCEPT: unsupported playlist-link input rejected with its reason', flush=True)
+
+    require(tap_label('Cancel', 'tap-import-cancel.txt'),
+            'dialog Cancel not resolvable (second pass)')
+    root = snap('37-import-cancelled')
+    require(chips_present(root), 'dialog did not dismiss back to the chip list')
+route('import-functional', import_functional_route)
+
 
 conn = adb('shell', 'dumpsys', 'connectivity').decode()
 open(OUT + '/connectivity-after.txt', 'w').write(conn)
-print('CAPTURE-COMPLETE: acceptance session retained', flush=True)
+print('CAPTURE-COMPLETE: functional acceptance session retained', flush=True)
