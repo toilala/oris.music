@@ -124,11 +124,21 @@ internal fun PlayerTray(
                 val playlists by store.playlists.collectAsState()
                 Box(Modifier.weight(1f)) {
                     ActionTile(Icons.Rounded.PlaylistAdd, "Playlist", false, 56.dp, Modifier.fillMaxWidth()) { playlistMenu = true }
-                    DropdownMenu(playlistMenu, { playlistMenu = false }) {
-                        if (playlists.isEmpty()) DropdownMenuItem({ Text("Make a playlist in Library first") }, { playlistMenu = false })
-                        playlists.forEach { p ->
-                            DropdownMenuItem({ Text(p.name) }, { song?.let { store.add(p.id, it) }; playlistMenu = false })
-                        }
+                    if (playlistMenu) {
+                        com.orismusic.client.ui.components.SongActionsSheet(
+                            title = song?.title ?: "Nothing playing",
+                            subtitle = song?.artist,
+                            thumbnail = song?.thumbnail,
+                            actions = mutableListOf<com.orismusic.client.ui.components.SongAction>().apply {
+                                if (playlists.isEmpty()) add(com.orismusic.client.ui.components.SongAction("Make a playlist in Library first",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant) { playlistMenu = false })
+                                playlists.forEach { p ->
+                                    add(com.orismusic.client.ui.components.SongAction(p.name,
+                                        enabled = song != null) { song?.let { store.add(p.id, it) }; playlistMenu = false })
+                                }
+                            },
+                            onDismiss = { playlistMenu = false },
+                        )
                     }
                 }
                 var timerMenu by remember { mutableStateOf(false) }

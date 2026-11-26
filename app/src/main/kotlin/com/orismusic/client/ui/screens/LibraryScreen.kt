@@ -25,7 +25,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -567,50 +567,43 @@ private fun SavedSongRow(
                     tint = MaterialTheme.colorScheme.outline)
             null -> Unit
         }
-        Box {
-            IconButton(onClick = { menu = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add to playlist",
-                    tint = MaterialTheme.colorScheme.outline)
+        IconButton(onClick = { menu = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "Song actions",
+                tint = MaterialTheme.colorScheme.outline)
+        }
+        if (menu) {
+            val actions = mutableListOf<com.orismusic.client.ui.components.SongAction>()
+            if (!unmatched) when (offline) {
+                com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
+                    actions += com.orismusic.client.ui.components.SongAction("Cancel download") { onCancelOffline(); menu = false }
+                com.orismusic.client.playback.OfflineStatus.FAILED ->
+                    actions += com.orismusic.client.ui.components.SongAction("Retry download") { onSaveOffline(); menu = false }
+                com.orismusic.client.playback.OfflineStatus.READY ->
+                    actions += com.orismusic.client.ui.components.SongAction("Remove from offline",
+                        tint = MaterialTheme.colorScheme.error) { onRemoveOffline(); menu = false }
+                com.orismusic.client.playback.OfflineStatus.PARTIAL,
+                com.orismusic.client.playback.OfflineStatus.UNKNOWN -> {
+                    actions += com.orismusic.client.ui.components.SongAction("Retry download") { onSaveOffline(); menu = false }
+                    actions += com.orismusic.client.ui.components.SongAction("Remove from offline",
+                        tint = MaterialTheme.colorScheme.error) { onRemoveOffline(); menu = false }
+                }
+                null ->
+                    actions += com.orismusic.client.ui.components.SongAction("Save for offline") { onSaveOffline(); menu = false }
             }
-            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                if (!unmatched) when (offline) {
-                    com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Cancel download") },
-                            onClick = { onCancelOffline(); menu = false })
-                    com.orismusic.client.playback.OfflineStatus.FAILED ->
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Retry download") },
-                            onClick = { onSaveOffline(); menu = false })
-                    com.orismusic.client.playback.OfflineStatus.READY ->
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Remove from offline") },
-                            onClick = { onRemoveOffline(); menu = false })
-                    com.orismusic.client.playback.OfflineStatus.PARTIAL,
-                    com.orismusic.client.playback.OfflineStatus.UNKNOWN -> {
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Retry download") },
-                            onClick = { onSaveOffline(); menu = false })
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Remove from offline") },
-                            onClick = { onRemoveOffline(); menu = false })
-                    }
-                    null ->
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Save for offline") },
-                            onClick = { onSaveOffline(); menu = false })
-                }
-                if (playlists.isEmpty()) {
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("Make a playlist first") }, onClick = { menu = false })
-                }
-                playlists.forEach { (id, name) ->
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(name) },
-                        onClick = { onAddToPlaylist(id); menu = false },
-                    )
-                }
+            if (playlists.isEmpty()) {
+                actions += com.orismusic.client.ui.components.SongAction("Make a playlist first",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant) { menu = false }
             }
+            playlists.forEach { (id, name) ->
+                actions += com.orismusic.client.ui.components.SongAction(name) { onAddToPlaylist(id); menu = false }
+            }
+            com.orismusic.client.ui.components.SongActionsSheet(
+                title = song.title,
+                subtitle = song.artist,
+                thumbnail = song.thumbnail,
+                actions = actions,
+                onDismiss = { menu = false },
+            )
         }
         val heart by androidx.compose.animation.core.animateFloatAsState(
             targetValue = if (liked) 1.15f else 1f,

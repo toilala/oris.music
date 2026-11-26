@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -231,15 +229,22 @@ private fun QuickPickChip(
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        DropdownMenu(menu, { menu = false }) {
-            if (onPlayNext != null) DropdownMenuItem(text = { Text("Play next") }, onClick = { onPlayNext(); menu = false })
-            if (onAddToQueue != null) DropdownMenuItem(text = { Text("Add to queue") }, onClick = { onAddToQueue(); menu = false })
-            if (onStartRadio != null) DropdownMenuItem(text = { Text("Start radio") }, onClick = { onStartRadio(); menu = false })
-            if (onHide != null) DropdownMenuItem(text = { Text("Hide song") }, onClick = { onHide(); menu = false })
-            if (onDislike != null) DropdownMenuItem(text = { Text("Dislike song") }, onClick = { onDislike(); menu = false })
-            if (onBlockArtist != null) {
-                DropdownMenuItem(text = { Text("Block ${song.artists.first().name}") }, onClick = { onBlockArtist(); menu = false })
-            }
+        if (menu) {
+            com.orismusic.client.ui.components.SongActionsSheet(
+                title = song.title,
+                subtitle = song.artists.joinToString { it.name },
+                thumbnail = song.thumbnail,
+                actions = mutableListOf<com.orismusic.client.ui.components.SongAction>().apply {
+                    if (onPlayNext != null) add(com.orismusic.client.ui.components.SongAction("Play next") { onPlayNext(); menu = false })
+                    if (onAddToQueue != null) add(com.orismusic.client.ui.components.SongAction("Add to queue") { onAddToQueue(); menu = false })
+                    if (onStartRadio != null) add(com.orismusic.client.ui.components.SongAction("Start radio") { onStartRadio(); menu = false })
+                    if (onHide != null) add(com.orismusic.client.ui.components.SongAction("Hide song") { onHide(); menu = false })
+                    if (onDislike != null) add(com.orismusic.client.ui.components.SongAction("Dislike song") { onDislike(); menu = false })
+                    if (onBlockArtist != null) add(com.orismusic.client.ui.components.SongAction("Block ${song.artists.first().name}",
+                        tint = MaterialTheme.colorScheme.error) { onBlockArtist(); menu = false })
+                },
+                onDismiss = { menu = false },
+            )
         }
     }
 }
