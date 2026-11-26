@@ -31,11 +31,16 @@ def tree():
             time.sleep(1)
     return ET.Element('hierarchy')
 
-def wait_label(label, seconds=25):
+def wait_label(label, seconds=25, pkg=None):
+    # uiautomator dumps every window, including the system navigation bar whose
+    # buttons carry content-desc "Back"/"Home": pkg scopes matching to one package
+    # so a caller can never wait on another window's node.
     end = time.monotonic() + seconds
     while time.monotonic() < end:
         root = tree()
         for node in root.iter('node'):
+            if pkg is not None and (node.get('package') or '') != pkg:
+                continue
             if label in (node.get('text'), node.get('content-desc')):
                 return node
         time.sleep(1)
@@ -49,11 +54,13 @@ def wait_label(label, seconds=25):
     print(adb('logcat', '-d', '-s', 'AndroidRuntime').decode(), flush=True)
     raise AssertionError(f'UI never showed {label}')
 
-def tap(label, bottom=True):
-    wait_label(label)
+def tap(label, bottom=True, pkg=None):
+    wait_label(label, pkg=pkg)
     nodes = []
     for _ in range(6):
-        nodes = [n for n in tree().iter('node') if label in (n.get('text'), n.get('content-desc'))]
+        nodes = [n for n in tree().iter('node')
+                 if (pkg is None or (n.get('package') or '') == pkg)
+                 and label in (n.get('text'), n.get('content-desc'))]
         if nodes:
             break
         time.sleep(1)

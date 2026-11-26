@@ -29,6 +29,26 @@ ON_COPY = 'On: shaping the sound of the current output.'
 UNKNOWN_COPY = 'Unknown: the equalizer state could not be confirmed on this output.'
 
 
+def app_nodes(root):
+    """Only the app's own windows. uiautomator dumps every visible window, and the
+    system navigation bar's buttons carry content-desc 'Back'/'Home' with no text, so
+    a whole-dump match on either label is satisfiable by SystemUI on every page."""
+    return [n for n in root.iter('node') if (n.get('package') or '') == PKG]
+
+
+def back_affordances(root):
+    """App-package nodes exactly matching the Back affordance, as evidence tuples
+    (text, content-desc, package, bounds, clickable)."""
+    return [(n.get('text'), n.get('content-desc'), n.get('package'), n.get('bounds'),
+             n.get('clickable')) for n in app_nodes(root)
+            if (n.get('text') or '') == 'Back' or (n.get('content-desc') or '') == 'Back']
+
+
+def page_texts(root, limit=12):
+    """First visible app text nodes: page-identity evidence for NAV lines."""
+    return [n.get('text') for n in app_nodes(root) if n.get('text')][:limit]
+
+
 def resumed_activity():
     out = adb('shell', 'dumpsys', 'activity', 'activities').decode()
     return out.split('mResumedActivity:')[-1].splitlines()[0]
@@ -51,12 +71,14 @@ def resume_main():
     raise AssertionError('MainActivity never resumed to the foreground')
 
 
-NAV = {'recovery_used': False}
+NAV = {'recovery_used': False, 'walks': 0}
 
 
 def open_playback_settings():
     resume_main()
     print('NAV after resume_main: ' + resumed_activity().strip(), flush=True)
+    print('NAV walk entry: pid=' + safe_pidof(PKG)
+          + ' foreground=' + resumed_activity().strip(), flush=True)
     if PKG not in resumed_activity():
         # The app left the foreground right after a verified resume. Record it; no
         # automatic relaunch here, so a failed initial cold start can never be
@@ -70,46 +92,79 @@ def open_playback_settings():
     # navigation-settings rows), so only Back-absence ends the walk. A press needs
     # two consecutive fresh dumps both showing Back, so a mid-transition stale dump
     # makes sending Back into a root page (which exits the app) much less likely.
+    # All matching is scoped to the app's own package: the system navigation bar
+    # carries a content-desc "Back" button on every page, and a whole-dump match
+    # would send system Back into a root page, which exits the app by design.
+    NAV['walks'] += 1
+    tag = 'nav-walk' + str(NAV['walks'])
+    captured = False
     for _ in range(8):
         fg = resumed_activity()
         if PKG not in fg:
             NAV['recovery_used'] = True
             print('NAV stop: foreground left the app before any further back: ' + fg.strip(), flush=True)
             break
+        print('NAV page texts: ' + repr(page_texts(tree())), flush=True)
         # Exact node semantics only: the back affordance is Text("Back") in a top-bar
         # TextButton or an ArrowBack icon with contentDescription "Back" (DetailScreen).
         # Substring matching would also catch copy like "Background playback".
-        first = list(tree().iter('node'))
-        if not any((n.get('text') or '') == 'Back' or (n.get('content-desc') or '') == 'Back'
-                   for n in first):
+        first_root = tree()
+        first = back_affordances(first_root)
+        if not first:
+            # Zero-press exit: record the decisive cold-start page evidence (full
+            # dump, screenshot, app texts) so the run names the page either way.
+            open(OUT + '/' + tag + '-root-no-back.xml', 'w').write(
+                ET.tostring(first_root, encoding='unicode'))
+            screen(tag + '_root_no_back')
+            print('NAV root page (no Back press sent): texts='
+                  + repr(page_texts(first_root)), flush=True)
             break
         time.sleep(0.5)
-        second = list(tree().iter('node'))
-        if not any((n.get('text') or '') == 'Back' or (n.get('content-desc') or '') == 'Back'
-                   for n in second):
+        second_root = tree()
+        second = back_affordances(second_root)
+        if not second:
             print('NAV stop: Back gone between confirming dumps (page transition)', flush=True)
             break
+        print('NAV back candidates dump1: ' + repr(first), flush=True)
+        print('NAV back candidates dump2: ' + repr(second), flush=True)
+        if not captured:
+            open(OUT + '/' + tag + '-before-first-back.xml', 'w').write(
+                ET.tostring(second_root, encoding='unicode'))
+            screen(tag + '_before_first_back')
         fg = resumed_activity()
         print('NAV back before: ' + fg.strip(), flush=True)
+        if PKG not in fg:
+            # The app left the foreground between the confirming dumps and the press:
+            # never send system Back into whatever is foreground now.
+            NAV['recovery_used'] = True
+            print('NAV stop: app not foreground at press time, no Back sent: ' + fg.strip(), flush=True)
+            break
         adb('shell', 'input', 'keyevent', '4')
         time.sleep(1)
         after = resumed_activity()
         print('NAV back after: ' + after.strip(), flush=True)
+        if not captured:
+            captured = True
+            after_root = tree()
+            open(OUT + '/' + tag + '-after-first-back.xml', 'w').write(
+                ET.tostring(after_root, encoding='unicode'))
+            screen(tag + '_after_first_back')
+            print('NAV page texts after first back: ' + repr(page_texts(after_root)), flush=True)
         if PKG not in after:
             NAV['recovery_used'] = True
             print('NAV stop: that back press left the app: ' + after.strip(), flush=True)
             break
-    wait_label('Home', seconds=60)
-    tap('Library')
-    tap('Settings', bottom=False)
-    wait_label('Appearance')
-    tap('Playback', bottom=False)
-    wait_label('Playback speed')
+    wait_label('Home', seconds=60, pkg=PKG)
+    tap('Library', pkg=PKG)
+    tap('Settings', bottom=False, pkg=PKG)
+    wait_label('Appearance', pkg=PKG)
+    tap('Playback', bottom=False, pkg=PKG)
+    wait_label('Playback speed', pkg=PKG)
 
 
 def scroll_to_eq():
     for _ in range(10):
-        if any(n.get('text') == 'Equalizer' for n in tree().iter('node')):
+        if any(n.get('text') == 'Equalizer' for n in app_nodes(tree())):
             return
         adb('shell', 'input', 'swipe', '540', '1500', '540', '600', '350')
         time.sleep(1.2)
@@ -118,7 +173,7 @@ def scroll_to_eq():
 
 
 def has_text(fragment):
-    return any(fragment in (n.get('text') or '') for n in tree().iter('node'))
+    return any(fragment in (n.get('text') or '') for n in app_nodes(tree()))
 
 
 def safe_pidof(name):
@@ -149,10 +204,10 @@ def dump_am_tail(ev):
 def tap_clickable(label):
     """Tap the clickable ancestor of the node carrying label, so taps never land on a
     plain Text sibling of the real control."""
-    wait_label(label)
+    wait_label(label, pkg=PKG)
     root = tree()
     parents = {c: p for p in root.iter('node') for c in p}
-    target = next(n for n in root.iter('node') if label in (n.get('text'), n.get('content-desc')))
+    target = next(n for n in app_nodes(root) if label in (n.get('text'), n.get('content-desc')))
     node = target
     while node is not None and node.get('clickable') != 'true':
         node = parents.get(node)
@@ -193,7 +248,7 @@ def band0_level():
 def custom_present():
     return any(n.get('text') == 'Custom'
                or (n.get('content-desc') or '') == 'Active preset: Custom'
-               for n in tree().iter('node'))
+               for n in app_nodes(tree()))
 
 
 def drag_band(x1, y1, x2, y2, duration_ms):
@@ -223,7 +278,7 @@ class Reported(Exception):
 
 
 def state_line():
-    return next((n.get('content-desc') for n in tree().iter('node')
+    return next((n.get('content-desc') for n in app_nodes(tree())
                  if (n.get('content-desc') or '').startswith('Active preset:')), None)
 
 
@@ -363,12 +418,12 @@ def phase_custom(ev):
     # position (EqualizerController's -1500..1500 millibel range) instead of track
     # center: a drag starting off the thumb can be ignored by the slider.
     for _ in range(8):
-        if any(re.fullmatch(r'\d+(\.\d+)? (Hz|kHz)', n.get('text') or '') for n in tree().iter('node')):
+        if any(re.fullmatch(r'\d+(\.\d+)? (Hz|kHz)', n.get('text') or '') for n in app_nodes(tree())):
             break
         adb('shell', 'input', 'swipe', '540', '1500', '540', '900', '350')
         time.sleep(1.2)
     screen('eq_band_sliders')
-    slider = next((n for n in tree().iter('node') if n.get('content-desc') == 'Equalizer band 60 Hz'), None)
+    slider = next((n for n in app_nodes(tree()) if n.get('content-desc') == 'Equalizer band 60 Hz'), None)
     if slider is None:
         ev.append('EQ-CUSTOM-UNRESOLVED no accessible Equalizer band 60 Hz slider in the tree')
         raise Reported('custom gesture: no accessible slider, skipped')
