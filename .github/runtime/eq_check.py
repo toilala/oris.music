@@ -65,26 +65,38 @@ def open_playback_settings():
         NAV['recovery_used'] = True
         print('NAV recovery_used=true: app not foreground after verified resume', flush=True)
     # A resumed singleTop activity lands wherever it was left; walk back to a root
-    # tab before navigating down. Each decision uses ONE fresh dump: a visible Home
-    # tab label means a root page is already showing, so never press Back past it.
+    # page (the only pages without a Back affordance) before navigating down.
+    # 'Home' text is NOT a root indicator: sub-pages carry it (Home settings title,
+    # navigation-settings rows), so only Back-absence ends the walk. A press needs
+    # two consecutive fresh dumps both showing Back, so a mid-transition stale dump
+    # makes sending Back into a root page (which exits the app) much less likely.
     for _ in range(8):
-        root = tree()
-        texts = [(n.get('text') or '') for n in root.iter('node')]
-        if any(t == 'Home' for t in texts):
-            break
-        if not any('Back' in t for t in texts):
-            break
         fg = resumed_activity()
         if PKG not in fg:
-            # Left the app without our input. Preserve the evidence and stop.
-            print('NAV stop: foreground left the app between dumps: ' + fg.strip(), flush=True)
+            NAV['recovery_used'] = True
+            print('NAV stop: foreground left the app before any further back: ' + fg.strip(), flush=True)
             break
+        # Exact node semantics only: the back affordance is Text("Back") in a top-bar
+        # TextButton or an ArrowBack icon with contentDescription "Back" (DetailScreen).
+        # Substring matching would also catch copy like "Background playback".
+        first = list(tree().iter('node'))
+        if not any((n.get('text') or '') == 'Back' or (n.get('content-desc') or '') == 'Back'
+                   for n in first):
+            break
+        time.sleep(0.5)
+        second = list(tree().iter('node'))
+        if not any((n.get('text') or '') == 'Back' or (n.get('content-desc') or '') == 'Back'
+                   for n in second):
+            print('NAV stop: Back gone between confirming dumps (page transition)', flush=True)
+            break
+        fg = resumed_activity()
         print('NAV back before: ' + fg.strip(), flush=True)
         adb('shell', 'input', 'keyevent', '4')
         time.sleep(1)
         after = resumed_activity()
         print('NAV back after: ' + after.strip(), flush=True)
         if PKG not in after:
+            NAV['recovery_used'] = True
             print('NAV stop: that back press left the app: ' + after.strip(), flush=True)
             break
     wait_label('Home', seconds=60)
@@ -107,6 +119,17 @@ def scroll_to_eq():
 
 def has_text(fragment):
     return any(fragment in (n.get('text') or '') for n in tree().iter('node'))
+
+
+def safe_pidof(name):
+    """Evidence-only pidof: an adb hiccup or unexpected rc must never abort the
+    phase before the real launch is tested. pidof itself returns [] on rc=1 with
+    empty output (its own no-match contract); 'pidof-unavailable' means process
+    death was NOT verified, and cold-restart coverage from that record is unknown."""
+    try:
+        return repr(pidof(name))
+    except Exception as e:
+        return 'pidof-unavailable: ' + str(e)[:120]
 
 
 def dump_am_tail(ev):
@@ -402,7 +425,7 @@ def phase_restart(ev):
     intended = PRESET_VECTORS[PRESET_TARGET['name']]
     adb('shell', 'am', 'force-stop', PKG)
     time.sleep(1)
-    initial = 'pid=' + repr(pidof(PKG)) + ' foreground=' + resumed_activity().strip()
+    initial = 'pid=' + safe_pidof(PKG) + ' foreground=' + resumed_activity().strip()
     print('RESTART initial after force-stop: ' + initial, flush=True)
     ev.append('RESTART initial after force-stop: ' + initial)
     NAV['recovery_used'] = False
@@ -413,8 +436,9 @@ def phase_restart(ev):
         dump_am_tail(ev)
         raise
     if NAV['recovery_used']:
-        raise Reported('restart inconclusive: app left the foreground after a verified '
-                       'initial resume; no relaunch performed, evidence in stdout')
+        raise AssertionError('restart failed: the app left the foreground during '
+                             'root-safe navigation (NAV lines above); the initial cold '
+                             'restart is not accepted and no relaunch masked it')
     screen('eq_restart')
     prefs = read_prefs('eq-prefs-after-restart.xml')
     ev.append('PERSISTED after restart: ' + prefs.replace('\n', ' '))
