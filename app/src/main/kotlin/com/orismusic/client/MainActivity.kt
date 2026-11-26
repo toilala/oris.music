@@ -1,5 +1,6 @@
 package com.orismusic.client
 
+import com.orismusic.client.ui.theme.OrisMotion
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -63,7 +64,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.ui.screens.applyTo
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
@@ -214,14 +214,8 @@ class MainActivity : ComponentActivity() {
                 val tabState = rememberSaveableStateHolder()
                 val selectedTab = navigation.currentTab
                 val showPlayer = navigation.playerOpen
-                val library = com.orismusic.client.library.LibraryStore.get(this@MainActivity)
                 androidx.compose.runtime.LaunchedEffect(connection) {
                     com.orismusic.client.settings.PlaybackPreferences(this@MainActivity).applyTo(connection)
-                }
-                androidx.compose.runtime.LaunchedEffect(connection) {
-                    connection?.currentMetadata?.collect {
-                        connection.currentSavedSong()?.let { song -> library.recordPlay(song) }
-                    }
                 }
                 BackHandler(enabled = navigation.canGoBack) {
                     navigation = navigation.back()
@@ -259,13 +253,6 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
                                             connection = it,
                                             onExpand = { navigation = navigation.openPlayer() },
-                                            onOpenArtist = { id, name ->
-                                                openScope.launch {
-                                                    com.orismusic.client.ui.screens.openOrPlay(
-                                                        com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
-                                                    ) { detail = it; detailBack = null }
-                                                }
-                                            },
                                         )
                                     }
                                     FloatingNav(
@@ -287,8 +274,8 @@ class MainActivity : ComponentActivity() {
                             if (openDetail != null) lastDetail = openDetail
                             AnimatedVisibility(
                                 visible = openDetail != null,
-                                enter = androidx.compose.animation.slideInHorizontally(spring(1f, 300f)) { it / 6 } + fadeIn(androidx.compose.animation.core.tween(250)),
-                                exit = androidx.compose.animation.slideOutHorizontally(spring(1f, 300f)) { it / 6 } + fadeOut(androidx.compose.animation.core.tween(180)),
+                                enter = androidx.compose.animation.slideInHorizontally(OrisMotion.smooth()) { it / 6 } + fadeIn(OrisMotion.quick()),
+                                exit = androidx.compose.animation.slideOutHorizontally(OrisMotion.smooth()) { it / 6 } + fadeOut(OrisMotion.micro()),
                             ) {
                                 lastDetail?.let { d ->
                                 com.orismusic.client.ui.screens.DetailScreen(
@@ -296,7 +283,7 @@ class MainActivity : ComponentActivity() {
                                     connection = connection,
                                     onBack = { detail = detailBack; detailBack = null },
                                     onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = d; detail = it } } },
-                                    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = innerPadding.calculateTopPadding()),
+                                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
                                 )
                                 }
                             }
@@ -304,9 +291,9 @@ class MainActivity : ComponentActivity() {
                             androidx.compose.animation.AnimatedContent(
                                 targetState = selectedTab,
                                 transitionSpec = {
-                                    (fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60)) +
-                                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(260, delayMillis = 60), initialScale = 0.97f))
-                                        .togetherWith(fadeOut(androidx.compose.animation.core.tween(120)))
+                                    (fadeIn(OrisMotion.quick(delayMillis = 60)) +
+                                        androidx.compose.animation.scaleIn(OrisMotion.quick(delayMillis = 60), initialScale = 0.97f))
+                                        .togetherWith(fadeOut(OrisMotion.micro()))
                                 },
                                 label = "tabs",
                             ) { tabIndex ->
@@ -325,8 +312,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenPlayer = { navigation = navigation.openPlayer() },
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .statusBarsPadding()
-                                        .padding(top = innerPadding.calculateTopPadding()),
+                                        .statusBarsPadding(),
                                     connection = connection,
                                 )
                                 MainTab.Search -> SearchScreen(
@@ -334,8 +320,7 @@ class MainActivity : ComponentActivity() {
                                     onOpen = { t -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(t, connection) { detail = it; detailBack = null } } },
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .statusBarsPadding()
-                                        .padding(top = innerPadding.calculateTopPadding()),
+                                        .statusBarsPadding(),
                                 )
                                 MainTab.Library -> com.orismusic.client.ui.screens.LibraryScreen(
                                     connection = connection,
@@ -343,8 +328,7 @@ class MainActivity : ComponentActivity() {
                                     onSettings = { settingsOpen = true },
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .statusBarsPadding()
-                                        .padding(top = innerPadding.calculateTopPadding()),
+                                        .statusBarsPadding(),
                                 )
                             }
                             }
@@ -369,13 +353,13 @@ class MainActivity : ComponentActivity() {
                         // settles without bouncing, the way the reference players move.
                         AnimatedVisibility(
                             visible = showPlayer && connection != null,
-                            enter = slideInVertically(animationSpec = spring(dampingRatio = 1f, stiffness = 195f), initialOffsetY = { it * 2 / 3 }) +
-                                fadeIn(androidx.compose.animation.core.tween(220)) +
-                                androidx.compose.animation.scaleIn(spring(1f, 195f), initialScale = 0.9f,
+                            enter = slideInVertically(animationSpec = OrisMotion.pop(), initialOffsetY = { it * 2 / 3 }) +
+                                fadeIn(OrisMotion.quick()) +
+                                androidx.compose.animation.scaleIn(OrisMotion.pop(), initialScale = 0.9f,
                                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
-                            exit = slideOutVertically(animationSpec = spring(1f, 195f), targetOffsetY = { it * 2 / 3 }) +
-                                fadeOut(androidx.compose.animation.core.tween(220)) +
-                                androidx.compose.animation.scaleOut(spring(1f, 195f), targetScale = 0.9f,
+                            exit = slideOutVertically(animationSpec = OrisMotion.pop(), targetOffsetY = { it * 2 / 3 }) +
+                                fadeOut(OrisMotion.quick()) +
+                                androidx.compose.animation.scaleOut(OrisMotion.pop(), targetScale = 0.9f,
                                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
                         ) {
                             connection?.let {
@@ -395,12 +379,12 @@ class MainActivity : ComponentActivity() {
                                                         // Carry the release's speed into the close so a flick keeps moving.
                                                         val v = (dragDeltas.average() * 60).toFloat()
                                                         if (playerDrag.value > 220f || v > 900f) {
-                                                            playerDrag.animateTo(size.height.toFloat(), spring(1f, 195f), initialVelocity = v.coerceIn(0f, 8000f))
+                                                            playerDrag.animateTo(size.height.toFloat(), OrisMotion.pop(), initialVelocity = v.coerceIn(0f, 8000f))
                                                             navigation = navigation.closePlayer()
-                                                        } else playerDrag.animateTo(0f, spring(1f, 400f), initialVelocity = v.coerceIn(-4000f, 4000f))
+                                                        } else playerDrag.animateTo(0f, OrisMotion.smooth(), initialVelocity = v.coerceIn(-4000f, 4000f))
                                                     }
                                                 },
-                                                onDragCancel = { dragScope.launch { playerDrag.animateTo(0f, spring(1f, 400f)) } },
+                                                onDragCancel = { dragScope.launch { playerDrag.animateTo(0f, OrisMotion.smooth()) } },
                                                 onVerticalDrag = { change, amount ->
                                                     change.consume()
                                                     dragDeltas[dragDeltaIx % 4] = amount
@@ -513,7 +497,7 @@ private fun NavItem(
 ) {
     val fill by androidx.compose.animation.animateColorAsState(
         if (selected) MaterialTheme.colorScheme.tertiary else androidx.compose.ui.graphics.Color.Transparent,
-        androidx.compose.animation.core.tween(260), label = "nav fill",
+        OrisMotion.quick(), label = "nav fill",
     )
     val tint = if (selected) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant
     val expanded = selected && showLabel
@@ -528,8 +512,8 @@ private fun NavItem(
         Icon(icon, contentDescription = if (expanded) null else tab.label, tint = tint)
         androidx.compose.animation.AnimatedVisibility(
             visible = expanded,
-            enter = androidx.compose.animation.expandHorizontally(androidx.compose.animation.core.spring(0.8f, 380f)) + fadeIn(),
-            exit = androidx.compose.animation.shrinkHorizontally(androidx.compose.animation.core.spring(0.8f, 380f)) + fadeOut(),
+            enter = androidx.compose.animation.expandHorizontally(OrisMotion.soft()) + fadeIn(),
+            exit = androidx.compose.animation.shrinkHorizontally(OrisMotion.soft()) + fadeOut(),
         ) {
             Text(tab.label, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1,
                 modifier = Modifier.padding(start = 8.dp))

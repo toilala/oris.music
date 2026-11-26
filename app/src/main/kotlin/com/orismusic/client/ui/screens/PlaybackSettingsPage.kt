@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import com.orismusic.client.settings.PlaybackPreferences
@@ -171,9 +175,104 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                     }
                 }
             }
+            val eq by com.orismusic.client.playback.EqualizerController.state.collectAsState()
+            if (!eq.available) {
+                Column {
+                    Text("Equalizer", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        when (eq.unavailableReason) {
+                            com.orismusic.client.playback.EqUnavailable.NoSession ->
+                                "No audio session for it to work on right now."
+                            com.orismusic.client.playback.EqUnavailable.InitFailed ->
+                                "Could not start the equalizer on this output."
+                            null -> "Unavailable right now."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                ToggleRow(
+                    "Equalizer",
+                    // Stale means the shown values are the last verified ones and the
+                    // platform could not be read back: never presented as confirmed.
+                    if (eq.stale) "Unknown: the equalizer state could not be confirmed on this output."
+                    else if (eq.enabled) "On: shaping the sound of the current output."
+                    else "Off: sound passes through unchanged.",
+                    eq.enabled,
+                ) { com.orismusic.client.playback.EqualizerController.setEnabled(it) }
+                if (eq.enabled) {
+                    val activePreset = com.orismusic.client.playback.eqPresetNameFor(
+                        com.orismusic.client.playback.EqualizerController.presets,
+                        eq.levels, eq.minLevel, eq.maxLevel,
+                    )
+                    // The active preset as one accessible state line: a single unambiguous
+                    // anchor for the current mix, beyond each chip's own selected state.
+                    Column(
+                        Modifier.semantics {
+                            contentDescription = "Active preset: " + (activePreset ?: "Custom")
+                            stateDescription = "Active preset: " + (activePreset ?: "Custom")
+                        },
+                    ) {
+                        Text("Presets", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            com.orismusic.client.playback.EqualizerController.presets.forEach { (name, shape) ->
+                                FilterChip(
+                                    selected = activePreset == name,
+                                    onClick = { com.orismusic.client.playback.EqualizerController.applyPreset(shape) },
+                                    label = { Text(name) },
+                                )
+                            }
+                            if (activePreset == null) {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { },
+                                    label = { Text("Custom") },
+                                )
+                            }
+                        }
+                    }
+                    eq.levels.forEachIndexed { band, level ->
+                        Column {
+                            Text(
+                                eqBandLabel(eq.centerHz.getOrNull(band) ?: 0),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            androidx.compose.material3.Slider(
+                                value = level.toFloat(),
+                                onValueChange = { com.orismusic.client.playback.EqualizerController.setLevel(band, it.toInt()) },
+                                valueRange = eq.minLevel.toFloat()..eq.maxLevel.toFloat(),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Equalizer band ${eqBandLabel(eq.centerHz.getOrNull(band) ?: 0)}"
+                                    stateDescription = eqLevelDescription(level)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+private fun eqBandLabel(centerHz: Int): String =
+    if (centerHz < 1000) "$centerHz Hz"
+    else if (centerHz % 1000 == 0) "${centerHz / 1000} kHz"
+    else "${centerHz / 1000f} kHz"
+
+/** Spoken slider value: platform levels are millibels, people hear decibels. */
+private fun eqLevelDescription(levelMb: Int): String {
+    val db = levelMb / 100.0
+    val text = if (db == db.toLong().toDouble()) "${db.toLong()}"
+    else java.lang.String.format(java.util.Locale.US, "%.1f", db)
+    return (if (db > 0) "+$text" else text) + " decibels"
 }
 
 /** Best-effort path to the phone's battery allowlist: the standard battery-optimization

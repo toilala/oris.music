@@ -22,6 +22,8 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.CancellationException
 import com.metrolist.innertubex.extraction.StreamResolveException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import timber.log.Timber
 
 object YTPlayerUtils {
@@ -99,8 +101,13 @@ object YTPlayerUtils {
     }
 
     /** Fresh resolutions, kept briefly so retries and the next song cost no network. */
-    private val resolved = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, PlaybackData>>()
+    internal val resolved = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, PlaybackData>>()
     private const val RESOLVED_TTL_MS = 10 * 60 * 1000L
+
+    /** Hard bound on one resolve attempt, so failure feedback reaches the user in seconds
+     *  even when the OS still shows a network but packets go nowhere. */
+    // Var (not const) so unit tests can shrink it; production leaves the default.
+    internal var resolveTimeoutMs = 30_000L
 
     /** Forget a resolved stream, for example after it failed to play. */
     fun evict(videoId: String) {
@@ -142,6 +149,17 @@ object YTPlayerUtils {
         data
     }
 
+    // Test seams. Production never overrides these; unit tests use them to drive
+    // failure paths deterministically without a network.
+    internal var networkOnline: (android.content.Context) -> Boolean = { ctx ->
+        val cm = ctx.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val active = cm.activeNetwork
+        active != null &&
+            cm.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }
+    internal var resolveStage: suspend (String, Int, Boolean, Int) -> PlaybackData =
+        { v, k, q, a -> resolveInner(v, k, q, a) }
+
     private suspend fun resolveFresh(
         videoId: String,
         maxKbps: Int,
@@ -149,22 +167,56 @@ object YTPlayerUtils {
         quiet: Boolean,
     ): PlaybackData = withContext(IO) {
         if (!quiet) PlaybackDiagnostic.report("Resolving selected song anonymously...")
-        Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps)")
+        val attempt = PlaybackDiagnostic.beginResolveAttempt(videoId)
+        Timber.tag(TAG).d("Resolving stream for $videoId (maxKbps=$maxKbps, attempt=r$attempt)")
+        // Fail fast when the OS reports no network at all. OS state can only prove
+        // absence, never reachability, so this only short-circuits doomed attempts.
+        if (!networkOnline(context)) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no network (OS)")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. NETWORK")
+            throw IOException("Cannot resolve $videoId: no network")
+        }
+        try {
+            return@withContext withTimeout(resolveTimeoutMs) {
+                resolveStage(videoId, maxKbps, quiet, attempt)
+            }
+        } catch (timeout: TimeoutCancellationException) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: timed out after ${resolveTimeoutMs / 1000}s")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. TIMED OUT")
+            throw IOException("Cannot resolve $videoId: timed out", timeout)
+        }
+    }
+
+    private suspend fun resolveInner(
+        videoId: String,
+        maxKbps: Int,
+        quiet: Boolean,
+        attempt: Int,
+    ): PlaybackData {
         try {
             directAnonymous(videoId, maxKbps)?.let {
+                PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok VISIONOS-direct")
                 if (!quiet) PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
-                return@withContext it
+                return it
             }
         } catch (refused: GuestAccessRefused) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "refused")
             if (!quiet) PlaybackDiagnostic.reportFailure(refused.message.orEmpty())
             throw refused
         }
         val extracted = try {
             InnerTubeXResolver.extract(videoId = videoId, maxKbps = maxKbps)
-                ?: throw IOException("No playable stream found for $videoId")
+                ?: run {
+                    PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no playable stream")
+                    throw IOException("No playable stream found for $videoId")
+                }
         } catch (cancelled: CancellationException) {
+            if (cancelled !is TimeoutCancellationException) {
+                PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "cancelled")
+            }
             throw cancelled
         } catch (failure: StreamResolveException) {
+            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: ${failure.reason}")
             if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. ${failure.reason}")
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
@@ -176,9 +228,10 @@ object YTPlayerUtils {
             // network/extraction failure, not an unexpected runtime exception.
             throw IOException("Cannot resolve $videoId: ${failure.reason}", failure)
         }
+        PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok ${extracted.clientName}")
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")
         if (!quiet) PlaybackDiagnostic.report("Stream resolved through ${extracted.clientName}. Listen and check that playback time advances.")
-        PlaybackData(
+        return PlaybackData(
             streamUrl = extracted.url,
             cacheKey = videoId,
             mimeType = extracted.mimeType.substringBefore(';').ifBlank { "audio/mp4" },
