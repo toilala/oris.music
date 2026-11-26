@@ -37,7 +37,7 @@ print('SUITE IDENTITY: this run boots a fresh emulator; nothing persists across 
 adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
 
 failures = []
-for check in ['eq_check.py', 'large_text_check.py', 'reduced_motion_check.py', 'skip_guard_check.py', 'inset_check.py', 'terminal_stop_check.py', 'library_filter_check.py', 'motion_record.py']:
+for check in ['eq_check.py', 'large_text_check.py', 'reduced_motion_check.py', 'skip_guard_check.py', 'inset_check.py', 'terminal_stop_check.py', 'library_filter_check.py', 'history_check.py', 'motion_record.py']:
     result = subprocess.run(['python3', '.github/runtime/' + check])
     if result.returncode:
         failures.append(check)
@@ -50,4 +50,4 @@ print('NETWORK-DISABLED: still no connected network after the checks', flush=Tru
 
 if failures:
     raise AssertionError('Network-disabled checks failed: ' + ', '.join(failures))
-print('PASS: network-disabled subset (equalizer, large text, reduced motion, skip guard, inset captures, terminal stop, motion recordings)', flush=True)
+print('PASS: network-disabled subset (equalizer, large text, reduced motion, skip guard, inset captures, terminal stop, library filter, history recording, motion recordings)', flush=True)

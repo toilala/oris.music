@@ -15,7 +15,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from playback_check import adb, tap, wait_label, screen, tree, PKG, OUT
-from eq_verdict import classify_preset
+from eq_verdict import classify_preset, parse_prefs, PRESET_VECTORS
 
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
 MAIN = PKG + '/com.orismusic.client.MainActivity'
@@ -174,6 +174,10 @@ def oris_log(name):
 
 PHASES = []
 
+# Set by phase_preset so the restart and off phases can assert the exact
+# persisted intent vector written by that tap.
+PRESET_TARGET = {'name': None}
+
 
 def phase(name):
     def deco(fn):
@@ -255,6 +259,7 @@ def phase_preset(ev):
     ev.append('EQ-INITIAL preset=' + repr(current_name) + ' (persisted state)')
     target = 'Flat' if current_name == 'Bass boost' else 'Bass boost'
     ev.append('EQ-TARGET ' + target + ' (differs from current ' + repr(current_name) + ')')
+    PRESET_TARGET['name'] = target
     adb('shell', 'logcat', '-c')
     tap_clickable(target)
     prefs = ''
@@ -346,6 +351,31 @@ def phase_playback(ev):
     ev.append('verified On during playback (app read-back, not intent)')
 
 
+@phase('restart')
+def phase_restart(ev):
+    # 6. Cold restart: the persisted INTENT vector must survive force-stop + cold start
+    # exactly. The state line after restart is the app's own platform read-back,
+    # captured as scoped observation; a platform clamp is reported, never scripted.
+    if PRESET_TARGET['name'] is None:
+        raise Reported('restart: no preset target recorded by the preset phase')
+    intended = PRESET_VECTORS[PRESET_TARGET['name']]
+    adb('shell', 'am', 'force-stop', PKG)
+    time.sleep(1)
+    open_playback_settings()
+    scroll_to_eq()
+    screen('eq_restart')
+    prefs = read_prefs('eq-prefs-after-restart.xml')
+    ev.append('PERSISTED after restart: ' + prefs.replace('\n', ' '))
+    enabled, levels = parse_prefs(prefs)
+    assert levels == intended, ('persisted intent after cold restart ' + repr(levels)
+                                + ' != vector written before restart ' + repr(intended))
+    ev.append('intent vector exact after cold restart: ' + repr(levels))
+    line = state_line()
+    ev.append('STATE LINE after restart: ' + repr(line))
+    assert line is not None and not line.startswith('Unknown'), \
+        'app reported unconfirmed equalizer state after restart'
+
+
 @phase('off')
 def phase_off(ev):
     # 6. Toggle-off: independently prerequisite-established, so it records platform-read
@@ -374,6 +404,28 @@ def phase_off(ev):
         ev.append('PERSISTED final: ' + prefs.replace('\n', ' '))
     assert 'enabled' in prefs and 'false' in prefs, 'equalizer off state was not persisted'
     ev.append('prefs enabled=false persisted')
+    # Off/On must never touch the band-level intent: the vector stays exact through an
+    # Off, an On, and a final Off, each persisted and read back from disk.
+    if PRESET_TARGET['name'] is not None:
+        intended = PRESET_VECTORS[PRESET_TARGET['name']]
+        _, levels = parse_prefs(prefs)
+        assert levels == intended, 'toggle-off rewrote the intent vector: ' + repr(levels)
+        ev.append('intent vector intact after Off: ' + repr(levels))
+        tap_clickable('Equalizer')
+        wait_label(ON_COPY)
+        assert not has_text(UNKNOWN_COPY), 'unconfirmed state re-enabling after off phase'
+        en, levels = parse_prefs(read_prefs('eq-prefs-reenabled.xml'))
+        assert en is True and levels == intended, \
+            're-enable did not persist enabled=true with the intent vector intact: ' + repr((en, levels))
+        ev.append('On persisted enabled=true, vector intact')
+        tap_clickable('Equalizer')
+        wait_label(OFF_COPY)
+        assert not has_text(UNKNOWN_COPY), 'unconfirmed state after final toggle-off'
+        screen('eq_final_off')
+        en, levels = parse_prefs(read_prefs('eq-prefs-off-final.xml'))
+        assert en is False and levels == intended, \
+            'final Off did not persist enabled=false with the intent vector intact: ' + repr((en, levels))
+        ev.append('final Off persisted enabled=false, vector intact')
 
 
 adb('wait-for-device')
