@@ -1,9 +1,12 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,12 +21,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
@@ -60,6 +68,14 @@ import coil3.compose.AsyncImage
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.PlaylistStore
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.ImportPreview
+import com.orismusic.client.library.ListeningStats
+import com.orismusic.client.library.isUnmatchedImport
+import com.orismusic.client.library.matchedForPlayback
+import com.orismusic.client.library.listeningStats
+import com.orismusic.client.library.matching
+import com.orismusic.client.library.parsePlaylistImport
+import com.orismusic.client.library.toSavedSong
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.OfflineAudio
 import com.orismusic.client.playback.PlayerConnection
@@ -79,13 +95,25 @@ fun LibraryScreen(
     val appContext = LocalContext.current
     remember { OfflineAudio.load(appContext) }
     val saved by OfflineAudio.downloaded.collectAsState()
+    val offlineBusy by OfflineAudio.inProgress.collectAsState()
+    val offlineFailed by OfflineAudio.failed.collectAsState()
+    val offlineStatus by OfflineAudio.status.collectAsState()
     val playlistStore = PlaylistStore.get(LocalContext.current)
     val playlists by playlistStore.playlists.collectAsState()
+    val playCounts by store.playCounts.collectAsState()
     var section by rememberSaveable { mutableIntStateOf(0) }
+    var showStats by rememberSaveable { mutableStateOf(false) }
     var openPlaylist by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var importing by remember { mutableStateOf(false) }
+    var importText by rememberSaveable { mutableStateOf("") }
+    var importName by rememberSaveable { mutableStateOf("") }
+    var importPreview by remember { mutableStateOf<ImportPreview?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    BackHandler(enabled = showStats) { showStats = false }
     val opened = playlists.firstOrNull { it.id == openPlaylist }
+    val stats = listeningStats(playCounts, history + liked + saved + playlists.flatMap { it.songs })
     val songs = when {
         section == 0 -> liked
         section == 1 -> history
@@ -128,6 +156,60 @@ fun LibraryScreen(
             dismissButton = { TextButton(onClick = { creating = false; newName = "" }) { Text("Cancel") } },
         )
     }
+
+    if (importing) {
+        AlertDialog(
+            onDismissRequest = { importing = false },
+            title = { Text("Import playlist") },
+            text = {
+                Column {
+                    OutlinedTextField(value = importName, onValueChange = { importName = it },
+                        singleLine = true, label = { Text("Name") })
+                    OutlinedTextField(
+                        value = importText,
+                        onValueChange = { importText = it; importPreview = null },
+                        label = { Text("Songs as Title - Artist, one per line, or a CSV export") },
+                        minLines = 4,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    importPreview?.let { p ->
+                        val playableCount = p.songs.count { it.videoId != null }
+                        val metaCount = p.songs.size - playableCount
+                        val summary = mutableListOf<String>()
+                        summary += "${p.songs.size} ${if (p.songs.size == 1) "entry" else "entries"} ready to import" +
+                            (if (p.duplicates > 0) ", ${p.duplicates} ${if (p.duplicates == 1) "duplicate" else "duplicates"} collapsed" else "") +
+                            (if (p.skipped.isNotEmpty()) ", ${p.skipped.size} ${if (p.skipped.size == 1) "line" else "lines"} couldn't be read" else "")
+                        if (playableCount > 0) summary += "$playableCount ${if (playableCount == 1) "entry has" else "entries have"} a video id; playback depends on availability"
+                        if (metaCount > 0) summary += "$metaCount ${if (metaCount == 1) "entry is" else "entries are"} metadata only: listed in the playlist, but the app can't match ${if (metaCount == 1) "it" else "them"} to playable audio, so ${if (metaCount == 1) "it" else "they"} can't play"
+                        Text(
+                            text = p.unsupportedReason ?: (summary.joinToString(". ") + "."),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (p.unsupportedReason != null) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val p = importPreview
+                if (p == null) {
+                    TextButton(onClick = { importPreview = parsePlaylistImport(importText) }) { Text("Preview") }
+                } else {
+                    TextButton(
+                        onClick = {
+                            val id = playlistStore.create(importName.ifBlank { "Imported playlist" })
+                            p.songs.forEach { playlistStore.add(id, it.toSavedSong()) }
+                            importing = false; importText = ""; importName = ""; importPreview = null
+                            section = 2; openPlaylist = id
+                        },
+                        enabled = p.songs.isNotEmpty(),
+                    ) { Text("Import") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { importing = false }) { Text("Cancel") } },
+        )
+    }
     Column(modifier = modifier) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -135,6 +217,14 @@ fun LibraryScreen(
                 style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = { showStats = !showStats }) {
+                Icon(
+                    Icons.Rounded.Insights,
+                    contentDescription = "Listening stats",
+                    tint = if (showStats) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = onQueue) {
                 Icon(Icons.Rounded.QueueMusic, contentDescription = "Queue")
             }
@@ -142,6 +232,15 @@ fun LibraryScreen(
                 Icon(Icons.Rounded.Settings, contentDescription = "Settings")
             }
         }
+        if (showStats) {
+            TextButton(onClick = { showStats = false }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null,
+                    modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Back to Library")
+            }
+            StatsContent(stats)
+        } else {
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -155,9 +254,21 @@ fun LibraryScreen(
             FilterChip(selected = section == 3, onClick = { section = 3 },
                 label = { Text("Saved (${saved.size})") })
         }
+        if (songs.isNotEmpty() && (section != 2 || opened != null)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                label = { Text("Filter this list") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
         if (section == 2 && opened == null) {
-            TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Text("New playlist")
+            Row {
+                TextButton(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text("New playlist")
+                }
+                TextButton(onClick = { importing = true }) { Text("Import playlist") }
             }
             if (playlists.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -200,9 +311,15 @@ fun LibraryScreen(
             }
             Text(opened.name, style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val shown = songs.matching(query)
+            val playable = shown.matchedForPlayback()
             if (songs.isEmpty()) {
                 Text("Nothing here yet. Open a song's player and add it to this playlist.",
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp))
+            } else if (shown.isEmpty()) {
+                Text("No matches.", style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp))
             } else {
@@ -210,21 +327,31 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Button(onClick = { play(songs, 0) }, enabled = connection != null) {
+                    Button(onClick = { play(playable, 0) }, enabled = connection != null && playable.isNotEmpty()) {
                         Icon(Icons.Filled.PlayArrow, null)
                         Spacer(Modifier.width(6.dp))
                         Text("Play")
                     }
-                    OutlinedButton(onClick = { play(songs, 0, shuffle = true) }, enabled = connection != null) {
+                    OutlinedButton(onClick = { play(playable, 0, shuffle = true) }, enabled = connection != null && playable.isNotEmpty()) {
                         Icon(Icons.Filled.Shuffle, null)
                         Spacer(Modifier.width(6.dp))
                         Text("Shuffle")
                     }
                 }
+                if (playable.size < shown.size) {
+                    Text(
+                        "Play and Shuffle skip the ${shown.size - playable.size} metadata-only ${if (shown.size - playable.size == 1) "entry" else "entries"}; ${if (shown.size - playable.size == 1) "it" else "they"} can't play.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
                 LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
-                    itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                    itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->
+                        val playableIndex = playable.indexOfFirst { it.id == song.id }
                         Row(
-                            modifier = Modifier.fillMaxWidth().entrance(index).clickable { play(songs, index) }
+                            modifier = Modifier.fillMaxWidth().entrance(index)
+                                .clickable(enabled = playableIndex >= 0) { play(playable, playableIndex) }
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -239,7 +366,11 @@ fun LibraryScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
-                                Text(song.artist, style = MaterialTheme.typography.bodyMedium,
+                                Text(
+                                    if (song.isUnmatchedImport())
+                                        listOf(song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" · ")
+                                    else song.artist,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis)
                             }
@@ -264,8 +395,19 @@ fun LibraryScreen(
                 )
             }
         } else {
+            val shown = songs.matching(query)
+            val playable = shown.matchedForPlayback()
+            if (shown.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No matches.", style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(32.dp))
+                }
+                return@Column
+            }
             Text(
-                text = "$title  \u00b7  ${songs.size} ${if (songs.size == 1) "song" else "songs"}",
+                text = if (query.isBlank()) "$title  \u00b7  ${songs.size} ${if (songs.size == 1) "song" else "songs"}"
+                    else "$title  \u00b7  ${shown.size} of ${songs.size} ${if (songs.size == 1) "song" else "songs"}",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
@@ -275,12 +417,12 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(onClick = { play(songs, 0) }, enabled = connection != null) {
+                Button(onClick = { play(playable, 0) }, enabled = connection != null && playable.isNotEmpty()) {
                     Icon(Icons.Filled.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Play")
                 }
-                OutlinedButton(onClick = { play(songs, 0, shuffle = true) }, enabled = connection != null) {
+                OutlinedButton(onClick = { play(playable, 0, shuffle = true) }, enabled = connection != null && playable.isNotEmpty()) {
                     Icon(Icons.Filled.Shuffle, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Shuffle")
@@ -289,17 +431,100 @@ fun LibraryScreen(
                 if (section == 1) TextButton(onClick = { store.clearHistory() }) { Text("Clear") }
             }
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
-                itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                itemsIndexed(shown, key = { _, song -> song.id }) { index, song ->
                     Box(Modifier.entrance(index)) {
+                    val playableIndex = playable.indexOfFirst { it.id == song.id }
                     SavedSongRow(
                         song = song,
                         liked = liked.any { it.id == song.id },
-                        onClick = { play(songs, index) },
+                        onClick = { if (playableIndex >= 0) play(playable, playableIndex) },
                         onToggleLike = { store.toggleLike(song) },
                         playlists = playlists.map { it.id to it.name },
                         onAddToPlaylist = { id -> playlistStore.add(id, song) },
+                        offline = com.orismusic.client.playback.offlineRowStatus(
+                            song.id, saved.any { it.id == song.id }, offlineBusy, offlineFailed, offlineStatus),
+                        onSaveOffline = { OfflineAudio.download(appContext, song) },
+                        onCancelOffline = { OfflineAudio.cancel(appContext, song.id) },
+                        onRemoveOffline = { OfflineAudio.remove(appContext, song.id) },
                     )
                     }
+                }
+            }
+        }
+        }
+    }
+}
+
+/** Recorded listening totals and rankings, kept on the phone. */
+@Composable
+private fun StatsContent(stats: ListeningStats) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 4.dp)
+            .padding(com.orismusic.client.ui.bottomInsetPadding()),
+    ) {
+        Text("Listening stats", style = MaterialTheme.typography.titleLarge)
+        if (stats.totalStarts == 0) {
+            Text(
+                "Play some songs and your counts will show up here.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            return@Column
+        }
+        Text(
+            "${stats.totalStarts} recorded starts · ${stats.countedSongs} ${if (stats.countedSongs == 1) "song" else "songs"}",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        val unnamed = stats.countedSongs - stats.namedSongs
+        Text(
+            "A start is counted each time a song began playing; back to back repeats of the same song count once. Recording began with the version that added counting, and clearing the library history resets it, so this is what this phone has recorded since then, not an all time history." +
+                if (unnamed > 0) " $unnamed counted ${if (unnamed == 1) "song no longer has" else "songs no longer have"} details here, so ${if (unnamed == 1) "it adds" else "they add"} to the totals but cannot appear below." else "",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (stats.topSongs.isNotEmpty()) {
+            Text("Top songs", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+            stats.topSongs.forEachIndexed { i, sp ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("${i + 1}", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(24.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(sp.song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                        Text(sp.song.artist, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        if (sp.starts == 1) "1 start" else "${sp.starts} starts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (stats.topArtists.isNotEmpty()) {
+            Text("Top artists", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+            stats.topArtists.forEachIndexed { i, ap ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("${i + 1}", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(24.dp))
+                    Text(ap.artist, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(
+                        if (ap.starts == 1) "1 start" else "${ap.starts} starts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -314,15 +539,67 @@ private fun SavedSongRow(
     onToggleLike: () -> Unit,
     playlists: List<Pair<String, String>> = emptyList(),
     onAddToPlaylist: (String) -> Unit = {},
+    offline: com.orismusic.client.playback.OfflineStatus? = null,
+    onSaveOffline: () -> Unit = {},
+    onCancelOffline: () -> Unit = {},
+    onRemoveOffline: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
-    SongRow(title = song.title, subtitle = song.artist, thumbnail = song.thumbnail, onClick = onClick) {
+    val unmatched = song.isUnmatchedImport()
+    SongRow(title = song.title,
+        subtitle = if (unmatched) listOf(song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" \u00b7 ") else song.artist,
+        thumbnail = song.thumbnail, onClick = onClick) {
+        when (offline) {
+            com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
+                androidx.compose.material3.CircularProgressIndicator(
+                    Modifier.size(18.dp), strokeWidth = 2.dp)
+            com.orismusic.client.playback.OfflineStatus.FAILED ->
+                Icon(Icons.Filled.Close, contentDescription = "Offline download failed",
+                    tint = MaterialTheme.colorScheme.error)
+            com.orismusic.client.playback.OfflineStatus.READY ->
+                Icon(Icons.Filled.Check, contentDescription = "Saved for offline",
+                    tint = MaterialTheme.colorScheme.primary)
+            com.orismusic.client.playback.OfflineStatus.PARTIAL ->
+                Icon(Icons.Filled.Warning, contentDescription = "Only partly saved for offline",
+                    tint = MaterialTheme.colorScheme.outline)
+            com.orismusic.client.playback.OfflineStatus.UNKNOWN ->
+                Icon(Icons.Filled.Info, contentDescription = "Offline copy not verified yet",
+                    tint = MaterialTheme.colorScheme.outline)
+            null -> Unit
+        }
         Box {
             IconButton(onClick = { menu = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "Add to playlist",
                     tint = MaterialTheme.colorScheme.outline)
             }
             androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (!unmatched) when (offline) {
+                    com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Cancel download") },
+                            onClick = { onCancelOffline(); menu = false })
+                    com.orismusic.client.playback.OfflineStatus.FAILED ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Retry download") },
+                            onClick = { onSaveOffline(); menu = false })
+                    com.orismusic.client.playback.OfflineStatus.READY ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Remove from offline") },
+                            onClick = { onRemoveOffline(); menu = false })
+                    com.orismusic.client.playback.OfflineStatus.PARTIAL,
+                    com.orismusic.client.playback.OfflineStatus.UNKNOWN -> {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Retry download") },
+                            onClick = { onSaveOffline(); menu = false })
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Remove from offline") },
+                            onClick = { onRemoveOffline(); menu = false })
+                    }
+                    null ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Save for offline") },
+                            onClick = { onSaveOffline(); menu = false })
+                }
                 if (playlists.isEmpty()) {
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text("Make a playlist first") }, onClick = { menu = false })
@@ -337,7 +614,7 @@ private fun SavedSongRow(
         }
         val heart by androidx.compose.animation.core.animateFloatAsState(
             targetValue = if (liked) 1.15f else 1f,
-            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.35f, stiffness = 400f),
+            animationSpec = OrisMotion.press(),
             label = "heart",
         )
         IconButton(onClick = onToggleLike) {

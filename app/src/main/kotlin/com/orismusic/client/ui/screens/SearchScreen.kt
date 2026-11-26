@@ -1,5 +1,16 @@
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
+import com.orismusic.client.library.LibraryStore
+import com.orismusic.client.library.PlaylistStore
+import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.isUnmatchedImport
+import com.orismusic.client.library.matchedForPlayback
+import com.orismusic.client.library.localLibrarySearch
+import com.orismusic.client.library.toPlayableItem
+import com.orismusic.client.playback.OfflineAudio
+import com.orismusic.client.playback.OfflineStatus
+import com.orismusic.client.playback.queues.ListQueue
 import android.content.Context
 import org.json.JSONArray
 import androidx.compose.animation.core.animateFloat
@@ -112,6 +123,9 @@ object SearchRequest {
  * top-result card, song rows with a playing marker, and entrance motion. The look
  * follows Metrolist/OuterTune conventions (filters, grouped summary) in genuine Oris code.
  */
+/** The two search modes: the on-device library, or the online catalog. */
+private enum class SearchMode(val label: String) { Library("Library"), Online("Online") }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
@@ -122,10 +136,28 @@ fun SearchScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var submittedQuery by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableStateOf(SearchTab.All) }
+    var mode by rememberSaveable { mutableStateOf(SearchMode.Online) }
     val scope = rememberCoroutineScope()
     val preferences = LocalContext.current.getSharedPreferences("oris-search", Context.MODE_PRIVATE)
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
+    val appContext = LocalContext.current
+    val libraryStore = remember { LibraryStore.get(appContext) }
+    val playlistStore = remember { PlaylistStore.get(appContext) }
+    remember { OfflineAudio.load(appContext) }
+    val liked by libraryStore.liked.collectAsState()
+    val history by libraryStore.history.collectAsState()
+    val userPlaylists by playlistStore.playlists.collectAsState()
+    val savedOffline by OfflineAudio.downloaded.collectAsState()
+    val offlineStatus by OfflineAudio.status.collectAsState()
+    // The badge follows validated cache coverage, never mere membership in the saves list.
+    val readyOffline = remember(savedOffline, offlineStatus) {
+        savedOffline.mapNotNull { s -> s.id.takeIf { offlineStatus[it] == OfflineStatus.READY } }.toSet()
+    }
+    // Library mode derives results straight from the query, so edits and clears can never go stale.
+    val localResults = remember(query, mode, liked, history, userPlaylists, savedOffline, readyOffline) {
+        if (mode == SearchMode.Library) localLibrarySearch(query, liked, history, userPlaylists, savedOffline, readyOffline) else emptyList()
+    }
     var recent by remember {
         mutableStateOf(runCatching {
             val values = JSONArray(preferences.getString("recent", "[]"))
@@ -155,8 +187,9 @@ fun SearchScreen(
         focus.clearFocus()
     }
 
-    LaunchedEffect(query) {
+    LaunchedEffect(query, mode) {
         suggestions = emptyList()
+        if (mode != SearchMode.Online) return@LaunchedEffect
         val clean = query.trim()
         if (clean.length < 2 || clean == submittedQuery) return@LaunchedEffect
         delay(320)
@@ -174,8 +207,8 @@ fun SearchScreen(
         if (handoff != null) { SearchRequest.pending = null; submit(handoff) }
     }
 
-    val results by produceState<SearchState>(SearchState.Idle, submittedQuery, attempts, tab) {
-        if (submittedQuery.isBlank()) {
+    val results by produceState<SearchState>(SearchState.Idle, submittedQuery, attempts, tab, mode) {
+        if (submittedQuery.isBlank() || mode == SearchMode.Library) {
             value = SearchState.Idle
         } else {
             value = SearchState.Loading
@@ -246,6 +279,15 @@ fun SearchScreen(
         PlayerLaunch.maybeOpen()
     }
 
+    fun playLocal(song: SavedSong) {
+        val c = connection ?: return
+        if (song.isUnmatchedImport()) return
+        val songs = localResults.map { it.song }.matchedForPlayback()
+        c.playQueue(ListQueue("Library search", songs.map { it.toPlayableItem() },
+            startIndex = songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)))
+        PlayerLaunch.maybeOpen()
+    }
+
     Scaffold(modifier = modifier) { innerPadding ->
         Column(
             modifier = Modifier
@@ -276,11 +318,27 @@ fun SearchScreen(
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
-                    onSearch = { submit(query) },
+                    onSearch = {
+                        if (mode == SearchMode.Online) submit(query) else { keyboard?.hide(); focus.clearFocus() }
+                    },
                 ),
             )
 
             Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SearchMode.entries.forEach { option ->
+                    FilterChip(
+                        selected = mode == option,
+                        onClick = { mode = option; suggestions = emptyList() },
+                        label = { Text(option.label) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+
+            if (mode == SearchMode.Online) Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -308,6 +366,53 @@ fun SearchScreen(
                             Icon(Icons.Filled.Search, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.width(16.dp))
                             Text(suggestion, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+                return@Column
+            }
+
+            if (mode == SearchMode.Library) {
+                when {
+                    query.isBlank() -> Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Text(
+                            "Search your liked songs, history, playlists and offline saves. Works without a connection.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    localResults.isEmpty() -> Column(Modifier.padding(24.dp)) {
+                        Text(
+                            "Nothing in your library matches \"$query\"",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = bottomInsetPadding()) {
+                        items(localResults.size, key = { "local-${localResults[it].song.id}" }) { i ->
+                            val result = localResults[i]
+                            SongRow(
+                                title = result.song.title,
+                                subtitle = if (result.song.isUnmatchedImport())
+                                    listOf(result.song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" \u00b7 ")
+                                else result.song.artist,
+                                thumbnail = result.song.thumbnail,
+                                highlight = currentId == result.song.id,
+                                modifier = Modifier.entrance(i),
+                                onClick = { if (!result.song.isUnmatchedImport()) playLocal(result.song) },
+                                trailing = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (result.downloaded) {
+                                            Text(
+                                                "Saved offline",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                        }
+                                        if (currentId == result.song.id) PlayingBars(isPlaying)
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -497,7 +602,7 @@ private fun PlayingBars(playing: Boolean) {
                 initialValue = 0.25f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    tween(420 + i * 130),
+                    tween(OrisMotion.Standard + i * 130),
                     androidx.compose.animation.core.RepeatMode.Reverse,
                 ),
                 label = "bar$i",

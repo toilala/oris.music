@@ -7,6 +7,7 @@
  */
 package com.orismusic.client.ui.screens
 
+import com.orismusic.client.ui.theme.OrisMotion
 import com.orismusic.client.settings.HomeSettings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
@@ -16,7 +17,6 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.SkeletonCard
 import com.orismusic.client.ui.components.entrance
@@ -59,9 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.collectAsState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import com.orismusic.client.utils.PlaybackDiagnostic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -85,6 +84,8 @@ import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.queues.MusicRadioQueue
 import com.orismusic.client.music.MusicCandidates
+import com.orismusic.client.library.DiscoveryFilterStore
+import com.orismusic.client.library.FilteredSong
 import com.orismusic.client.library.LibraryStore
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.playback.queues.ListQueue
@@ -127,13 +128,7 @@ fun HomeScreen(
     bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
-    val diagnostic = PlaybackDiagnostic.message.collectAsState().value
-    if (showDiagnostic) AlertDialog(
-        onDismissRequest = { showDiagnostic = false },
-        title = { Text("Playback diagnostic") },
-        text = { Text(diagnostic) },
-        confirmButton = { TextButton(onClick = { showDiagnostic = false }) { Text("Close") } },
-    )
+    if (showDiagnostic) DiagnosticHistoryDialog { showDiagnostic = false }
     var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var refreshing by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1400); refreshing = false } }
@@ -154,6 +149,8 @@ fun HomeScreen(
     val liked = store.liked.collectAsState().value
     val counts = store.playCounts.collectAsState().value
     val taste = remember(history, liked, counts) { Taste.from(history, liked, counts) }
+    val filterStore = DiscoveryFilterStore.get(context)
+    val filters = filterStore.filters.collectAsState().value
     val shelves by produceState<List<ArtistShelf>>(emptyList(), taste.artists, refreshTick) {
         value = if (taste.artists.isEmpty()) emptyList() else loadArtistShelves(taste.artists.take(6))
     }
@@ -170,8 +167,8 @@ fun HomeScreen(
             .orEmpty().distinctBy { it.id }.take(5)
     }
 
-    val quickPicks by produceState<Pair<List<SongItem>, String>?>(null, feed, refreshTick) {
-        value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it) }
+    val quickPicks by produceState<Pair<List<SongItem>, String>?>(null, feed, refreshTick, filters, taste.artists) {
+        value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it, filters, taste.artists) }
     }
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize().padding(outerPadding)) {
@@ -189,7 +186,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
                     item(key = "header") {
-                        Box(Modifier.statusBarsPadding()) { HomeHeader(scroll) }
+                        HomeHeader(scroll)
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)
                     if (heroSongs.isNotEmpty()) item(key = "discovery-hero") {
@@ -221,8 +218,8 @@ fun HomeScreen(
                             ) {
                                 Text("Could not load your home feed", style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    text = state.message,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = "You're offline, or the service can't be reached right now.",
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp),
                                 )
@@ -233,11 +230,36 @@ fun HomeScreen(
                                     modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(12.dp))
                                         .clickable { refreshTick++ }.padding(horizontal = 16.dp, vertical = 8.dp),
                                 )
+                                var showDetails by remember { mutableStateOf(false) }
+                                Text(
+                                    text = if (showDetails) "Hide details" else "Details",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+                                        .clickable { showDetails = !showDetails }.padding(horizontal = 16.dp, vertical = 6.dp),
+                                )
+                                if (showDetails) {
+                                    Text(
+                                        text = state.message,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
                             }
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {
                             quickPicks?.let { (picks, _) ->
-                                item(key = "quick-picks") { Column(Modifier.entrance(2)) { QuickPicksSection(picks, playerConnection, scope) } }
+                                item(key = "quick-picks") {
+                                    Column(Modifier.entrance(2)) {
+                                        QuickPicksSection(
+                                            picks, playerConnection, scope,
+                                            onHide = { s -> filterStore.hide(FilteredSong(s.id, s.title, s.artists.joinToString { it.name })) },
+                                            onDislike = { s -> filterStore.dislike(FilteredSong(s.id, s.title, s.artists.joinToString { it.name })) },
+                                            onBlockArtist = { name -> filterStore.blockArtist(name) },
+                                        )
+                                    }
+                                }
                             }
                             if (community.isNotEmpty() && !HomeSettings.minimal) item(key = "community-playlists") { CommunityPlaylistsSection(community, onOpen) }
                             feedItems(state.page, newAlbums, playerConnection, onOpen, scope, quickPicks?.second)
@@ -257,14 +279,14 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int, tint: androidx.compose
     val a by t.animateFloat(
         0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(13000, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.tween(OrisMotion.Drift, easing = androidx.compose.animation.core.LinearEasing),
             androidx.compose.animation.core.RepeatMode.Reverse,
         ), label = "a",
     )
     val b by t.animateFloat(
         1f, 0f,
         androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(17000, easing = androidx.compose.animation.core.LinearEasing),
+            androidx.compose.animation.core.tween(OrisMotion.SlowDrift, easing = androidx.compose.animation.core.LinearEasing),
             androidx.compose.animation.core.RepeatMode.Reverse,
         ), label = "b",
     )
@@ -272,7 +294,7 @@ private fun Aurora(modifier: Modifier, scroll: () -> Int, tint: androidx.compose
         androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.tertiary, tint, 0.45f)
     else MaterialTheme.colorScheme.tertiary
     val warm by androidx.compose.animation.animateColorAsState(
-        warmTarget, androidx.compose.animation.core.tween(900), label = "aurora warm",
+        warmTarget, OrisMotion.entrance(), label = "aurora warm",
     )
     val cool = MaterialTheme.colorScheme.primary
     androidx.compose.foundation.Canvas(
@@ -309,7 +331,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
         while (true) {
             kotlinx.coroutines.delay(6500)
             if (!pager.isScrollInProgress && songs.size > 1) {
-                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = androidx.compose.animation.core.tween(900))
+                pager.animateScrollToPage((pager.currentPage + 1) % songs.size, animationSpec = OrisMotion.entrance())
             }
         }
     }
@@ -368,7 +390,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
             repeat(songs.size) { i ->
                 val active = pager.currentPage == i
                 val w by androidx.compose.animation.core.animateDpAsState(
-                    if (active) 20.dp else 6.dp, androidx.compose.animation.core.spring(0.6f, 400f), label = "dot",
+                    if (active) 20.dp else 6.dp, OrisMotion.settle(), label = "dot",
                 )
                 Box(
                     Modifier.padding(horizontal = 2.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
@@ -387,12 +409,11 @@ private fun HomeHeader(scroll: () -> Int) {
         in 5..11 -> "Good morning"
         in 12..16 -> "Good afternoon"
         in 17..21 -> "Good evening"
-        else -> "Your late-night soundtrack"
+        else -> "Late-night soundtrack"
     }
     val reveal = remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        reveal.animateTo(1f, androidx.compose.animation.core.tween(650,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        reveal.animateTo(1f, OrisMotion.slow())
     }
     Row(
         Modifier.fillMaxWidth().height(88.dp).padding(horizontal = 22.dp),
@@ -407,7 +428,7 @@ private fun HomeHeader(scroll: () -> Int) {
         }, contentAlignment = Alignment.Center) {
             OrisLogo(Modifier.size(38.dp), tint = MaterialTheme.colorScheme.primary)
         }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")).uppercase() },
                 style = MaterialTheme.typography.labelMedium,
@@ -574,7 +595,7 @@ private fun HeroPager(albums: List<com.music.innertube.models.AlbumItem>, onOpen
                 val active = pager.currentPage == i
                 val w by androidx.compose.animation.core.animateDpAsState(
                     if (active) 22.dp else 6.dp,
-                    androidx.compose.animation.core.spring(0.6f, 400f), label = "dot",
+                    OrisMotion.settle(), label = "dot",
                 )
                 Box(
                     Modifier.padding(horizontal = 3.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
@@ -633,38 +654,5 @@ private fun GenericCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
-    }
-}
-
-
-/**
- * The Oris mark stays at the top while Home scrolls. At the top of the page it is just the mark.
- * Scrolling turns it into a small glass chip and the name slides out next to it.
- */
-@Composable
-private fun PinnedMark(listState: androidx.compose.foundation.lazy.LazyListState, modifier: Modifier) {
-    val target by remember {
-        androidx.compose.runtime.derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) 1f else (listState.firstVisibleItemScrollOffset / 260f).coerceIn(0f, 1f)
-        }
-    }
-    val p by androidx.compose.animation.core.animateFloatAsState(target, androidx.compose.animation.core.tween(220), label = "mark")
-    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "mark spin")
-    val angle by spin.animateFloat(
-        0f, 360f,
-        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing)),
-        label = "mark angle",
-    )
-    // Bare mark: no chip or container, just the logo and name over the artwork.
-    Row(
-        modifier.statusBarsPadding().padding(start = 16.dp, top = 10.dp)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OrisLogo(Modifier.size(24.dp).graphicsLayer { rotationZ = angle; alpha = 0.55f + 0.45f * p }, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
-        androidx.compose.animation.AnimatedVisibility(visible = p > 0.6f) {
-            Text("Oris", style = MaterialTheme.typography.titleSmall, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f),
-                modifier = Modifier.padding(start = 8.dp, end = 6.dp))
-        }
     }
 }
