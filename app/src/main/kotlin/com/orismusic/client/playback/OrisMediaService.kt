@@ -232,6 +232,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private lateinit var ipVersion: Any // IpVersion placeholder
 
     private var currentQueue: Queue = EmptyQueue
+    private lateinit var shuffleRepeatMemory: ShuffleRepeatMemory
     var queueTitle: String? = null
 
     private var queueGeneration = 0
@@ -500,6 +501,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         player = createExoPlayer()
         _playerFlow.value = player
         player.addListener(this)
+        // Persists shuffle/repeat however they change (tray, notification, other
+        // controllers); restores them below together with the queue snapshot.
+        shuffleRepeatMemory = ShuffleRepeatMemory(this, scope, player).also(player::addListener)
         if (historyRecorder == null) {
             historyRecorder = PlaybackHistoryRecorder { song ->
                 com.orismusic.client.library.LibraryStore.get(this).recordPlay(song)
@@ -533,6 +537,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             QueueSnapshotStore.load(this)?.let { snap ->
                 val restoredItems = snap.items.map { it.toMediaItem() }
                 if (restoredItems.isNotEmpty()) {
+                    // Modes first: setMediaItems keeps player-level repeat/shuffle, and the
+                    // restored index is a natural timeline position, so the same song resumes.
+                    shuffleRepeatMemory.savedModes()?.let { (shuffle, repeat) ->
+                        player.repeatMode = repeat
+                        player.shuffleModeEnabled = shuffle
+                    }
                     playQueue(
                         com.orismusic.client.playback.queues.ListQueue(snap.title, restoredItems, snap.index, snap.positionMs),
                         playWhenReady = false,
@@ -540,6 +550,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 }
             }
         }
+        // Restore decision is made (snapshot applied or skipped); mode events from
+        // controllers and the UI persist from here on.
+        shuffleRepeatMemory.beginPersisting()
 
         connectivityManager = getSystemService(ConnectivityManager::class.java)
 

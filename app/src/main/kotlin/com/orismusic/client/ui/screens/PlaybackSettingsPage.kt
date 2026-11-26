@@ -136,6 +136,18 @@ fun PlaybackSettingsPage(onBack: () -> Unit, connection: com.orismusic.client.pl
                 preferences.persistentQueue = it
                 persistentQueue = it
             }
+            val modesScope = rememberCoroutineScope()
+            val rememberModes by remember(context) {
+                context.dataStore.data.map { it[com.orismusic.client.constants.RememberShuffleAndRepeatKey] ?: true }
+            }.collectAsState(initial = true)
+            ToggleRow(
+                "Remember shuffle and repeat",
+                if (rememberModes) "On: a restored queue comes back with the same shuffle and repeat."
+                else "Off: a restored queue always starts with shuffle and repeat off.",
+                rememberModes,
+            ) { v ->
+                modesScope.launch { com.orismusic.client.playback.ShuffleRepeatMemory.setRemember(context, v) }
+            }
             ToggleRow("Skip silence", "Jumps over quiet gaps in songs and between tracks.", skipSilence) {
                 preferences.skipSilence = it
                 skipSilence = it
