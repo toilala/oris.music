@@ -12,7 +12,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from playback_check import (adb, tap, wait_label, screen, tree, restore_setting,
-                            PKG, OUT)
+                            PKG, OUT, pidof)
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -65,7 +65,7 @@ def record(name, max_seconds, resolve, confirm):
             break
         time.sleep(0.5)
     time.sleep(1.5)
-    pid = adb('shell', 'pidof', 'screenrecord').decode().strip().split()
+    pid = pidof('screenrecord')
     if pid:
         adb('shell', 'kill', '-2', pid[0])
     try:

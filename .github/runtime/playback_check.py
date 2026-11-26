@@ -63,15 +63,59 @@ def tap(label, bottom=True):
     time.sleep(1)
 
 
-def tap_mini_player(title):
-    """Tap the mini-player pill: the clickable ancestor of the title text whose subtree
-    owns a transport button (content-desc Play/Pause/Replay). Home's 'Continue listening'
-    row carries the same title but no transport buttons, so title alone is ambiguous."""
-    end = time.monotonic() + 30
+def pidof(name):
+    """Pids of a running process; [] when nothing matches. pidof exits 1 exactly when no
+    process matches - the expected dead state - so only that rc is quiet. Timeouts,
+    device errors and every other rc keep raising with stderr preserved."""
+    r = subprocess.run(['adb', 'shell', 'pidof', name], capture_output=True, timeout=30)
+    if r.returncode == 1 and not r.stdout.strip():
+        return []
+    if r.returncode != 0:
+        raise AssertionError('pidof ' + name + ' rc=' + str(r.returncode) + ': '
+                             + r.stderr.decode(errors='replace').strip())
+    return r.stdout.decode().split()
+
+
+def ime_shown():
+    """True/False from dumpsys input_method's mInputShown (the API-29 emulator signal);
+    None when the line is absent, so callers fail loudly instead of assuming."""
+    dump = adb('shell', 'dumpsys', 'input_method').decode(errors='replace')
+    m = re.search(r'mInputShown=(\w+)', dump)
+    return None if m is None else m.group(1) == 'true'
+
+
+def dismiss_ime(seconds=10):
+    """Close the soft keyboard before navigating to something it covers, and confirm it
+    actually disappeared. BACK is sent only when the keyboard is genuinely shown - with
+    no IME up, BACK would navigate away instead."""
+    shown = ime_shown()
+    if shown is None:
+        raise AssertionError('IME state unreadable: no mInputShown in dumpsys input_method')
+    if shown:
+        adb('shell', 'input', 'keyevent', '4')
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            time.sleep(0.7)
+            now = ime_shown()
+            if now is False:
+                print('IME dismissed and confirmed hidden', flush=True)
+                return
+            if now is None:
+                raise AssertionError('IME state unreadable after BACK')
+        screen('failure')
+        raise AssertionError('IME still shown after BACK')
+    print('IME already hidden, no BACK sent', flush=True)
+
+
+def tap_mini_any(titles, seconds=30):
+    """Tap the mini-player pill showing any one of titles: the clickable ancestor of the
+    title text whose subtree owns a transport button (content-desc Play/Pause/Replay).
+    Used when the now-playing title is not predetermined (shuffled start)."""
+    end = time.monotonic() + seconds
     while time.monotonic() < end:
         root = tree()
         parents = {c: p for p in root.iter('node') for c in p}
-        for label_node in [n for n in root.iter('node') if n.get('text') == title]:
+        for label_node in [n for n in root.iter('node') if n.get('text') in titles]:
             node = label_node
             while node is not None and node.get('clickable') != 'true':
                 node = parents.get(node)
@@ -80,12 +124,20 @@ def tap_mini_player(title):
             descs = [d.get('content-desc') for d in node.iter('node')]
             if any(d in ('Play', 'Pause', 'Replay') for d in descs):
                 x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
-                print('TAP mini player ' + title + ' bounds=' + node.get('bounds'), flush=True)
+                print('TAP mini player ' + label_node.get('text')
+                      + ' bounds=' + node.get('bounds'), flush=True)
                 adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
                 return
         time.sleep(1)
     screen('failure')
-    raise AssertionError('mini player pill for ' + title + ' never found')
+    raise AssertionError('mini player pill for any of ' + repr(titles) + ' never found')
+
+
+def tap_mini_player(title):
+    """Tap the mini-player pill: the clickable ancestor of the title text whose subtree
+    owns a transport button (content-desc Play/Pause/Replay). Home's 'Continue listening'
+    row is not clickable, so it can never shadow the pill."""
+    tap_mini_any([title])
 
 
 def get_setting(ns, key):

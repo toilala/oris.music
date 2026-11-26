@@ -24,7 +24,7 @@ import time
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
-from playback_check import adb, tap, tap_mini_player, wait_label, screen, tree, PKG, OUT
+from playback_check import adb, tap, tap_mini_player, wait_label, screen, tree, PKG, OUT, pidof
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 
@@ -70,8 +70,8 @@ def runas_write(path, data):
 def force_stopped():
     adb('shell', 'am', 'force-stop', PKG)
     time.sleep(1)
-    out = adb('shell', 'pidof', PKG).decode().strip()
-    assert not out, 'app process still alive after force-stop: ' + out
+    alive = pidof(PKG)
+    assert not alive, 'app process still alive after force-stop: ' + ' '.join(alive)
 
 
 def songs_json(rows):

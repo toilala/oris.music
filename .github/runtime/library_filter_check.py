@@ -10,7 +10,8 @@ import time
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
-from playback_check import adb, tap, wait_label, screen, tree, restore_setting, PKG, OUT
+from playback_check import (adb, tap, wait_label, screen, tree, restore_setting, PKG, OUT,
+                            dismiss_ime, tap_mini_player, tap_mini_any)
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 
@@ -199,12 +200,18 @@ clear_query(n)
 n = type_query('m83')
 wait_visible('Liked songs  ·  2 of 3 songs')
 tap_clickable('Play')
+# Default PlayerSettings.tapOpen is Miniplayer: the header buttons and row taps
+# start playback and show the pill; NowPlaying opens through it, not directly.
+dismiss_ime()
+tap_mini_player('Midnight City')
 wait_label('Collapse player', seconds=30)
 tap('Collapse player')
 wait_label('Filter this list')
 queue_shows(['Midnight City', 'Wait'], ['One More Time'])
 screen('library_filter_queue_play')
 tap_clickable('Shuffle')
+dismiss_ime()
+tap_mini_any(['Midnight City', 'Wait'])
 wait_label('Collapse player', seconds=30)
 tap('Collapse player')
 wait_label('Filter this list')
@@ -213,6 +220,8 @@ screen('library_filter_queue_shuffle')
 
 # A filtered row tap plays that exact song.
 tap_clickable('Wait')
+dismiss_ime()
+tap_mini_player('Wait')
 wait_label('Collapse player', seconds=30)
 wait_visible('Wait')
 screen('library_filter_rowtap')
@@ -227,6 +236,8 @@ n = type_query('nuvole')
 wait_gone('Midnight City')
 wait_visible('Nuvole Bianche')
 tap_clickable('Nuvole Bianche')
+dismiss_ime()
+tap_mini_player('Nuvole Bianche')
 wait_label('Collapse player', seconds=30)
 wait_visible('Nuvole Bianche')
 screen('library_filter_playlist_rowtap')
