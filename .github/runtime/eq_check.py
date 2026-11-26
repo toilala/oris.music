@@ -226,7 +226,16 @@ def phase_enable(ev):
         prefs = read_prefs('eq-prefs-enabled.xml')
         ev.append('PERSISTED after enable: ' + prefs.replace('\n', ' '))
     assert 'enabled' in prefs and 'true' in prefs, 'equalizer enabled flag was not persisted'
-    assert 'levels' in prefs, 'equalizer band levels were not persisted'
+    # Enabling writes only the enabled intent; band levels are persisted by the first
+    # band change. An absent key is the zero/default intent, not failed persistence.
+    # If a vector IS present it must be a parseable integer list.
+    m = re.search(r'name="levels">([^<]*)<', prefs)
+    if m:
+        parts = m.group(1).split(',')
+        assert all(p.lstrip('-').isdigit() for p in parts), \
+            'persisted levels vector is not parseable: ' + m.group(1)
+    ev.append('levels key after enable: '
+              + ('absent (zero/default intent)' if not m else 'present, parseable: ' + m.group(1)))
 
 
 @phase('preset')

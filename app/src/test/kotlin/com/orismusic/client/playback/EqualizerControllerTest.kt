@@ -31,7 +31,11 @@ class EqualizerControllerTest {
         var enabled = false
         val levels = IntArray(bandCount)
         var refuseEnabledWrites = false
-        var clampBandAt: Int? = null
+        /** Per-band clamp floor: a write below the band's floor comes back clamped,
+         *  like the emulator's audio effect (observed on-device: 1050 -> 1100). */
+        var clampFloors: Map<Int, Int> = emptyMap()
+        /** Per-band clamp cap: a write above the band's cap comes back clamped. */
+        var clampCaps: Map<Int, Int> = emptyMap()
         var throwOnReads = false
         var released = false
 
@@ -50,8 +54,13 @@ class EqualizerControllerTest {
             return levels[band]
         }
         override fun writeBandLevel(band: Int, level: Int) {
-            val cap = clampBandAt
-            levels[band] = if (cap != null && level > cap) cap else level
+            val floor = clampFloors[band]
+            val cap = clampCaps[band]
+            levels[band] = when {
+                floor != null && level < floor -> floor
+                cap != null && level > cap -> cap
+                else -> level
+            }
         }
         override fun release() { released = true }
     }
@@ -146,12 +155,12 @@ class EqualizerControllerTest {
     @Test
     fun `band clamp publishes the observed clamped level while prefs keep the intent`() {
         EqualizerController.attach(7)
-        platform.clampBandAt = 1000
-        EqualizerController.setLevel(0, 1500)
+        platform.clampFloors = mapOf(0 to 1000)
+        EqualizerController.setLevel(0, 500)
         val s = EqualizerController.state.value
-        assertEquals(1000, s.levels[0]) // observed clamp, not the intended 1500
+        assertEquals(1000, s.levels[0]) // observed clamp, not the intended 500
         assertFalse(s.stale)
-        assertEquals("1500,0,0,0,0", prefs.data["levels"]) // intent preserved
+        assertEquals("500,0,0,0,0", prefs.data["levels"]) // intent preserved
     }
 
     @Test
@@ -174,6 +183,80 @@ class EqualizerControllerTest {
         val s = EqualizerController.state.value
         assertFalse(s.available)
         assertEquals(EqUnavailable.InitFailed, s.unavailableReason)
+    }
+
+    @Test
+    fun `preset loop never folds a clamped band back into the saved intent`() {
+        // The runtime repro (run 45719436428): Bass boost with the platform clamping
+        // band 1 (1050 -> 1100) must still persist the full intended vector while the
+        // published state stays the platform's observed answer.
+        platform.clampFloors = mapOf(1 to 1100)
+        EqualizerController.attach(7)
+        EqualizerController.applyPreset(EqualizerController.presets.getValue("Bass boost"))
+        val s = EqualizerController.state.value
+        assertEquals("1500,1050,0,0,0", prefs.data["levels"])
+        assertEquals(listOf(1500, 1100, 0, 0, 0), s.levels)
+        assertEquals(1100, platform.levels[1]) // the clamp genuinely happened
+        assertFalse(s.stale)
+    }
+
+    @Test
+    fun `preset loop with two clamped bands persists every intended level`() {
+        platform.clampCaps = mapOf(0 to 1400)
+        platform.clampFloors = mapOf(1 to 1100)
+        EqualizerController.attach(7)
+        EqualizerController.applyPreset(EqualizerController.presets.getValue("Bass boost"))
+        val s = EqualizerController.state.value
+        // The clamps genuinely happened at the platform, on the intended writes.
+        assertEquals(1400, platform.levels[0])
+        assertEquals(1100, platform.levels[1])
+        assertEquals("1500,1050,0,0,0", prefs.data["levels"])
+        assertEquals(listOf(1400, 1100, 0, 0, 0), s.levels)
+    }
+
+    @Test
+    fun `slider change after a clamp does not leak the neighbor's observed level into intent`() {
+        prefs.data["levels"] = "1500,1050,0,0,0"
+        platform.clampFloors = mapOf(1 to 1100)
+        EqualizerController.attach(7)
+        assertEquals(1100, EqualizerController.state.value.levels[1]) // observed clamp published
+        EqualizerController.setLevel(0, 1200)
+        assertEquals("1200,1050,0,0,0", prefs.data["levels"])
+    }
+
+    @Test
+    fun `enable alone persists no levels key, absent default is not a persistence failure`() {
+        EqualizerController.attach(7)
+        EqualizerController.setEnabled(true)
+        assertEquals(true, prefs.data["enabled"])
+        assertFalse(prefs.data.containsKey("levels"))
+        assertTrue(EqualizerController.state.value.enabled)
+    }
+
+    @Test
+    fun `first edit with no saved levels builds on the zero intent, not a platform-altered default`() {
+        // The device cannot represent zero on band 0, so read-back publishes its floor.
+        // A first slider change must not adopt that observation as neighboring intent.
+        platform.clampFloors = mapOf(0 to 300)
+        EqualizerController.attach(7)
+        assertEquals(300, EqualizerController.state.value.levels[0])
+        assertFalse(prefs.data.containsKey("levels"))
+        EqualizerController.setLevel(2, 500)
+        assertEquals("0,0,500,0,0", prefs.data["levels"])
+    }
+
+    @Test
+    fun `malformed and short saved vectors read with the same defaults attach applies`() {
+        // An unparseable entry drops out exactly as attach's read treats it.
+        prefs.data["levels"] = "1500,bogus"
+        EqualizerController.attach(7)
+        assertEquals(listOf(1500, 0, 0, 0, 0), EqualizerController.state.value.levels)
+        EqualizerController.setLevel(1, 700)
+        assertEquals("1500,700,0,0,0", prefs.data["levels"])
+        // A short vector defaults the missing bands, again exactly as attach.
+        prefs.data["levels"] = "1500,1050"
+        EqualizerController.setLevel(3, 200)
+        assertEquals("1500,1050,0,200,0", prefs.data["levels"])
     }
 
     @Test

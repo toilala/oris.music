@@ -142,8 +142,7 @@ object EqualizerController {
         eq = created
         // Saved intent is re-applied to the device, checked per write; the device's
         // answer never rewrites the intent.
-        val saved = prefs?.getString("levels", null)?.split(",")?.mapNotNull { it.toIntOrNull() }.orEmpty()
-        val wantLevels = List(count) { i -> (saved.getOrNull(i) ?: 0).coerceIn(min, max) }
+        val wantLevels = savedIntent(count, min, max)
         val wantOn = prefs?.getBoolean("enabled", false) ?: false
         wantLevels.forEachIndexed { i, level -> applyBandWrite(created, i, level) }
         applyEnabledWrite(created, wantOn)
@@ -160,6 +159,14 @@ object EqualizerController {
             centerHz = List(count) { i -> runCatching { created.centerFreq(i) / 1000 }.getOrDefault(0) },
             levels = verified.second,
         )
+    }
+
+    /** The saved band intent for `count` bands, parsed and defaulted the same way
+     *  everywhere: a missing key, unparseable entries and a short vector all fall back
+     *  to the zero/default intent; every value coerces into the platform range. */
+    private fun savedIntent(count: Int, min: Int, max: Int): List<Int> {
+        val saved = prefs?.getString("levels", null)?.split(",")?.mapNotNull { it.toIntOrNull() }.orEmpty()
+        return List(count) { i -> (saved.getOrNull(i) ?: 0).coerceIn(min, max) }
     }
 
     /** One intent write, checked where the SDK allows checking: setEnabled returns a
@@ -216,7 +223,9 @@ object EqualizerController {
     fun setLevel(band: Int, level: Int) {
         val s = _state.value
         if (band !in s.levels.indices) return
-        val intent = s.levels.toMutableList().also { it[band] = level }
+        // Intent extends the saved intent, never the published observed state: a
+        // clamped neighbor is the platform's answer, not the user's request.
+        val intent = savedIntent(s.levels.size, s.minLevel, s.maxLevel).toMutableList().also { it[band] = level }
         prefs?.edit()?.putString("levels", intent.joinToString(","))?.apply()
         val e = eq ?: return
         if (!s.available) return
