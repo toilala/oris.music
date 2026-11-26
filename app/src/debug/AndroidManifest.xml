@@ -2,10 +2,14 @@
     <application>
         <!-- Debug-only deterministic local audio harness. Absent from release builds. -->
         <activity android:name="com.orismusic.client.debug.LocalPlaybackCheckActivity" android:exported="true" />
+        <activity android:name="com.orismusic.client.debug.SkipGuardCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.LyricsCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.EmbeddedLyricsCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.HomePicksCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.ControlStylesCheckActivity" android:exported="true" />
         <activity android:name="com.orismusic.client.debug.SettingsCheckActivity" android:exported="true" />
+        <activity android:name="com.orismusic.client.debug.OfflineCheckActivity" android:exported="true" />
+        <!-- One-shot fixture setup; explicit-component broadcast only, no task-restorable state. -->
+        <receiver android:name="com.orismusic.client.debug.OfflineFixtureSetupReceiver" android:exported="true" />
     </application>
 </manifest>

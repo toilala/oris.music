@@ -38,6 +38,8 @@ import com.music.innertube.models.AlbumItem
 import com.music.innertube.models.ArtistItem
 import com.music.innertube.models.SongItem
 import com.orismusic.client.library.SavedSong
+import com.orismusic.client.library.isUnmatchedImport
+import com.orismusic.client.library.matchedForPlayback
 import com.orismusic.client.library.toPlayableItem
 import com.orismusic.client.music.MusicCandidates
 import com.orismusic.client.playback.PlayerConnection
@@ -101,7 +103,11 @@ suspend fun loadArtistShelves(names: List<String>): List<ArtistShelf> = coroutin
 }
 
 private fun playHistory(c: PlayerConnection?, title: String, songs: List<SavedSong>, song: SavedSong) {
-    c?.playQueue(ListQueue(title = title, items = songs.map { it.toPlayableItem() }, startIndex = songs.indexOf(song)))
+    if (song.isUnmatchedImport()) return
+    val playable = songs.matchedForPlayback()
+    val start = playable.indexOfFirst { it.id == song.id }
+    if (start < 0) return
+    c?.playQueue(ListQueue(title = title, items = playable.map { it.toPlayableItem() }, startIndex = start))
     com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
 }
 

@@ -28,6 +28,14 @@ fun List<SavedSong>.toggled(song: SavedSong): List<SavedSong> =
 fun List<SavedSong>.withPlay(song: SavedSong, limit: Int = HISTORY_LIMIT): List<SavedSong> =
     (listOf(song) + filterNot { it.id == song.id }).take(limit)
 
+/** Local filter over songs already on the phone: title or artist, case-insensitive.
+ *  A blank query keeps everything. */
+fun List<SavedSong>.matching(query: String): List<SavedSong> {
+    val q = query.trim()
+    if (q.isEmpty()) return this
+    return filter { it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true) }
+}
+
 fun SavedSong.toPlayableItem(): MediaItem =
     MediaMetadata(
         id = id,
