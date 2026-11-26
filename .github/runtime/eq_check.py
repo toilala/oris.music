@@ -14,7 +14,7 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 
-from playback_check import adb, tap, wait_label, screen, tree, PKG, OUT
+from playback_check import adb, tap, wait_label, screen, tree, PKG, OUT, pidof
 from eq_verdict import classify_preset, parse_prefs, PRESET_VECTORS
 
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -51,15 +51,42 @@ def resume_main():
     raise AssertionError('MainActivity never resumed to the foreground')
 
 
+NAV = {'recovery_used': False}
+
+
 def open_playback_settings():
     resume_main()
-    # A resumed singleTop activity lands wherever it was left; walk back to the root
-    # page (the only page without a Back affordance) before navigating down.
+    print('NAV after resume_main: ' + resumed_activity().strip(), flush=True)
+    if PKG not in resumed_activity():
+        # The app left the foreground right after a verified resume. Record it; no
+        # automatic relaunch here, so a failed initial cold start can never be
+        # converted into a pass by recovery. The next phase's own resume_main
+        # relaunches naturally, which is what lets later phases proceed.
+        NAV['recovery_used'] = True
+        print('NAV recovery_used=true: app not foreground after verified resume', flush=True)
+    # A resumed singleTop activity lands wherever it was left; walk back to a root
+    # tab before navigating down. Each decision uses ONE fresh dump: a visible Home
+    # tab label means a root page is already showing, so never press Back past it.
     for _ in range(8):
-        if not has_text('Back'):
+        root = tree()
+        texts = [(n.get('text') or '') for n in root.iter('node')]
+        if any(t == 'Home' for t in texts):
             break
+        if not any('Back' in t for t in texts):
+            break
+        fg = resumed_activity()
+        if PKG not in fg:
+            # Left the app without our input. Preserve the evidence and stop.
+            print('NAV stop: foreground left the app between dumps: ' + fg.strip(), flush=True)
+            break
+        print('NAV back before: ' + fg.strip(), flush=True)
         adb('shell', 'input', 'keyevent', '4')
         time.sleep(1)
+        after = resumed_activity()
+        print('NAV back after: ' + after.strip(), flush=True)
+        if PKG not in after:
+            print('NAV stop: that back press left the app: ' + after.strip(), flush=True)
+            break
     wait_label('Home', seconds=60)
     tap('Library')
     tap('Settings', bottom=False)
@@ -80,6 +107,20 @@ def scroll_to_eq():
 
 def has_text(fragment):
     return any(fragment in (n.get('text') or '') for n in tree().iter('node'))
+
+
+def dump_am_tail(ev):
+    """ActivityManager logcat tail on a navigation failure: ANR and task-transition
+    evidence that the AndroidRuntime-only stdout print never carries."""
+    try:
+        out = adb('logcat', '-d', '-s', 'ActivityManager').decode()
+        lines = [l for l in out.splitlines()
+                 if PKG in l or 'ANR' in l or 'Force stopping' in l][-40:]
+        for l in lines:
+            print('AM ' + l, flush=True)
+        ev.append('AM logcat tail: ' + ' | '.join(lines[-10:]))
+    except subprocess.CalledProcessError:
+        pass
 
 
 def tap_clickable(label):
@@ -361,8 +402,19 @@ def phase_restart(ev):
     intended = PRESET_VECTORS[PRESET_TARGET['name']]
     adb('shell', 'am', 'force-stop', PKG)
     time.sleep(1)
-    open_playback_settings()
-    scroll_to_eq()
+    initial = 'pid=' + repr(pidof(PKG)) + ' foreground=' + resumed_activity().strip()
+    print('RESTART initial after force-stop: ' + initial, flush=True)
+    ev.append('RESTART initial after force-stop: ' + initial)
+    NAV['recovery_used'] = False
+    try:
+        open_playback_settings()
+        scroll_to_eq()
+    except Exception:
+        dump_am_tail(ev)
+        raise
+    if NAV['recovery_used']:
+        raise Reported('restart inconclusive: app left the foreground after a verified '
+                       'initial resume; no relaunch performed, evidence in stdout')
     screen('eq_restart')
     prefs = read_prefs('eq-prefs-after-restart.xml')
     ev.append('PERSISTED after restart: ' + prefs.replace('\n', ' '))
