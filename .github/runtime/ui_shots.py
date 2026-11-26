@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Screenshots of the library, playlists and settings screens. Never plays audio."""
-from playback_check import adb, tap, wait_label, screen, tree, PKG
+from playback_check import adb, back, tap, wait_label, screen, tree, PKG
 
 def wait_greeting(seconds=60):
     end = time.monotonic() + seconds
