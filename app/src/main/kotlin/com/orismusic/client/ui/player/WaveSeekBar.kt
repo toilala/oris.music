@@ -2,6 +2,7 @@ package com.orismusic.client.ui.player
 
 /** Wave seek bar flavours. The player uses Wave; the rest are kept for the settings preview. */
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -79,12 +80,12 @@ fun WaveSeekBar(
 
     val style = SeekStyle.Wave
     val view = androidx.compose.ui.platform.LocalView.current
-    val amp by animateFloatAsState(if (isPlaying && !dragging && style == SeekStyle.Wave) 1f else 0f, tween(600), label = "wave amp")
-    val thumb by animateFloatAsState(if (dragging) 34f else 22f, spring(dampingRatio = 0.6f, stiffness = 400f), label = "thumb")
+    val amp by animateFloatAsState(if (isPlaying && !dragging && style == SeekStyle.Wave) 1f else 0f, OrisMotion.slow(), label = "wave amp")
+    val thumb by animateFloatAsState(if (dragging) 34f else 22f, OrisMotion.settle(), label = "thumb")
     val phaseAnim = rememberInfiniteTransition(label = "wave phase")
     val phase by phaseAnim.animateFloat(
         0f, (2 * PI).toFloat(),
-        infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart),
+        infiniteRepeatable(tween(OrisMotion.WavePeriod, easing = LinearEasing), RepeatMode.Restart),
         label = "wave phase value",
     )
     val track = PlayerTextButtonColor.copy(alpha = 0.28f)
@@ -160,7 +161,7 @@ fun WaveSeekBar(
             )
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            val big by animateFloatAsState(if (dragging) 1.3f else 1f, spring(0.6f, 400f), label = "time pop")
+            val big by animateFloatAsState(if (dragging) 1.3f else 1f, OrisMotion.settle(), label = "time pop")
             Text(
                 if (durationMs > 0) formatTime(shownSec * 1000L) else "--:--", style = MaterialTheme.typography.labelSmall,
                 color = if (dragging) accent else PlayerTextButtonColor.copy(alpha = 0.75f),
@@ -184,7 +185,7 @@ fun SeekPreview(progress: Float, accent: Color, onChange: (Float) -> Unit) {
     val phaseAnim = rememberInfiniteTransition(label = "preview phase")
     val phase by phaseAnim.animateFloat(
         0f, (2 * PI).toFloat(),
-        infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart), label = "preview phase value",
+        infiniteRepeatable(tween(OrisMotion.WavePeriod, easing = LinearEasing), RepeatMode.Restart), label = "preview phase value",
     )
     val previewInk = PlayerTextButtonColor
     Canvas(

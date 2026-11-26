@@ -7,6 +7,7 @@ package com.orismusic.client.ui.player
  * Playback, queue, lyrics and timers run on Oris's own PlayerConnection. All code is Oris's own.
  */
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -91,6 +92,8 @@ import com.orismusic.client.settings.PlayerSettings
 import com.orismusic.client.settings.SwipeSensitivity
 import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.DiagnosticFailureBanner
+import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 import com.orismusic.client.utils.formatTime
 import kotlin.math.abs
 import kotlin.math.min
@@ -166,7 +169,7 @@ fun NowPlayingScreen(
         when (backgroundStyle) {
             PlayerBackgroundStyle.Gradient -> {
                 // Gradient background: three stops from the artwork, crossfading on song change.
-                Crossfade(targetState = gradientColors, animationSpec = tween(800), label = "player gradient") { colors ->
+                Crossfade(targetState = gradientColors, animationSpec = OrisMotion.entrance(), label = "player gradient") { colors ->
                     if (colors != null) {
                         Box(
                             Modifier.fillMaxSize().background(
@@ -177,7 +180,7 @@ fun NowPlayingScreen(
                 }
             }
             PlayerBackgroundStyle.Blur -> {
-                Crossfade(targetState = art, animationSpec = tween(800), label = "player blur") { url ->
+                Crossfade(targetState = art, animationSpec = OrisMotion.entrance(), label = "player blur") { url ->
                     Artwork(
                         url,
                         Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(70.dp),
@@ -222,9 +225,19 @@ fun NowPlayingScreen(
             }
             Spacer(Modifier.height(4.dp))
 
+            var failureDialog by remember { mutableStateOf(false) }
+            DiagnosticFailureBanner(
+                onClick = { failureDialog = true },
+                onRetry = {
+                    connection.player.prepare()
+                    connection.player.playWhenReady = true
+                },
+            )
+            if (failureDialog) DiagnosticHistoryDialog { failureDialog = false }
+
             // Top area: artwork carousel, or the lyrics list in its place.
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                Crossfade(targetState = lyricsOpen, animationSpec = tween(300), label = "player mode") { open ->
+                Crossfade(targetState = lyricsOpen, animationSpec = OrisMotion.standard(), label = "player mode") { open ->
                     if (open) {
                         LyricsPane(connection, onClose = { lyricsOpen = false }, embedded = true)
                     } else {

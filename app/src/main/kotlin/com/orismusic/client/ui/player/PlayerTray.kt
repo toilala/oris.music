@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +55,7 @@ import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.playback.PlayerConnection
 import com.orismusic.client.playback.SleepTimer
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 
 /**
  * Everything that is not play, skip or lyrics lives here, behind one swipe up.
@@ -150,6 +153,10 @@ internal fun PlayerTray(
                         context.startActivity(android.content.Intent.createChooser(send, "Share song").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
                 }
+                var diagnosticOpen by remember { mutableStateOf(false) }
+                val failureActive by com.orismusic.client.utils.PlaybackDiagnostic.activeFailure.collectAsState()
+                ActionTile(Icons.Rounded.Info, if (failureActive != null) "Issue found" else "Diagnostics", failureActive != null, 56.dp, Modifier.weight(1f)) { diagnosticOpen = true }
+                if (diagnosticOpen) DiagnosticHistoryDialog { diagnosticOpen = false }
             }
         }
     }
@@ -166,7 +173,7 @@ private fun ActionTile(
 ) {
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tile press")
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, OrisMotion.press(), label = "tile press")
     val container = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHighest
     val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Surface(

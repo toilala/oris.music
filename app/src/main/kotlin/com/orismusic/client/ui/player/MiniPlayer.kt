@@ -6,6 +6,7 @@ package com.orismusic.client.ui.player
  * https://github.com/EchoMusicApp/Echo-Music). All code here is Oris's own.
  */
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -21,13 +22,13 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -79,11 +80,9 @@ import kotlin.math.abs
 fun MiniPlayer(
     connection: PlayerConnection,
     onExpand: () -> Unit,
-    onOpenArtist: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value ?: return
-    val artistId = metadata.extras?.getString("artist_id")
     val scope = rememberCoroutineScope()
     val offX = remember { Animatable(0f) }
     val offY = remember { Animatable(0f) }
@@ -100,6 +99,7 @@ fun MiniPlayer(
     val position by connection.currentPosition.collectAsState()
     val duration by connection.duration.collectAsState()
     val error by connection.error.collectAsState()
+    val diagFailure by com.orismusic.client.utils.PlaybackDiagnostic.activeFailure.collectAsState()
     val artwork = metadata.artworkUri?.toString()
 
     val primary = MaterialTheme.colorScheme.primary
@@ -116,11 +116,11 @@ fun MiniPlayer(
                 MaterialTheme.colorScheme.surfaceContainerHigh, it, if (isPlaying) 0.40f else 0.26f,
             )
         } ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = tween(700), label = "mini pill colour",
+        animationSpec = OrisMotion.slow(), label = "mini pill colour",
     )
     val ringColor by androidx.compose.animation.animateColorAsState(
         targetValue = artworkTint?.let { androidx.compose.ui.graphics.lerp(primary, it, 0.65f) } ?: primary,
-        animationSpec = tween(700), label = "mini ring colour",
+        animationSpec = OrisMotion.slow(), label = "mini ring colour",
     )
 
     val pillShape = RoundedCornerShape(50)
@@ -138,11 +138,11 @@ fun MiniPlayer(
                         scope.launch {
                             val x = offX.value; val y = offY.value
                             when {
-                                x > skipThreshold -> { offX.animateTo(900f, tween(140)); connection.seekToPrevious(); offX.snapTo(-900f); offX.animateTo(0f, spring(0.7f, 300f)) }
-                                x < -skipThreshold -> { offX.animateTo(-900f, tween(140)); connection.seekToNext(); offX.snapTo(900f); offX.animateTo(0f, spring(0.7f, 300f)) }
-                                y < -90f -> { launch { offY.animateTo(0f, spring(0.75f, 320f)) }; onExpand() }
-                                y > 100f -> { offY.animateTo(500f, tween(160)); connection.pause(); dismissed = true; offY.snapTo(0f) }
-                                else -> { launch { offX.animateTo(0f, spring(0.6f, 400f)) }; offY.animateTo(0f, spring(0.6f, 400f)) }
+                                x > skipThreshold -> { offX.animateTo(900f, OrisMotion.micro()); connection.seekToPrevious(); offX.snapTo(-900f); offX.animateTo(0f, OrisMotion.soft()) }
+                                x < -skipThreshold -> { offX.animateTo(-900f, OrisMotion.micro()); connection.seekToNext(); offX.snapTo(900f); offX.animateTo(0f, OrisMotion.soft()) }
+                                y < -90f -> { launch { offY.animateTo(0f, OrisMotion.soft()) }; onExpand() }
+                                y > 100f -> { offY.animateTo(500f, OrisMotion.micro()); connection.pause(); dismissed = true; offY.snapTo(0f) }
+                                else -> { launch { offX.animateTo(0f, OrisMotion.settle()) }; offY.animateTo(0f, OrisMotion.settle()) }
                             }
                         }
                     },
@@ -156,7 +156,7 @@ fun MiniPlayer(
                     },
                 )
             }
-            .height(64.dp)
+            .heightIn(min = 64.dp)
             .clip(pillShape)
             .background(pillColor)
             .border(1.dp, outline.copy(alpha = 0.3f), pillShape)
@@ -169,7 +169,7 @@ fun MiniPlayer(
             // Artwork with a progress ring around it.
             val progress by animateFloatAsState(
                 targetValue = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                animationSpec = tween(400),
+                animationSpec = OrisMotion.standard(),
                 label = "mini progress",
             )
             Box(
@@ -208,16 +208,13 @@ fun MiniPlayer(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp)
-                        .then(
-                            if (artistId != null) Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() }, indication = null,
-                            ) { onOpenArtist(artistId, metadata.artist?.toString().orEmpty()) } else Modifier
-                        ),
+                        .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
                 )
                 androidx.compose.animation.AnimatedVisibility(visible = error != null) {
                     Text(
-                        "Playback error - skipping may fix it",
+                        // A genuinely short label: the pill clips even a first sentence.
+                        diagFailure?.let { com.orismusic.client.utils.diagnosticShort(it) }
+                            ?: "Playback error",
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 10.sp,
                         maxLines = 1,
@@ -237,9 +234,9 @@ fun MiniPlayer(
             }
             Spacer(Modifier.width(12.dp))
             // Mini orbit play button, matching the full player's disc and satellite dot.
-            val ringAlpha by animateFloatAsState(if (isPlaying) 1f else 0f, tween(300, easing = LinearEasing), label = "mini orbit ring")
+            val ringAlpha by animateFloatAsState(if (isPlaying) 1f else 0f, OrisMotion.standard(easing = LinearEasing), label = "mini orbit ring")
             val spin = rememberInfiniteTransition(label = "mini orbit spin")
-            val degrees by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing)), label = "mini orbit degrees")
+            val degrees by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(OrisMotion.OrbitPeriod, easing = LinearEasing)), label = "mini orbit degrees")
             val ended = playbackState == Player.STATE_ENDED
             Box(
                 contentAlignment = Alignment.Center,
