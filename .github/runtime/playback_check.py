@@ -62,6 +62,103 @@ def tap(label, bottom=True):
     adb('shell', 'input', 'tap', str((points[0]+points[2])//2), str((points[1]+points[3])//2))
     time.sleep(1)
 
+
+def pidof(name):
+    """Pids of a running process; [] when nothing matches. pidof exits 1 exactly when no
+    process matches - the expected dead state - so only that rc is quiet. Timeouts,
+    device errors and every other rc keep raising with stderr preserved."""
+    r = subprocess.run(['adb', 'shell', 'pidof', name], capture_output=True, timeout=30)
+    if r.returncode == 1 and not r.stdout.strip():
+        return []
+    if r.returncode != 0:
+        raise AssertionError('pidof ' + name + ' rc=' + str(r.returncode) + ': '
+                             + r.stderr.decode(errors='replace').strip())
+    return r.stdout.decode().split()
+
+
+def ime_shown():
+    """True/False from dumpsys input_method's mInputShown (the API-29 emulator signal);
+    None when the line is absent, so callers fail loudly instead of assuming."""
+    dump = adb('shell', 'dumpsys', 'input_method').decode(errors='replace')
+    m = re.search(r'mInputShown=(\w+)', dump)
+    return None if m is None else m.group(1) == 'true'
+
+
+def dismiss_ime(seconds=10):
+    """Close the soft keyboard before navigating to something it covers, and confirm it
+    actually disappeared. BACK is sent only when the keyboard is genuinely shown - with
+    no IME up, BACK would navigate away instead."""
+    shown = ime_shown()
+    if shown is None:
+        raise AssertionError('IME state unreadable: no mInputShown in dumpsys input_method')
+    if shown:
+        adb('shell', 'input', 'keyevent', '4')
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            time.sleep(0.7)
+            now = ime_shown()
+            if now is False:
+                print('IME dismissed and confirmed hidden', flush=True)
+                return
+            if now is None:
+                raise AssertionError('IME state unreadable after BACK')
+        screen('failure')
+        raise AssertionError('IME still shown after BACK')
+    print('IME already hidden, no BACK sent', flush=True)
+
+
+def tap_mini_any(titles, seconds=30):
+    """Tap the mini-player pill showing any one of titles: the clickable ancestor of the
+    title text whose subtree owns a transport button (content-desc Play/Pause/Replay).
+    Used when the now-playing title is not predetermined (shuffled start)."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        root = tree()
+        parents = {c: p for p in root.iter('node') for c in p}
+        for label_node in [n for n in root.iter('node') if n.get('text') in titles]:
+            node = label_node
+            while node is not None and node.get('clickable') != 'true':
+                node = parents.get(node)
+            if node is None:
+                continue
+            descs = [d.get('content-desc') for d in node.iter('node')]
+            if any(d in ('Play', 'Pause', 'Replay') for d in descs):
+                x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+                print('TAP mini player ' + label_node.get('text')
+                      + ' bounds=' + node.get('bounds'), flush=True)
+                adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
+                return
+        time.sleep(1)
+    screen('failure')
+    raise AssertionError('mini player pill for any of ' + repr(titles) + ' never found')
+
+
+def tap_mini_player(title):
+    """Tap the mini-player pill: the clickable ancestor of the title text whose subtree
+    owns a transport button (content-desc Play/Pause/Replay). Home's 'Continue listening'
+    row is not clickable, so it can never shadow the pill."""
+    tap_mini_any([title])
+
+
+def get_setting(ns, key):
+    return adb('shell', 'settings', 'get', ns, key).decode().strip()
+
+
+def restore_setting(ns, key, initial):
+    """Restore a shared OS setting to its captured initial value. A captured 'null'
+    means the key was unset: delete it rather than writing the literal string 'null'
+    back (settings get prints null for an absent key). The final value is always read
+    back and printed so the log shows what the OS actually holds."""
+    if initial in ('', 'null'):
+        adb('shell', 'settings', 'delete', ns, key)
+    else:
+        adb('shell', 'settings', 'put', ns, key, initial)
+    final = get_setting(ns, key)
+    print('SETTING ' + ns + '/' + key + ' initial=' + repr(initial)
+          + ' final=' + repr(final), flush=True)
+    return final
+
+
 def back():
     adb('shell', 'input', 'keyevent', '4')
     time.sleep(1)
@@ -140,7 +237,7 @@ if __name__ == '__main__':
     print('PASS: idle player, nested Back, tab history, Home system exit; no playback network request', flush=True)
     # Run both checks even if one fails, so a lifecycle regression cannot hide lyric evidence.
     failures = []
-    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py']:
+    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py']:
         result = subprocess.run(['python3', '.github/runtime/'+check])
         if result.returncode: failures.append(check)
     if failures: raise AssertionError('Runtime checks failed: '+', '.join(failures))
