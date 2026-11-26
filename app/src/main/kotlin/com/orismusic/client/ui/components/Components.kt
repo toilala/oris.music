@@ -5,6 +5,7 @@
  */
 package com.orismusic.client.ui.components
 
+import com.orismusic.client.ui.theme.OrisMotion
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -13,6 +14,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -50,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import android.provider.Settings
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
@@ -61,13 +64,31 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import kotlinx.coroutines.delay
 
+/** True when the user asked the OS for no animations (animator duration scale 0). */
+@Composable
+fun rememberReducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        // The OS "Remove animations" toggle writes the Global namespace; the System
+        // constant is deprecated. Read Global first, fall back to System on devices
+        // where the setting still lives there.
+        val global = Settings.Global.getFloat(
+            context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, Float.NaN,
+        )
+        if (!global.isNaN()) global == 0f
+        else Settings.System.getFloat(
+            context.contentResolver, Settings.System.ANIMATOR_DURATION_SCALE, 1f,
+        ) == 0f
+    }
+}
+
 /** Springy press feedback: the element shrinks slightly while a finger is down. */
 fun Modifier.pressClickable(onClick: () -> Unit, pressedScale: Float = 0.96f): Modifier = composed {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (rememberReducedMotion()) snap() else OrisMotion.press(),
         label = "press",
     )
     this
@@ -86,7 +107,7 @@ fun Modifier.pressCombinedClickable(
     val pressed by source.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (rememberReducedMotion()) snap() else OrisMotion.press(),
         label = "press",
     )
     this
@@ -100,7 +121,7 @@ fun Modifier.shimmer(): Modifier = composed {
     val x by transition.animateFloat(
         initialValue = -400f,
         targetValue = 1200f,
-        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(OrisMotion.ShimmerPeriod, easing = LinearEasing), RepeatMode.Restart),
         label = "shimmer x",
     )
     val base = MaterialTheme.colorScheme.surfaceVariant
@@ -119,7 +140,7 @@ fun Modifier.entrance(index: Int = 0): Modifier = composed {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay((index.coerceAtMost(8) * 45).toLong())
-        progress.animateTo(1f, tween(380))
+        progress.animateTo(1f, OrisMotion.standard())
     }
     this.graphicsLayer {
         alpha = progress.value
@@ -162,7 +183,7 @@ fun Artwork(
     val pulse = if (loaded || failed || url.isNullOrBlank()) base else {
         val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "cover pulse")
         val a by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing),
+            OrisMotion.entrance(easing = androidx.compose.animation.core.LinearEasing),
             androidx.compose.animation.core.RepeatMode.Reverse), label = "cover pulse alpha")
         androidx.compose.ui.graphics.lerp(base, MaterialTheme.colorScheme.surfaceContainerHigh, a)
     }

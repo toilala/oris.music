@@ -63,9 +63,6 @@ import com.orismusic.client.MainActivity
 import com.orismusic.client.R
 import com.orismusic.client.constants.AudioNormalizationKey
 import com.orismusic.client.constants.AudioOffload
-import com.orismusic.client.constants.CrossfadeDurationKey
-import com.orismusic.client.constants.CrossfadeEnabledKey
-import com.orismusic.client.constants.CrossfadeGaplessKey
 import com.orismusic.client.constants.HideExplicitKey
 import com.orismusic.client.constants.HideVideoSongsKey
 import com.orismusic.client.constants.InfiniteQueueKey
@@ -81,13 +78,11 @@ import com.orismusic.client.constants.SkipSilenceInstantKey
 import com.orismusic.client.constants.SkipSilenceKey
 import com.orismusic.client.constants.StopPlaybackOnTaskRemovedKey
 import com.orismusic.client.constants.IpVersionKey
-import com.orismusic.client.constants.transitionModeOf
 import com.orismusic.client.di.AudioFxService
 import com.orismusic.client.di.AudioLabStore
 import com.orismusic.client.di.AudioSpectrum
 import com.orismusic.client.di.CarLyrics
 import com.orismusic.client.di.CastConnectionHandler
-import com.orismusic.client.di.CrossmixTransitionAudioProcessor
 import com.orismusic.client.di.CustomEqualizerAudioProcessor
 import com.orismusic.client.di.CustomStreamResult
 import com.orismusic.client.di.DiscordPresence
@@ -103,7 +98,6 @@ import com.orismusic.client.di.NetworkConnectivityObserver
 import com.orismusic.client.di.PlayerCache
 import com.orismusic.client.di.ReplayGainTags
 import com.orismusic.client.di.Scrobbler
-import com.orismusic.client.di.SilenceDetectorAudioProcessor
 import com.orismusic.client.di.SleepTimer
 import com.orismusic.client.di.SongTuning
 import com.orismusic.client.di.SourceModules
@@ -213,27 +207,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     var preferredDeviceId: Int? = null
         private set
 
-    private var crossfadeEnabled = false
-    private var crossfadeDuration = 5000f
-    private var crossfadeGapless = true
-    private var crossmixMode = CrossmixMode.OFF
-    private var crossfadeTriggerJob: Job? = null
-
-    private val secondaryPlayerListener = object : Player.Listener {
-        override fun onPlayerError(error: PlaybackException) {
-            Timber.tag("OrisMediaService").e(error, "Secondary player error")
-            secondaryPlayer?.stop()
-            secondaryPlayer?.clearMediaItems()
-            secondaryPlayer?.let { failed ->
-                failed.removeListener(this)
-                playerCrossmixProcessors.remove(failed)
-                playerSilenceProcessors.remove(failed)
-                failed.release()
-            }
-            secondaryPlayer = null
-        }
-    }
-
     private var scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val binder = MusicBinder()
@@ -332,10 +305,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     lateinit var player: ExoPlayer
         private set
-    private var secondaryPlayer: ExoPlayer? = null
-    private var fadingPlayer: ExoPlayer? = null
-    private var isCrossfading = false
-    private var crossfadeJob: Job? = null
 
     @Volatile private var skipBlend = false
     @Volatile private var blendAhead = 1
@@ -344,18 +313,9 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     @Volatile private var studioForVideos = false
     private var fadingLoudnessEnhancer: LoudnessEnhancer? = null
     private var loudnessEnhancerSessionId = C.AUDIO_SESSION_ID_UNSET
-    private var promotingCrossmix = false
-
     // Minimal TransportTransitions
     val transport = object {
         val host = object {}
-    }
-
-    val crossmixMixing = MutableStateFlow(false)
-    val crossmixStatus = MutableStateFlow("")
-
-    fun testCrossmix() {
-        // Crossmix test
     }
 
     private val playingStreams = java.util.concurrent.ConcurrentHashMap<String, Any>() // CustomStreamResult placeholder
@@ -409,13 +369,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         // Handle lyrics sync result
     }
 
-    private data class CrossfadeConfig(
-        val mode: CrossmixMode,
-        val enabled: Boolean,
-        val durationSeconds: Float,
-        val disableForGaplessAlbums: Boolean,
-    )
-
     private lateinit var mediaSession: MediaLibrarySession
 
     private var carLyrics: CarLyrics? = null
@@ -424,15 +377,14 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         get() = mediaSession.platformToken
 
     private val playerInitialized = MutableStateFlow(false)
+    private var historyRecorder: PlaybackHistoryRecorder? = null
     val isPlayerReady: StateFlow<Boolean> = playerInitialized.asStateFlow()
 
     private val _playerFlow = MutableStateFlow<ExoPlayer?>(null)
     val playerFlow = _playerFlow.asStateFlow()
 
-    private val playerSilenceProcessors = java.util.HashMap<Player, SilenceDetectorAudioProcessor>()
     private val playerReplayGain = java.util.HashMap<Player, ReplayGainTags>()
     private val playerEqProcessors = java.util.HashMap<Player, CustomEqualizerAudioProcessor>()
-    private val playerCrossmixProcessors = java.util.HashMap<Player, CrossmixTransitionAudioProcessor>()
     private val playerSpectra = java.util.WeakHashMap<Player, AudioSpectrum>()
 
     fun spectrumOf(player: Player): AudioSpectrum? = playerSpectra[player]
@@ -459,7 +411,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var originalQueueSize: Int = 0
 
-    private var consecutivePlaybackErr = 0
+    private val skipWalkGuard = ConsecutiveFailureGuard()
+    private var pausedForExplicitRetry = false
     private var retryJob: Job? = null
     private var retryCount = 0
     private var silenceSkipJob: Job? = null
@@ -547,6 +500,11 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         player = createExoPlayer()
         _playerFlow.value = player
         player.addListener(this)
+        if (historyRecorder == null) {
+            historyRecorder = PlaybackHistoryRecorder { song ->
+                com.orismusic.client.library.LibraryStore.get(this).recordPlay(song)
+            }.also(player::addListener)
+        }
         EqualizerController.watch(this, player, player)
         playerInitialized.value = true
         Timber.d("OrisMediaService created")
@@ -596,9 +554,6 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     private fun loadPreferences() {
         scope.launch {
             dataStore.data.collect { prefs ->
-                crossfadeEnabled = prefs[CrossfadeEnabledKey] ?: false
-                crossfadeDuration = (prefs[CrossfadeDurationKey] ?: 5f) * 1000
-                crossfadeGapless = prefs[CrossfadeGaplessKey] ?: true
                 mixWithOtherApps = prefs[MixWithOtherAppsKey] ?: false
             }
         }
@@ -718,11 +673,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory())
                 .setLoadErrorHandlingPolicy(object : DefaultLoadErrorHandlingPolicy() {
                     override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                        var cause: Throwable? = info.exception
-                        repeat(12) {
-                            if (cause is GuestAccessRefused) return C.TIME_UNSET
-                            cause = cause?.cause
-                        }
+                        if (com.orismusic.client.utils.hasGuestRefusal(info.exception)) return C.TIME_UNSET
                         return super.getRetryDelayMsFor(info)
                     }
                 }))
@@ -860,13 +811,13 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         playerInitialized.value = false
         queueGeneration++
         scope.cancel()
-        if (::player.isInitialized) player.removeListener(this)
+        if (::player.isInitialized) {
+            player.removeListener(this)
+            historyRecorder?.let(player::removeListener)
+            historyRecorder = null
+        }
         if (::mediaSession.isInitialized) mediaSession.release()
         if (::player.isInitialized) player.release()
-        secondaryPlayer?.release()
-        secondaryPlayer = null
-        fadingPlayer?.release()
-        fadingPlayer = null
         abandonAudioFocus()
         if (::audioManager.isInitialized && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
@@ -977,6 +928,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     /** A stream that fails to load used to leave the player idle, so the user had to tap play again. Retry, then skip. */
     private fun handlePlaybackError(error: PlaybackException) {
         val id = player.currentMediaItem?.mediaId
+        if (com.orismusic.client.utils.hasGuestRefusal(error)) {
+            // Known refusal (bot check): the loader already declines retries, and automatic
+            // re-prepares would storm the same refusal. resolveFresh has already surfaced
+            // the human message; only a user action starts a new attempt.
+            return
+        }
         if (id != errorMediaId) { errorMediaId = id; errorRetries = 0 }
         errorRetries++
         val keepPlaying = player.playWhenReady
@@ -995,11 +952,39 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                 if (player.currentMediaItem?.mediaId != id) return@launch
                 player.prepare()
                 player.playWhenReady = keepPlaying
-            } else if (!pinned && player.hasNextMediaItem()) {
-                errorRetries = 0
-                player.seekToNextMediaItem()
-                player.prepare()
-                player.playWhenReady = keepPlaying
+            } else {
+                if (player.currentMediaItem?.mediaId != id) return@launch
+                when (retriesExhausted(pinned, player.hasNextMediaItem(), skipWalkGuard)) {
+                    RetriesExhausted.SkipToNext -> {
+                        errorRetries = 0
+                        player.seekToNextMediaItem()
+                        player.prepare()
+                        player.playWhenReady = keepPlaying
+                    }
+                    RetriesExhausted.PauseForStreak -> {
+                        // Stop walking the queue silently: pause and say why. A fresh user
+                        // action starts a fresh streak, so reset here too.
+                        errorRetries = 0
+                        skipWalkGuard.onUserAction()
+                        pausedForExplicitRetry = true
+                        player.pause()
+                        com.orismusic.client.utils.PlaybackDiagnostic.reportFailure(
+                            streakPauseMessage(skipWalkGuard.limit),
+                        )
+                        return@launch
+                    }
+                    RetriesExhausted.StopInPlace -> {
+                        // Nowhere to walk to: pause on the failed song with its own reason
+                        // (never a streak). Tapping play re-prepares with a fresh budget.
+                        errorRetries = 0
+                        pausedForExplicitRetry = true
+                        player.pause()
+                        com.orismusic.client.utils.PlaybackDiagnostic.reportFailure(
+                            terminalStopMessage(),
+                        )
+                        return@launch
+                    }
+                }
             }
         }
     }
@@ -1025,9 +1010,25 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     private var positionPersistJob: kotlinx.coroutines.Job? = null
 
+    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        // The guard's pause is retried by tapping play again. PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+        // cannot tell that tap apart from the service's own retry calls (ExoPlayer reports
+        // USER_REQUEST for every setPlayWhenReady), so only the explicit pausedForExplicitRetry
+        // flag marks this path. It is set by the guard's streak pause and by a terminal
+        // stop on a song with nowhere left to walk; either way the tap is the retry. An error drops the player to IDLE, where play() alone is a
+        // no-op, so the failed song needs a fresh prepare to actually retry.
+        if (playWhenReady && pausedForExplicitRetry) {
+            pausedForExplicitRetry = false
+            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        }
+    }
+
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         refreshMediaNotification()
-        if (isPlaying) com.orismusic.client.utils.PlaybackDiagnostic.reportStarted()
+        if (isPlaying) {
+            com.orismusic.client.utils.PlaybackDiagnostic.reportStarted(player.currentMediaItem?.mediaId)
+            skipWalkGuard.onPlaybackStarted()
+        }
         if (!isPlaying) {
             positionPersistJob?.cancel()
             positionPersistJob = null
@@ -1084,6 +1085,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
     // Queue methods for PlayerConnection
     fun playQueue(queue: Queue, playWhenReady: Boolean = true) {
+        skipWalkGuard.onUserAction()
+        pausedForExplicitRetry = false
         queueGeneration++
         val generation = queueGeneration
         runwayJob?.cancel()
@@ -1262,10 +1265,5 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
     // AudioQuality enum for settings
     enum class AudioQuality {
         LOW, MEDIUM, HIGH, LOSSLESS, AUTO
-    }
-
-    // CrossmixMode enum
-    enum class CrossmixMode {
-        OFF, CROSSFADE, AUTOMIX
     }
 }

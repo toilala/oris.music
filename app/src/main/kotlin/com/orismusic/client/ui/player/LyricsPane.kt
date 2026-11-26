@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -118,7 +119,19 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(glow.copy(alpha = 0.8f * wash), androidx.compose.ui.graphics.Color.Transparent)))
                 .statusBarsPadding().navigationBarsPadding())) {
             if (embedded) {
-                // Player's lyrics view: only the words. The player screen draws the header.
+                // Player's lyrics view: reading first, with a compact song header in the
+                // player's own type voice so the words never float without context.
+                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,
+                        color = PlayerTextButtonColor,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    if (artist.isNotBlank()) {
+                        Text(artist, style = MaterialTheme.typography.bodyMedium,
+                            color = PlayerTextButtonColor.copy(alpha = 0.7f), maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
             } else Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onClose) { Text("Back to player") }
                 sourceMenu(sourceName)
@@ -209,8 +222,8 @@ private fun LyricRow(
         distance == 4 -> 0.35f
         else -> 0.28f
     }
-    val alpha by animateFloatAsState(targetAlpha, tween(300), label = "line alpha")
-    val scale by animateFloatAsState(if (selected) 1f else 0.85f, tween(400), label = "line scale")
+    val alpha by animateFloatAsState(targetAlpha, OrisMotion.standard(), label = "line alpha")
+    val scale by animateFloatAsState(if (selected) 1f else 0.85f, OrisMotion.standard(), label = "line scale")
     val settings = com.orismusic.client.settings.PlayerSettings
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val view = androidx.compose.ui.platform.LocalView.current
@@ -302,7 +315,7 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
     val artUrl = metadata?.artworkUri?.toString()
     val tint by androidx.compose.animation.animateColorAsState(
         com.orismusic.client.ui.components.rememberArtworkColor(artUrl) ?: Color(0xFFE9E4DC),
-        animationSpec = tween(700), label = "lyrics accent")
+        animationSpec = OrisMotion.slow(), label = "lyrics accent")
     val accent = lerp(tint, PlayerTextButtonColor, 0.55f)
 
     // --- layout ---

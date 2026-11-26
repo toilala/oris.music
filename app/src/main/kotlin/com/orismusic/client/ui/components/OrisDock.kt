@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.components
 
+import com.orismusic.client.ui.theme.OrisMotion
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -80,7 +83,7 @@ fun OrisDock(
     }
     val dark = scheme.background.luminance() < 0.5f
     val body = when (NavSettings.style) {
-        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.9f else 0.96f)
+        NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.82f else 0.94f)
         NavStyle.Solid -> scheme.surfaceContainerHigh
         NavStyle.Clear -> scheme.surfaceContainerHigh.copy(alpha = 0.45f)
     }
@@ -108,7 +111,7 @@ fun OrisDock(
             .border(
                 BorderStroke(
                     1.dp,
-                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f)))
+                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)))
                     else Brush.verticalGradient(listOf(scheme.surfaceContainerLowest.copy(alpha = 0.9f), scheme.outlineVariant.copy(alpha = 0.5f))),
                 ),
                 shape,
@@ -134,15 +137,18 @@ fun OrisDock(
         Row {
             repeat(count) { i ->
                 val active = i == sel && !none
-                val pop by animateFloatAsState(if (active) 1.08f else 1f, spring(0.38f, 520f), label = "pop")
+                val pop by animateFloatAsState(if (active) 1.08f else 1f, OrisMotion.press(), label = "pop")
                 // A finger on a tab dips the icon, so taps answer before the lens arrives.
                 val pressSrc = remember { MutableInteractionSource() }
                 val pressed by pressSrc.collectIsPressedAsState()
-                val pressScale by animateFloatAsState(if (pressed) 0.82f else 1f, spring(0.5f, 600f), label = "tab press")
+                val pressScale by animateFloatAsState(if (pressed) 0.82f else 1f, OrisMotion.press(), label = "tab press")
                 val activeTint = if (effect == NavEffect.Dot) accent else onAccent
                 val tint by animateColorAsState(if (active) activeTint else scheme.onSurfaceVariant, label = "tint")
                 Column(
                     Modifier.width(tabW).height(tabH)
+                        // The tab itself carries the accessible name: a clickable control must
+                        // not depend on a child icon's node reaching the a11y tree.
+                        .semantics { contentDescription = label(i) }
                         .clickable(interactionSource = pressSrc, indication = null) {
                             if (NavSettings.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSelect(i)
@@ -151,7 +157,7 @@ fun OrisDock(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        icon(i), contentDescription = label(i), tint = tint,
+                        icon(i), contentDescription = null, tint = tint,
                         modifier = Modifier.size(NavSettings.size.icon.dp).graphicsLayer { scaleX = pop * pressScale; scaleY = pop * pressScale },
                     )
                     if (showLabels) Text(label(i), color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))

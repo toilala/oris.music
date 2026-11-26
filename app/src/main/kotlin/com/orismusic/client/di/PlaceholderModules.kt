@@ -83,13 +83,9 @@ interface LoudnessEnhancer
 
 interface HapticAudioProcessor
 
-interface SilenceDetectorAudioProcessor
-
 interface ReplayGainTags
 
 interface CustomEqualizerAudioProcessor
-
-interface CrossmixTransitionAudioProcessor
 
 interface AudioSpectrum
 
