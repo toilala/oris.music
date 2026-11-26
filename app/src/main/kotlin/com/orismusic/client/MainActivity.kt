@@ -64,7 +64,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import com.orismusic.client.library.currentSavedSong
 import com.orismusic.client.ui.screens.applyTo
 import com.orismusic.client.playback.OrisMediaService
 import com.orismusic.client.playback.PlayerConnection
@@ -215,14 +214,8 @@ class MainActivity : ComponentActivity() {
                 val tabState = rememberSaveableStateHolder()
                 val selectedTab = navigation.currentTab
                 val showPlayer = navigation.playerOpen
-                val library = com.orismusic.client.library.LibraryStore.get(this@MainActivity)
                 androidx.compose.runtime.LaunchedEffect(connection) {
                     com.orismusic.client.settings.PlaybackPreferences(this@MainActivity).applyTo(connection)
-                }
-                androidx.compose.runtime.LaunchedEffect(connection) {
-                    connection?.currentMetadata?.collect {
-                        connection.currentSavedSong()?.let { song -> library.recordPlay(song) }
-                    }
                 }
                 BackHandler(enabled = navigation.canGoBack) {
                     navigation = navigation.back()

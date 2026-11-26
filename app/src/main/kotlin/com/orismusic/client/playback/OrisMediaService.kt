@@ -377,6 +377,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         get() = mediaSession.platformToken
 
     private val playerInitialized = MutableStateFlow(false)
+    private var historyRecorder: PlaybackHistoryRecorder? = null
     val isPlayerReady: StateFlow<Boolean> = playerInitialized.asStateFlow()
 
     private val _playerFlow = MutableStateFlow<ExoPlayer?>(null)
@@ -499,6 +500,11 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         player = createExoPlayer()
         _playerFlow.value = player
         player.addListener(this)
+        if (historyRecorder == null) {
+            historyRecorder = PlaybackHistoryRecorder { song ->
+                com.orismusic.client.library.LibraryStore.get(this).recordPlay(song)
+            }.also(player::addListener)
+        }
         EqualizerController.watch(this, player, player)
         playerInitialized.value = true
         Timber.d("OrisMediaService created")
@@ -805,7 +811,11 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
         playerInitialized.value = false
         queueGeneration++
         scope.cancel()
-        if (::player.isInitialized) player.removeListener(this)
+        if (::player.isInitialized) {
+            player.removeListener(this)
+            historyRecorder?.let(player::removeListener)
+            historyRecorder = null
+        }
         if (::mediaSession.isInitialized) mediaSession.release()
         if (::player.isInitialized) player.release()
         abandonAudioFocus()
