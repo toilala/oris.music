@@ -97,7 +97,7 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
         }
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.3f to Color.Transparent),
+                Brush.verticalGradient(0f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f), 0.28f to Color.Transparent),
             ),
         )
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -104,15 +105,34 @@ private sealed interface HomeFeedState {
 /** Kept for the process so coming back to Home shows the shelves at once instead of reloading. */
 private var cachedFeed: HomeFeedState.Ready? = null
 private var cachedAlbums: List<com.music.innertube.models.AlbumItem> = emptyList()
+private var feedGeneration = 0
+private var feedGenerationLoaded = -1
+private var albumsGenerationLoaded = -1
+private var feedSessionLoaded = ""
+private var albumsSessionLoaded = ""
 
-private suspend fun loadHomeFeed(): HomeFeedState =
+/** What the feed was requested as: a different account or visitor is a different feed. */
+private fun feedSession() = "${YouTube.cookie}|${YouTube.visitorData}"
+
+/** One finished load, remembered with what it was built from so a re-entry reuses it. */
+private class Snapshot<K, V> {
+    var key: K? = null
+    var value: V? = null
+    fun peek(k: K): V? = if (key == k) value else null
+    fun store(k: K, v: V) { key = k; value = v }
+}
+private val quickSnapshot = Snapshot<List<Any?>, Pair<List<SongItem>, String>?>()
+private val shelvesSnapshot = Snapshot<List<Any?>, List<ArtistShelf>>()
+private val communitySnapshot = Snapshot<List<Any?>, List<com.music.innertube.models.PlaylistItem>>()
+
+private suspend fun loadHomeFeed(generation: Int, session: String): HomeFeedState =
     YouTube.home().fold(
         onSuccess = { page ->
             // YouTube rotates anonymous home shelves; some rounds carry no song
             // shelves at all. Show whatever came back - playlists included -
             // and only call it empty when nothing parseable arrived.
             if (page.sections.any { section -> section.items.isNotEmpty() }) {
-                HomeFeedState.Ready(page).also { cachedFeed = it }
+                HomeFeedState.Ready(page).also { if (generation == feedGeneration) { cachedFeed = it; feedGenerationLoaded = generation; feedSessionLoaded = session } }
             } else {
                 HomeFeedState.Failed("The feed came back empty")
             }
@@ -132,18 +152,22 @@ fun HomeScreen(
 ) {
     var showDiagnostic by remember { androidx.compose.runtime.mutableStateOf(false) }
     if (showDiagnostic) DiagnosticHistoryDialog { showDiagnostic = false }
-    var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var refreshTick by remember { androidx.compose.runtime.mutableIntStateOf(feedGeneration) }
     var refreshing by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(refreshing) { if (refreshing) { kotlinx.coroutines.delay(1400); refreshing = false } }
     val feed by produceState<HomeFeedState>(cachedFeed ?: HomeFeedState.Loading, refreshTick) {
-        val fresh = loadHomeFeed()
+        val session = feedSession()
+        if (cachedFeed != null && feedGenerationLoaded == refreshTick && feedSessionLoaded == session) { value = cachedFeed!!; return@produceState }
+        val fresh = loadHomeFeed(refreshTick, session)
         // A failed refresh keeps what is already on screen.
         value = if (fresh is HomeFeedState.Failed && cachedFeed != null) cachedFeed!! else fresh
     }
 
     val newAlbums by produceState<List<com.music.innertube.models.AlbumItem>>(cachedAlbums, refreshTick) {
+        val session = feedSession()
+        if (cachedAlbums.isNotEmpty() && albumsGenerationLoaded == refreshTick && albumsSessionLoaded == session) { value = cachedAlbums; return@produceState }
         val fresh = YouTube.explore().getOrNull()?.newReleaseAlbums.orEmpty()
-        if (fresh.isNotEmpty()) cachedAlbums = fresh
+        if (fresh.isNotEmpty() && refreshTick == feedGeneration) { cachedAlbums = fresh; albumsGenerationLoaded = refreshTick; albumsSessionLoaded = session }
         value = fresh.ifEmpty { cachedAlbums }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -154,24 +178,32 @@ fun HomeScreen(
     val taste = remember(history, liked, counts) { Taste.from(history, liked, counts) }
     val filterStore = DiscoveryFilterStore.get(context)
     val filters = filterStore.filters.collectAsState().value
-    val shelves by produceState<List<ArtistShelf>>(emptyList(), taste.artists, refreshTick) {
+    val shelvesKey = listOf(taste.artists, refreshTick, feedSession())
+    val shelves by produceState<List<ArtistShelf>>(shelvesSnapshot.peek(shelvesKey) ?: emptyList(), shelvesKey) {
+        shelvesSnapshot.peek(shelvesKey)?.let { value = it; return@produceState }
         value = if (taste.artists.isEmpty()) emptyList() else loadArtistShelves(taste.artists.take(6))
+        if (refreshTick == feedGeneration) shelvesSnapshot.store(shelvesKey, value)
     }
-    val community by produceState<List<com.music.innertube.models.PlaylistItem>>(emptyList(), taste.artists, refreshTick) {
+    val community by produceState<List<com.music.innertube.models.PlaylistItem>>(communitySnapshot.peek(shelvesKey) ?: emptyList(), shelvesKey) {
+        communitySnapshot.peek(shelvesKey)?.let { value = it; return@produceState }
         value = if (taste.artists.isEmpty()) emptyList() else loadCommunityPlaylists(taste.artists)
+        if (refreshTick == feedGeneration) communitySnapshot.store(shelvesKey, value)
     }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
-    val heroOn = HomeSettings.hero && !HomeSettings.minimal
+    val heroOn = HomeSettings.hero
     val heroSongs = remember(feed, heroOn) {
         if (!heroOn) emptyList() else (feed as? HomeFeedState.Ready)?.page?.sections
             ?.flatMap { MusicCandidates.select(it.items.filterIsInstance<SongItem>()) }
             .orEmpty().distinctBy { it.id }.take(5)
     }
 
-    val quickPicks by produceState<Pair<List<SongItem>, String>?>(null, feed, refreshTick, filters, taste.artists) {
+    val quickKey = listOf((feed as? HomeFeedState.Ready)?.page, refreshTick, filters, taste.artists, feedSession())
+    val quickPicks by produceState<Pair<List<SongItem>, String>?>(quickSnapshot.peek(quickKey), quickKey) {
+        quickSnapshot.peek(quickKey)?.let { value = it; return@produceState }
         value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it, filters, taste.artists) }
+        if (value != null && refreshTick == feedGeneration) quickSnapshot.store(quickKey, value)
     }
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize()
@@ -181,7 +213,7 @@ fun HomeScreen(
             if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = { refreshing = true; refreshTick++ },
+                onRefresh = { refreshing = true; feedGeneration++; refreshTick = feedGeneration },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 LazyColumn(
@@ -190,15 +222,27 @@ fun HomeScreen(
                     contentPadding = PaddingValues(bottom = 24.dp + bottomInset),
                     verticalArrangement = Arrangement.spacedBy(HomeSettings.density.gap.dp),
                 ) {
-                    item(key = "header") {
-                        HomeHeader(scroll)
+                    item(key = "top") {
+                        val deck = HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck
+                        val topInset = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                        when {
+                            heroSongs.isNotEmpty() -> Box {
+                                if (deck) HomeDeck(heroSongs, playerConnection, scroll)
+                                else HomeHero(heroSongs, playerConnection, scroll)
+                                HomeHeader(scroll, overArtwork = !deck)
+                            }
+                            // Same height as the deck so the feed arriving does not move anything below.
+                            heroOn && deck && feed is HomeFeedState.Loading -> Box(Modifier.fillMaxWidth().height(500.dp + topInset)) {
+                                HomeHeader(scroll)
+                                Box(
+                                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 64.dp, start = 78.dp, end = 78.dp)
+                                        .height(268.dp).clip(RoundedCornerShape(24.dp)).shimmer(),
+                                )
+                            }
+                            else -> HomeHeader(scroll)
+                        }
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)
-                    if (heroSongs.isNotEmpty()) item(key = "discovery-hero") {
-                        if (HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck)
-                            HomeDeck(heroSongs, playerConnection, scroll)
-                        else HomeHero(heroSongs, playerConnection, scroll)
-                    }
                     when (val state = feed) {
                         HomeFeedState.Loading -> item(key = "loading") {
                             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -221,7 +265,7 @@ fun HomeScreen(
                                 title = "Could not load your home feed",
                                 body = "You're offline, or the service can't be reached right now.",
                                 details = state.message,
-                                onRetry = { refreshTick++ },
+                                onRetry = { feedGeneration++; refreshTick = feedGeneration },
                             )
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {
@@ -379,7 +423,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
 
 /** Fixed-size first frame: feed loading never changes the header's position. */
 @Composable
-private fun HomeHeader(scroll: () -> Int) {
+private fun HomeHeader(scroll: () -> Int, overArtwork: Boolean = false) {
     val hour = remember { java.time.LocalTime.now().hour }
     val greeting = when (hour) {
         in 5..11 -> "Good morning"
@@ -402,19 +446,19 @@ private fun HomeHeader(scroll: () -> Int) {
             scaleY = scaleX
             rotationZ = -18f * (1f - progress)
         }, contentAlignment = Alignment.Center) {
-            OrisLogo(Modifier.size(38.dp), tint = MaterialTheme.colorScheme.primary)
+            OrisLogo(Modifier.size(38.dp), tint = if (overArtwork) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.primary)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")).uppercase() },
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.tertiary,
+                color = if (overArtwork) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.tertiary,
                 letterSpacing = androidx.compose.ui.unit.TextUnit(1.8f, androidx.compose.ui.unit.TextUnitType.Sp),
             )
             Text(greeting, style = MaterialTheme.typography.headlineSmall,
                 fontFamily = com.orismusic.client.ui.theme.DisplaySerif,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (overArtwork) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
