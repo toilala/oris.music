@@ -89,6 +89,9 @@ fun QueueScreen(
             },
         )
     }
+    val player = connection?.player
+    var version by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val count = try { version.let { player?.mediaItemCount ?: 0 } } catch (e: Exception) { 0 }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -102,9 +105,9 @@ fun QueueScreen(
                 actions = {
                     androidx.compose.material3.TextButton(
                         onClick = { saving = true },
-                        enabled = connection != null,
+                        enabled = count > 0,
                     ) { Text(if (saved) "Saved" else "Save") }
-                    IconButton(onClick = onOpenPlayer, enabled = connection != null) {
+                    IconButton(onClick = onOpenPlayer, enabled = count > 0) {
                         Icon(Icons.Filled.ExpandLess, "Open player")
                     }
                 },
@@ -126,12 +129,10 @@ fun QueueScreen(
             }
             return@Scaffold
         }
+        if (player == null) return@Scaffold
 
         val queueTitle = connection.queueTitle.collectAsState().value
         val currentIndex = connection.currentWindowIndex.collectAsState().value
-        val player = connection.player
-        var version by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-        val count = try { version.let { player.mediaItemCount } } catch (e: Exception) { 0 }
         val view = androidx.compose.ui.platform.LocalView.current
 
         val nowArt = try { version.let { player.getMediaItemAt(currentIndex).mediaMetadata.artworkUri?.toString() } } catch (e: Exception) { null }

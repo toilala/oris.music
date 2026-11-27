@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import com.orismusic.client.ui.theme.OrisShapes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -160,13 +162,13 @@ fun DetailScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box(Modifier.size(220.dp).clip(RoundedCornerShape(20.dp)).shimmer())
+                Box(Modifier.size(220.dp).clip(if (target.kind == "artist") CircleShape else OrisShapes.Panel).shimmer())
                 Spacer(Modifier.height(16.dp))
                 Box(Modifier.width(200.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).shimmer())
                 Spacer(Modifier.height(24.dp))
                 repeat(5) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)).shimmer())
+                        Box(Modifier.size(54.dp).clip(OrisShapes.Thumb).shimmer())
                         Spacer(Modifier.width(14.dp))
                         Box(Modifier.width(170.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
                     }
@@ -199,7 +201,7 @@ fun DetailScreen(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            val artShape = RoundedCornerShape(if (target.kind == "artist") 110.dp else 24.dp)
+                            val artShape = if (target.kind == "artist") CircleShape else OrisShapes.Panel
                             com.orismusic.client.ui.components.Artwork(
                                 url = content.thumbnail ?: target.thumbnail,
                                 shape = artShape,

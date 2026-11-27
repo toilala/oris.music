@@ -78,15 +78,21 @@ screen('shot_settings')
 
 # Seed a few songs so the filled-in screens can be photographed.
 import json, subprocess
-songs = [{'id': f'seed{i}', 'title': t, 'artist': a} for i, (t, a) in enumerate([
+songs = [{'id': f'seed{i}', 'title': t, 'artist': a, 'thumb': f'https://picsum.photos/seed/oris{i}/300/300'}
+         for i, (t, a) in enumerate([
     ('Midnight City', 'M83'), ('Kathmandu', 'Bipul Chettri'), ('Heat Waves', 'Glass Animals'),
     ('Redbone', 'Childish Gambino'), ('Sunset Lover', 'Petit Biscuit')])]
 blob = json.dumps(songs).replace('&', '&amp;').replace('"', '&quot;')
 xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
        f'<string name="liked">{blob}</string><string name="history">{blob}</string></map>')
+queue = json.dumps({'title': 'Seeded picks', 'index': 0, 'position': 0, 'items': [
+    {'id': g['id'], 'title': g['title'], 'artists': [g['artist']], 'duration': 200, 'thumb': g['thumb']}
+    for g in songs]})
 adb('shell', 'am', 'force-stop', PKG)
 subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/oris-library.xml'"],
                input=xml.encode(), check=True)
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'cat > files/queue_snapshot.json'"],
+               input=queue.encode(), check=True)
 adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 wait_label('Home', seconds=60)
 wait_greeting()
@@ -118,7 +124,7 @@ wait_label('Songs, albums, artists')
 screen('shot_search')
 tap('Library')
 tap('Queue')
-wait_label('Back from queue')
+wait_label('Midnight City', seconds=30)
 screen('shot_queue')
 tap('Open player')
 wait_label('Lyrics', seconds=90)

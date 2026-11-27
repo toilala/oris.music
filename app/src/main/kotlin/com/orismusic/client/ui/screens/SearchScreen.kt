@@ -37,6 +37,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.orismusic.client.ui.theme.OrisShapes
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -434,7 +435,7 @@ fun SearchScreen(
                         recent.take(6).forEach { text ->
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(OrisShapes.Row)
                                     .clickable { submit(text) }
                                     .padding(horizontal = 4.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -468,7 +469,7 @@ fun SearchScreen(
                     Spacer(Modifier.height(12.dp))
                     repeat(6) {
                         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)).shimmer())
+                            Box(Modifier.size(54.dp).clip(OrisShapes.Thumb).shimmer())
                             Spacer(Modifier.width(14.dp))
                             Column {
                                 Box(Modifier.width(180.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
@@ -554,7 +555,7 @@ private fun TopResultCard(song: SongItem, playing: Boolean, onClick: () -> Unit,
         Row(
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(OrisShapes.Panel)
                 .background(
                     if (playing) MaterialTheme.colorScheme.surfaceContainerHighest
                     else MaterialTheme.colorScheme.surfaceContainer,
@@ -563,7 +564,7 @@ private fun TopResultCard(song: SongItem, playing: Boolean, onClick: () -> Unit,
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(song.thumbnail, Modifier.size(96.dp), RoundedCornerShape(16.dp), song.title, px = 500)
+            Artwork(song.thumbnail, Modifier.size(96.dp), OrisShapes.Card, song.title, px = 500)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
