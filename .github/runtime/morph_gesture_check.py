@@ -137,15 +137,15 @@ if not player_open():
 proc = record_start('morph-leg7-drag-during-close.mp4', 20)
 adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '4')
 adb('shell', 'input', 'keyevent', '4')
-time.sleep(1.0)
-swipe(540, 1700, 540, 500, 250)  # fast upward grab mid-close = reopen intent
+time.sleep(0.35)
+swipe(540, 1200, 540, 600, 250)  # fast upward grab mid-close = reopen intent
 time.sleep(4)
 adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
 ok7 = player_open()
+record_stop('morph-leg7-drag-during-close.mp4', proc)
 if not ok7:
     screen('leg7_failure')
 assert ok7, 'leg7: grabbing the sheet mid-close must settle back to open'
-record_stop('morph-leg7-drag-during-close.mp4', proc)
 
 # Leg 2: short drag below the close threshold settles back to open.
 proc = record_start('morph-leg2-drag-restore.mp4', 12)

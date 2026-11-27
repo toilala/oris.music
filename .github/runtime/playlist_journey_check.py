@@ -8,7 +8,7 @@ queue handoff into the player. Screenshots land in runtime-evidence/."""
 import json
 import subprocess
 import time
-from playback_check import adb, back, tap, wait_label, screen, tree, PKG
+from playback_check import adb, back, tap, wait_label, wait_pill, screen, tree, PKG
 
 SONGS = [('Midnight City', 'M83'), ('Kathmandu', 'Bipul Chettri'), ('Heat Waves', 'Glass Animals'),
          ('Redbone', 'Childish Gambino'), ('Sunset Lover', 'Petit Biscuit')]
@@ -108,7 +108,9 @@ tap(NAME)
 wait_label('Midnight City')
 screen('playlist_detail')
 tap('Midnight City')
-wait_label('Lyrics', seconds=90)
+pill = wait_pill('Midnight City', seconds=60)
+adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
+wait_label('Lyrics', seconds=30)
 screen('playlist_use_player')
 back()
 time.sleep(1)

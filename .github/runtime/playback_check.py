@@ -74,6 +74,28 @@ def emit_mp4_frames(tag, mp4_path, frames=10, span=6.0):
             continue
         emit_image(f'{tag}_f{i}', open(png, 'rb').read())
 
+def wait_pill(title, seconds=60):
+    # The mini-player pill for a playing song: its title text node lives under a
+    # clickable container that also holds a transport control. Rows with the same
+    # title elsewhere on screen lack the control and are skipped.
+    import re as _re
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        root = tree()
+        parents = {c: p for p in root.iter('node') for c in p}
+        for label_node in [n for n in root.iter('node') if n.get('text') == title]:
+            node = label_node
+            while node is not None and node.get('clickable') != 'true':
+                node = parents.get(node)
+            if node is None:
+                continue
+            if any(d.get('content-desc') in ('Play', 'Pause', 'Replay') for d in node.iter('node')):
+                x1, y1, x2, y2 = map(int, _re.findall(r'\d+', node.get('bounds')))
+                return ((x1 + x2) // 2, (y1 + y2) // 2)
+        time.sleep(1)
+    raise AssertionError('pill never appeared for ' + title)
+
+
 def tree():
     for _ in range(2):
         try:

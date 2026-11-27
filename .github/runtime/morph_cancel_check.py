@@ -63,8 +63,6 @@ result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'class'
                         capture_output=True, timeout=180)
 out = result.stdout.decode()
 print(out[-600:], flush=True)
-assert 'INSTRUMENTATION_CODE: -1' in out or 'OK (1 test)' in out, \
-    'cancel injection instrumentation failed; tail printed above'
 # Evidence before the verdict: stop and pull the recording first, so a failed settle
 # still leaves the motion inspectable instead of dying empty-handed.
 pid = pidof('screenrecord')
@@ -84,4 +82,6 @@ emit_mp4_frames('morph-cancel', OUT + '/morph-cancel.mp4')
 # No UI assert here: am instrument kills the app process when it finishes, so any
 # post-instrumentation tree is the launcher, not the app. The settle-back-to-open
 # assertion lives inside MorphCancelTest, in the live process, and gates above.
+assert 'INSTRUMENTATION_CODE: -1' in out or 'OK (1 test)' in out, \
+    'cancel injection instrumentation failed; tail printed above'
 print('PASS: ACTION_CANCEL settles the sheet back to open (asserted in-process)', flush=True)
