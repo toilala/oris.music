@@ -274,7 +274,7 @@ fun LibraryScreen(
             if (playlists.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "Make a playlist, then add songs from the player.",
+                        text = "Make a playlist, then add songs from any song's menu.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(32.dp),

@@ -223,7 +223,7 @@ private fun QuickPickChip(
             Artwork(song.thumbnail, Modifier.size(OrisDimens.ListThumb), OrisShapes.Thumb, song.title, px = 160)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(song.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val sub = buildString {
                     append(song.artists.joinToString { it.name })
                     song.duration?.let { append(" \u00b7 ").append(mmss(it)) }

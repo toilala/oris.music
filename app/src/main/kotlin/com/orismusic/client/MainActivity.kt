@@ -530,10 +530,7 @@ private fun ComingSoonTab(title: String, modifier: Modifier = Modifier) {
 private fun rememberNavTint(connection: com.orismusic.client.playback.PlayerConnection?): androidx.compose.ui.graphics.Color? {
     val meta by (connection?.currentMetadata?.collectAsState()
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.media3.common.MediaMetadata?>(null) })
-    val playing by (connection?.isPlaying?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) })
-    val tint = com.orismusic.client.ui.components.rememberArtworkColor(meta?.artworkUri?.toString())
-    return if (playing) tint else null
+    return com.orismusic.client.ui.components.rememberArtworkColor(meta?.artworkUri?.toString())
 }
 
 /**

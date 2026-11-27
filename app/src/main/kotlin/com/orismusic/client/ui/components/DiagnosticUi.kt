@@ -15,6 +15,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,26 +28,28 @@ fun DiagnosticFailureBanner(onClick: () -> Unit, onRetry: (() -> Unit)? = null) 
     val failure = activeFailure ?: return
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 2.dp),
     ) {
-        // The surface stays human-readable; the raw exception chain lives in the diagnostic history.
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        // One compact strip: an error-tinted icon carries the severity, the surface stays
+        // calm, and the artwork keeps its room. The raw exception chain lives in Details.
+        Row(
+            Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 diagnosticSummary(failure),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier.weight(1f),
             )
-            Row {
-                if (onRetry != null) {
-                    TextButton(onClick = onRetry) { Text("Retry") }
-                }
-                TextButton(onClick = onClick) { Text("Details") }
+            if (onRetry != null) {
+                TextButton(onClick = onRetry) { Text("Retry") }
             }
+            TextButton(onClick = onClick) { Text("Details") }
         }
     }
 }

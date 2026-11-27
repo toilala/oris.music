@@ -88,10 +88,10 @@ fun OrisDock(
         NavStyle.Solid -> scheme.surfaceContainerHigh
         NavStyle.Clear -> scheme.surfaceContainerHigh.copy(alpha = 0.45f)
     }
-    // While a song plays the dock leans a little toward its artwork colour, so the dock
-    // and the mini player above it read as one set.
+    // While a song is loaded the dock wears the same artwork colour as the mini player
+    // above it, a step quieter, so the stack reads as one set instead of two stray pills.
     val body by animateColorAsState(
-        tint?.let { androidx.compose.ui.graphics.lerp(bodyBase, it, 0.12f) } ?: bodyBase,
+        tint?.let { androidx.compose.ui.graphics.lerp(bodyBase, it, 0.24f) } ?: bodyBase,
         OrisMotion.slow(), label = "dock body",
     )
     val none = selected < 0
