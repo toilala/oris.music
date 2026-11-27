@@ -8,6 +8,8 @@
 package com.orismusic.client.ui.screens
 
 import com.orismusic.client.ui.theme.OrisMotion
+import com.orismusic.client.ui.theme.coverKey
+import com.orismusic.client.ui.theme.sharedCover
 import com.orismusic.client.settings.HomeSettings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
@@ -483,6 +485,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedItems(
                         modifier = orbit,
                         title = item.title,
                         thumbnail = item.thumbnail,
+                        coverKey = item.toDetailTarget()?.let { coverKey(it) },
                         onClick = item.toDetailTarget()?.let { target -> { onOpen(target) } },
                     )
                 }
@@ -614,13 +617,14 @@ private fun GenericCard(
     modifier: Modifier = Modifier,
     title: String,
     thumbnail: String?,
+    coverKey: String? = null,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier.width(150.dp)
             .then(if (onClick != null) Modifier.pressClickable(onClick) else Modifier),
     ) {
-        Artwork(thumbnail, Modifier.size(150.dp), HomeSettings.corners.shape(16), title)
+        Artwork(thumbnail, Modifier.sharedCover(coverKey).size(150.dp), HomeSettings.corners.shape(16), title)
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,

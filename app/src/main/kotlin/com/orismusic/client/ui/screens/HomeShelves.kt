@@ -50,6 +50,8 @@ import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.entrance
 import com.orismusic.client.ui.components.pressClickable
 import com.orismusic.client.ui.theme.OrisDimens
+import com.orismusic.client.ui.theme.coverKey
+import com.orismusic.client.ui.theme.sharedCover
 import com.orismusic.client.ui.theme.OrisShapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -290,7 +292,7 @@ fun LazyListScope.listeningShelves(
             SectionHeader(title = "New from your artists", subtitle = "Albums and singles from artists you play")
             OrbitRow(items = releases, key = { "na-${it.browseId}" }) { a, _, orbit ->
                 Column(orbit.width(HomeSettings.coverSize.dp(150)).pressClickable({ a.toDetailTarget()?.let(onOpen) })) {
-                    Artwork(a.thumbnail, Modifier.size(HomeSettings.coverSize.dp(150)), HomeSettings.corners.shape(16), a.title)
+                    Artwork(a.thumbnail, Modifier.sharedCover(a.toDetailTarget()?.let { coverKey(it) }).size(HomeSettings.coverSize.dp(150)), HomeSettings.corners.shape(16), a.title)
                     Text(a.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     Text(a.artists?.joinToString { it.name }.orEmpty(), style = MaterialTheme.typography.bodySmall,

@@ -1,6 +1,8 @@
 package com.orismusic.client.ui.screens
 
 import com.orismusic.client.ui.theme.OrisMotion
+import com.orismusic.client.ui.theme.coverKey
+import com.orismusic.client.ui.theme.sharedCover
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.shadow
 import com.orismusic.client.ui.components.shimmer
@@ -159,10 +161,16 @@ fun DetailScreen(
         }
         when (val s = state) {
             DetailState.Loading -> Column(
-                Modifier.fillMaxWidth().padding(16.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box(Modifier.size(220.dp).clip(if (target.kind == "artist") CircleShape else OrisShapes.Panel).shimmer())
+                val loadingShape = if (target.kind == "artist") CircleShape else OrisShapes.Panel
+                if (target.thumbnail != null) com.orismusic.client.ui.components.Artwork(
+                    url = target.thumbnail,
+                    shape = loadingShape,
+                    modifier = Modifier.sharedCover(coverKey(target)).size(220.dp).shadow(20.dp, loadingShape),
+                )
+                else Box(Modifier.size(220.dp).clip(loadingShape).shimmer())
                 Spacer(Modifier.height(16.dp))
                 Box(Modifier.width(200.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).shimmer())
                 Spacer(Modifier.height(24.dp))
@@ -203,11 +211,10 @@ fun DetailScreen(
                         ) {
                             val artShape = if (target.kind == "artist") CircleShape else OrisShapes.Panel
                             com.orismusic.client.ui.components.Artwork(
-                                url = content.thumbnail ?: target.thumbnail,
+                                url = target.thumbnail ?: content.thumbnail,
                                 shape = artShape,
-                                modifier = Modifier.size(220.dp)
+                                modifier = Modifier.sharedCover(coverKey(target)).size(220.dp)
                                     .shadow(20.dp, artShape),
-                                px = 800,
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(content.title, style = MaterialTheme.typography.headlineSmall,

@@ -54,6 +54,8 @@ import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.entrance
 import com.orismusic.client.ui.components.pressClickable
 import com.orismusic.client.ui.theme.OrisDimens
+import com.orismusic.client.ui.theme.coverKey
+import com.orismusic.client.ui.theme.sharedCover
 import com.orismusic.client.ui.theme.OrisShapes
 import com.orismusic.client.ui.components.pressCombinedClickable
 import kotlinx.coroutines.CoroutineScope
@@ -284,7 +286,7 @@ fun CommunityPlaylistsSection(
                     Modifier.entrance(index).width(OrisDimens.GridCard).clip(OrisShapes.Card)
                         .pressClickable({ playlist.toDetailTarget()?.let(onOpen) }),
                 ) {
-                    Artwork(playlist.thumbnail, Modifier.size(OrisDimens.GridCard), OrisShapes.Card, playlist.title, px = 300)
+                    Artwork(playlist.thumbnail, Modifier.sharedCover(playlist.toDetailTarget()?.let { coverKey(it) }).size(OrisDimens.GridCard), OrisShapes.Card, playlist.title)
                     Text(
                         playlist.title, style = MaterialTheme.typography.titleSmall,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
