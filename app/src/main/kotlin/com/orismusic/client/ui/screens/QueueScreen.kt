@@ -188,12 +188,12 @@ fun QueueScreen(
                             enableDismissFromStartToEnd = false,
                             enableDismissFromEndToStart = !isNow,
                             backgroundContent = {
-                                Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.CenterEnd) {
+                                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = 24.dp), contentAlignment = Alignment.CenterEnd) {
                                     Text("Remove", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             },
                         ) {
-                            Box(Modifier.background(MaterialTheme.colorScheme.background).alpha(if (dim) 0.55f else 1f)) {
+                            Box(Modifier.alpha(if (dim) 0.55f else 1f)) {
                                 com.orismusic.client.ui.components.SongRow(
                                     title = item.mediaMetadata.title?.toString().orEmpty(),
                                     subtitle = item.mediaMetadata.artist?.toString().orEmpty(),

@@ -51,7 +51,12 @@ assert 'category=transport' in late_dump, \
     'steady-state notification is not a media notification (no transport category)'
 assert 'android.mediaSession=Token' in late_dump, \
     'steady-state notification has no live media session token'
-media_sessions = adb('shell', 'dumpsys', 'media_session').decode()
+media_sessions = ''
+for _ in range(10):
+    media_sessions = adb('shell', 'dumpsys', 'media_session').decode()
+    if 'Runtime local tone' in media_sessions:
+        break
+    time.sleep(2)
 open(OUT + '/dumpsys-media-session.txt', 'w').write(media_sessions)
 assert 'Runtime local tone' in media_sessions, 'media session is not carrying the track title'
 assert 'Oris test' in media_sessions, 'media session is not carrying the track artist'
