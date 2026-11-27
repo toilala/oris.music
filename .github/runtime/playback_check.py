@@ -27,13 +27,26 @@ def screen(name):
     open(f'{OUT}/{name}.png', 'wb').write(data)
     emit_image(name, data)
 
+def ensure_ffmpeg():
+    """The runner image has no ffmpeg; install it once per job so recorded transitions
+    can be read as frames. Best-effort: frame emission stays warn-only if apt fails."""
+    import shutil
+    if shutil.which('ffprobe') and shutil.which('ffmpeg'):
+        return True
+    r = subprocess.run(['sudo', 'apt-get', 'install', '-y', 'ffmpeg'], capture_output=True)
+    if not (shutil.which('ffprobe') and shutil.which('ffmpeg')):
+        subprocess.run(['sudo', 'apt-get', 'update', '-qq'], capture_output=True)
+        r = subprocess.run(['sudo', 'apt-get', 'install', '-y', 'ffmpeg'], capture_output=True)
+    ok = bool(shutil.which('ffprobe') and shutil.which('ffmpeg'))
+    print('FFMPEG ' + ('ready' if ok else 'unavailable (apt rc=' + str(r.returncode) + ')'), flush=True)
+    return ok
+
 def emit_mp4_frames(tag, mp4_path, frames=4):
     """Key frames of a recorded transition as ORIS_IMAGE chunks, so the motion itself
     is inspectable from the log rather than only start/end stills or the artifact zip.
     ffmpeg/ffprobe are NOT on this runner, so frame emission is best-effort only and
     must never take a check down with it."""
-    import shutil
-    if not shutil.which('ffprobe') or not shutil.which('ffmpeg'):
+    if not ensure_ffmpeg():
         print('FRAMES SKIPPED ' + tag + ' (no ffmpeg on runner)', flush=True)
         return
     if not os.path.exists(mp4_path):

@@ -113,6 +113,8 @@ fun LibraryScreen(
     var importPreview by remember { mutableStateOf<ImportPreview?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = showStats) { showStats = false }
+    // System Back walks out one level at a time: playlist detail -> the list it came from.
+    BackHandler(enabled = openPlaylist != null) { openPlaylist = null }
     val opened = playlists.firstOrNull { it.id == openPlaylist }
     val stats = listeningStats(playCounts, history + liked + saved + playlists.flatMap { it.songs })
     val songs = when {

@@ -17,7 +17,10 @@ subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && c
                input=light_xml.encode(), check=True)
 adb('shell', 'am', 'start', '-n', MAIN)
 wait_label('Home', seconds=60)
-time.sleep(3)
+# Capture at rest, not mid-load: wait for real feed content so the shot is not the
+# shimmer/skeleton window that made the earlier idle capture read as dimmed.
+wait_label('Quick picks', seconds=60)
+time.sleep(4)
 screen('light_dock_idle')
 
 # Playing: the debug local tone behind the real MainActivity, mini player visible.
@@ -32,4 +35,9 @@ dark_xml = light_xml.replace('Light', 'Dark')
 adb('shell', 'am', 'force-stop', PKG)
 subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'cat > shared_prefs/appearance.xml'"],
                input=dark_xml.encode(), check=True)
-print('PASS: light dock captures (idle + playing)', flush=True)
+# Theme switch must also settle: photograph the dark theme at rest after switching back.
+adb('shell', 'am', 'start', '-n', MAIN)
+wait_label('Quick picks', seconds=60)
+time.sleep(4)
+screen('dark_after_switch')
+print('PASS: light dock captures (idle + playing) and dark after the switch back', flush=True)
