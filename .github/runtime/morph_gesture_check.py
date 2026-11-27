@@ -2,10 +2,10 @@
 """Gesture robustness for the pill<->player morph: real drags and interrupts on the new
 interaction, each leg recorded to mp4. After every interruption the app must show exactly
 one honest state - the open player or the pill - never a stranded invisible sheet, and the
-package stays foreground. Two honest limits: a tap during the reverse can be swallowed by
-the morph window covering the pill (asserted only for end-state consistency), and a true
-gesture CANCEL (ACTION_CANCEL mid-stream) is not scriptable via `adb shell input` - that
-leg is explicitly missing here and must be covered by hands-on device testing before release."""
+package stays foreground. One honest limit: a tap during the reverse can be swallowed by
+the morph window covering the pill (asserted only for end-state consistency). A true
+gesture CANCEL (ACTION_CANCEL mid-stream) is not scriptable via `adb shell input`; it is
+covered by morph_cancel_check.py through UiAutomation-injected MotionEvents."""
 import os
 import re
 import subprocess
@@ -164,12 +164,21 @@ if not player_open():
     pill = pill_visible()
     adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
     wait_label('Collapse player', seconds=10)
-proc = record_start('morph-leg7-drag-during-close.mp4', 14)
+# A fixed 0.3s grab loses the race against the close animation on a slow emulator: the
+# sheet is gone before the swipe lands and there is nothing to grab. Slow the close with
+# the animator scale so the grab reliably lands mid-close; the assertion itself is the
+# same product requirement, and the scale is restored before the next leg.
+proc = record_start('morph-leg7-drag-during-close.mp4', 20)
+adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '4')
 adb('shell', 'input', 'keyevent', '4')
-time.sleep(0.3)
+time.sleep(1.0)
 swipe(540, 1700, 540, 500, 250)  # fast upward grab mid-close = reopen intent
-time.sleep(2)
-assert player_open(), 'leg7: grabbing the sheet mid-close must settle back to open'
+time.sleep(4)
+adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
+ok7 = player_open()
+if not ok7:
+    screen('leg7_failure')
+assert ok7, 'leg7: grabbing the sheet mid-close must settle back to open'
 record_stop('morph-leg7-drag-during-close.mp4', proc)
 
 adb('shell', 'input', 'keyevent', '4')

@@ -263,7 +263,7 @@ if __name__ == '__main__':
     failures = []
     # offline_check stays last when present: it cuts the radios and keeps them cut as evidence.
     # battery.txt overrides the default set so a focused evidence run can skip the rest.
-    default_battery = ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'morph_gesture_check.py', 'motion_record.py', 'offline_check.py']
+    default_battery = ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'playlist_journey_check.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'morph_gesture_check.py', 'morph_cancel_check.py', 'motion_record.py', 'offline_check.py']
     battery_file = '.github/runtime/battery.txt'
     if os.path.exists(battery_file):
         battery = [line.strip() for line in open(battery_file) if line.strip()]

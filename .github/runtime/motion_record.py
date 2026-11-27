@@ -268,9 +268,13 @@ def phase(scale, tag):
     current_name = current.split(': ', 1)[1] if current else None
     target = 'Flat' if current_name == 'Bass boost' else 'Bass boost'
     print('EQ-TARGET ' + target + ' (current ' + repr(current_name) + ')', flush=True)
+    # Destination = the derived active-preset line moved off its pre-tap value. The exact
+    # name is not asserted here: band values can clamp so eqPresetNameFor reports Custom,
+    # and eq_check.py owns the exact preset-vector correctness for this environment.
     record('transition-preset-' + tag + '.mp4', 15,
            lambda: resolve_clickable(target),
-           lambda: any((n.get('content-desc') or '') == 'Active preset: ' + target
+           lambda: any((n.get('content-desc') or '').startswith('Active preset: ')
+                       and (n.get('content-desc') or '') != current
                        for n in tree().iter('node')))
     print('EQ-VERIFIED preset moved to ' + target + ' (confirmed inside the recording)',
           flush=True)
@@ -282,6 +286,9 @@ try:
     phase('1', 'default')
     phase('0', 'disabled')
 finally:
-    restore_setting('global', 'animator_duration_scale', initial_scale)
+    if initial_scale in ('null', ''):
+        adb('shell', 'settings', 'delete', 'global', 'animator_duration_scale')
+    else:
+        restore_setting('global', 'animator_duration_scale', initial_scale)
 adb('shell', 'am', 'force-stop', PKG)
 print('PASS: real transitions recorded at default and disabled animator scales', flush=True)

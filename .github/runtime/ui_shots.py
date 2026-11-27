@@ -115,7 +115,7 @@ screen('shot_library_filled')
 # Photograph the shared song menu from a library row. No playlists exist in this
 # fresh emulator, so the sheet must show the empty-playlist row.
 tap('Song actions')
-wait_label('Make a playlist first')
+wait_label('New playlist')
 screen('shot_song_menu')
 back()
 wait_label('Liked (5)')

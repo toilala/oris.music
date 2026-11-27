@@ -63,7 +63,8 @@ result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'class'
                         capture_output=True, timeout=180)
 out = result.stdout.decode()
 print(out[-600:], flush=True)
-assert 'INSTRUMENTATION_CODE: -1' in out, 'cancel injection instrumentation failed'
+assert 'INSTRUMENTATION_CODE: -1' in out or 'OK (1 test)' in out, \
+    'cancel injection instrumentation failed; tail printed above'
 time.sleep(2)
 assert has_label('Collapse player'), 'after ACTION_CANCEL the sheet must settle back to fully open'
 pid = pidof('screenrecord')
