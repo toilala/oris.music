@@ -42,6 +42,29 @@ def tap_edittext():
     raise AssertionError('no EditText node in the create dialog')
 
 
+
+def tap_row_action(title, action):
+    """Tap the action button that belongs to TITLE's own row; the same action label
+    repeats on every row, so a blind first-match tap hits whichever row is on top."""
+    import re
+    end = time.monotonic() + 20
+    while time.monotonic() < end:
+        root = tree()
+        parents = {c: p for p in root.iter('node') for c in p}
+        for node in root.iter('node'):
+            if (node.get('content-desc') or node.get('text')) != action:
+                continue
+            anc = parents.get(node)
+            while anc is not None:
+                texts = [(d.get('text') or '') for d in anc.iter('node')]
+                if title in texts:
+                    x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+                    adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
+                    return
+                anc = parents.get(anc)
+        time.sleep(1)
+    raise AssertionError('no ' + action + ' on ' + title + ' row')
+
 seed_liked()
 wait_label('Library', seconds=60)
 tap('Library')
@@ -68,7 +91,7 @@ back()
 wait_label('Playlists (1)')
 tap('Liked (5)')
 wait_label('Midnight City')
-tap('Song actions')
+tap_row_action('Midnight City', 'Song actions')
 wait_label(NAME, seconds=15)
 screen('playlist_in_sheet')
 tap(NAME)

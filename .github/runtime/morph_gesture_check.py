@@ -52,7 +52,11 @@ def record_start(name, seconds):
 def record_stop(name, proc):
     pid = pidof('screenrecord')
     if pid:
-        adb('shell', 'kill', '-2', pid[0])
+        # The recorder can already be gone (time-limit, device hiccup): a stale pid
+        # is a warning, never a reason to die before the remaining legs run.
+        r = subprocess.run(['adb', 'shell', 'kill', '-2', pid[0]], capture_output=True)
+        if r.returncode != 0:
+            print('RECORDER already gone for ' + name, flush=True)
     try:
         proc.wait(timeout=25)
     except subprocess.TimeoutExpired:

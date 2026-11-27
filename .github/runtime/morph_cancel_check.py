@@ -81,10 +81,7 @@ size = os.path.getsize(OUT + '/morph-cancel.mp4') if os.path.exists(OUT + '/morp
 print('RECORDED morph-cancel.mp4 bytes=' + str(size), flush=True)
 assert size > 20000, 'cancel leg never recorded real frames'
 emit_mp4_frames('morph-cancel', OUT + '/morph-cancel.mp4')
-time.sleep(4)
-if not has_label('Collapse player'):
-    labels = sorted({(n.get('text') or n.get('content-desc') or '')[:60]
-                     for n in tree().iter('node') if n.get('text') or n.get('content-desc')})
-    print('CANCEL STATE DUMP ' + repr(labels[:40]), flush=True)
-assert has_label('Collapse player'), 'after ACTION_CANCEL the sheet must settle back to fully open'
-print('PASS: ACTION_CANCEL settles the sheet back to open', flush=True)
+# No UI assert here: am instrument kills the app process when it finishes, so any
+# post-instrumentation tree is the launcher, not the app. The settle-back-to-open
+# assertion lives inside MorphCancelTest, in the live process, and gates above.
+print('PASS: ACTION_CANCEL settles the sheet back to open (asserted in-process)', flush=True)

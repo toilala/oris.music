@@ -28,5 +28,15 @@ class MorphCancelTest {
             check(ui.injectInputEvent(ev(MotionEvent.ACTION_MOVE, 540f, y, SystemClock.uptimeMillis()), true)) { "MOVE not delivered" }
         }
         check(ui.injectInputEvent(ev(MotionEvent.ACTION_CANCEL, 540f, y, SystemClock.uptimeMillis()), true)) { "CANCEL not delivered" }
+
+        // am instrument kills the app process when the run ends, so the settle
+        // assertion must run here, in the live process: a cancelled close drag
+        // settles the sheet back to fully open.
+        val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val settled = device.wait(
+            androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.desc("Collapse player")),
+            6_000,
+        )
+        check(settled) { "after ACTION_CANCEL the sheet must settle back to fully open" }
     }
 }
