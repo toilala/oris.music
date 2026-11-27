@@ -118,6 +118,7 @@ object InnerTubeXResolver {
           return@launch
         }
         val start = SystemClock.elapsedRealtime()
+        Timber.tag(TAG).d("InnerTubeX warm-up started")
         runCatching {
             innerTube.cookie = com.music.innertube.YouTube.cookie
             innerTube.visitorData = com.music.innertube.YouTube.visitorData

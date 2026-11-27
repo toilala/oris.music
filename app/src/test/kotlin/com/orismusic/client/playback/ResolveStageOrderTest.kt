@@ -67,17 +67,18 @@ class ResolveStageOrderTest {
 
     @Test
     fun `guest refusal falls back to the catalog`() = runTest {
-        val order = mutableListOf<String>()
-        YTPlayerUtils.directStage = { _, _, _ ->
-            order += "direct"
+        // The seams are process-wide. Count only this video so a stray caller on another thread cannot skew the order.
+        val order = java.util.Collections.synchronizedList(mutableListOf<String>())
+        YTPlayerUtils.directStage = { v, _, _ ->
+            if (v == "vid-fallback") order += "direct"
             throw GuestAccessRefused("bot check")
         }
-        YTPlayerUtils.extractStage = { _, _ ->
-            order += "catalog"
+        YTPlayerUtils.extractStage = { v, _ ->
+            if (v == "vid-fallback") order += "catalog"
             extracted("https://catalog/stream")
         }
         val data = YTPlayerUtils.getPlaybackData("vid-fallback", AudioQuality.AUTO, ctx)
-        assertEquals(listOf("direct", "catalog"), order)
+        assertEquals(listOf("direct", "catalog"), order.toList())
         assertEquals("https://catalog/stream", data.streamUrl)
     }
 

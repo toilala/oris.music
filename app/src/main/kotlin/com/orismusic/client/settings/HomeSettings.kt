@@ -43,6 +43,9 @@ object HomeSettings {
 
     var minimal by mutableStateOf(true)
     var hero by mutableStateOf(true)
+    /** Whether the banner also shows on Minimal Home. Settings saved before this existed keep their old look. */
+    var minimalBanner by mutableStateOf(true)
+    val bannerOn get() = hero && (!minimal || minimalBanner)
     var youtube by mutableStateOf(true)
     var heroStyle by mutableStateOf(HeroStyle.Deck)
     var shelfStyle by mutableStateOf(ShelfStyle.Scatter)
@@ -64,6 +67,7 @@ object HomeSettings {
         store = p
         minimal = p.getBoolean("minimal", true)
         hero = p.getBoolean("hero", true)
+        minimalBanner = if (p.contains("minimal_banner")) p.getBoolean("minimal_banner", true) else !p.contains("minimal")
         youtube = p.getBoolean("youtube", true)
         heroStyle = p.enum("hero_style", HeroStyle.Deck)
         shelfStyle = p.enum("shelf_style", ShelfStyle.Scatter)
@@ -98,6 +102,7 @@ object HomeSettings {
         store?.edit()
             ?.putBoolean("minimal", minimal)
             ?.putBoolean("hero", hero)
+            ?.putBoolean("minimal_banner", minimalBanner)
             ?.putBoolean("youtube", youtube)
             ?.putString("hero_style", heroStyle.name)
             ?.putString("shelf_style", shelfStyle.name)
@@ -114,7 +119,7 @@ object HomeSettings {
 
     fun reset() {
         minimal = true
-        shelfStyle = ShelfStyle.Scatter; hero = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
+        shelfStyle = ShelfStyle.Scatter; hero = true; minimalBanner = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
         coverSize = HomeCoverSize.Medium; jumpStyle = JumpStyle.Tiles; motion = HomeMotion.Lively; becauseCount = 3
         order.clear(); order.addAll(HomeSection.entries); hidden.clear()
         save()

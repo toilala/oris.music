@@ -190,11 +190,13 @@ object YTPlayerUtils {
             if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. NETWORK", videoId)
             throw IOException("Cannot resolve $videoId: no network")
         }
+        val startedAt = System.nanoTime()
         try {
             return@withContext withTimeout(resolveTimeoutMs) {
                 resolveStage(videoId, maxKbps, quiet, attempt)
-            }
+            }.also { Timber.tag(TAG).d("Resolved $videoId (r$attempt) in ${(System.nanoTime() - startedAt) / 1_000_000}ms") }
         } catch (timeout: TimeoutCancellationException) {
+            Timber.tag(TAG).w("Resolve of $videoId (r$attempt) timed out after ${(System.nanoTime() - startedAt) / 1_000_000}ms")
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: timed out after ${resolveTimeoutMs / 1000}s")
             if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. TIMED OUT", videoId)
             throw IOException("Cannot resolve $videoId: timed out", timeout)

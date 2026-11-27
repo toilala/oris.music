@@ -192,7 +192,7 @@ fun HomeScreen(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
-    val heroOn = HomeSettings.hero
+    val heroOn = HomeSettings.bannerOn
     val heroSongs = remember(feed, heroOn) {
         if (!heroOn) emptyList() else (feed as? HomeFeedState.Ready)?.page?.sections
             ?.flatMap { MusicCandidates.select(it.items.filterIsInstance<SongItem>()) }

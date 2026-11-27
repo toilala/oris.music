@@ -54,9 +54,9 @@ fun HomeSettingsPage(onBack: () -> Unit) {
                 HomeSettings.minimal = it; HomeSettings.save()
             }
             SettingsFold("Sections and layout") {
-            Text("These extra sections appear when Minimal Home is off. The top banner shows either way.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-            ToggleRow("Top banner", "The big artwork banner at the top. Off gives a plain header.", HomeSettings.hero) {
-                HomeSettings.hero = it; HomeSettings.save()
+            Text("These extra sections appear when Minimal Home is off.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            ToggleRow("Top banner", "The big artwork banner at the top. Off gives a plain header.", HomeSettings.bannerOn) {
+                HomeSettings.hero = it; if (it) HomeSettings.minimalBanner = true; HomeSettings.save()
             }
             ChoiceRow("Banner style", HeroStyle.entries, HomeSettings.heroStyle, { it.label }) { HomeSettings.heroStyle = it; HomeSettings.save() }
             ToggleRow("YouTube Music shelves", "The shelves from YouTube Music below your own.", HomeSettings.youtube) {
@@ -106,7 +106,7 @@ private fun HomePreview() {
         color = androidx.compose.ui.graphics.Color(0xFF151312), modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy((HomeSettings.density.gap / 2).dp)) {
-            if (HomeSettings.hero) {
+            if (HomeSettings.bannerOn) {
                 val deck = HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck
                 androidx.compose.foundation.layout.Box(
                     Modifier.fillMaxWidth().height(if (deck) 70.dp else 54.dp)
