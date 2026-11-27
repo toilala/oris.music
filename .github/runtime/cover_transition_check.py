@@ -90,11 +90,23 @@ def home_ready():
     wait_label('Quick picks', seconds=40, pkg=PKG)
 
 
+def signature():
+    return sorted(n.get('text') for n in tree().iter('node') if n.get('text'))
+
+
 def leg_open_close(tag):
     restart_app('Home', seconds=60)
     home_ready()
     time.sleep(2)
     card = find_card()
+    scrolled = False
+    if card is not None:
+        adb('shell', 'input', 'swipe', '540', '1500', '540', '1100', '300')
+        time.sleep(1.5)
+        moved = find_card()
+        if moved is not None:
+            card, scrolled = moved, True
+    sig_before = signature()
     print('CARD ' + str(card), flush=True)
     if card is None:
         screen(tag + '_nocard')
@@ -106,8 +118,13 @@ def leg_open_close(tag):
     screen(tag + '_page')
     if opened:
         record(tag + '_close.mp4', lambda: adb('shell', 'input', 'keyevent', '4'))
-        back_home = 'Quick picks' in labels()
-        print('LEG ' + tag + ' return-to-home-confirmed=' + str(back_home), flush=True)
+        time.sleep(1.5)
+        sig_after = signature()
+        back_home = bool(sig_after) and 'Back' not in labels()
+        print('LEG ' + tag + ' home-visible=' + str(back_home) + ' scrolled-before-open=' + str(scrolled)
+              + ' text-signature-equal=' + str(sig_before == sig_after)
+              + ' only-before=' + str(sorted(set(sig_before) - set(sig_after))[:6])
+              + ' only-after=' + str(sorted(set(sig_after) - set(sig_before))[:6]), flush=True)
         screen(tag + '_after')
 
 
@@ -136,12 +153,22 @@ def main():
     original = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
     print('SCALE initial=' + original, flush=True)
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
-    for leg in (lambda: leg_open_close('default'), leg_reversal):
+    adb('shell', 'cmd', 'uimode', 'night', 'no')
+    print('THEME light, uimode=' + adb('shell', 'cmd', 'uimode', 'night').decode().strip(), flush=True)
+    legs = [lambda: leg_open_close('default'), leg_reversal]
+    for leg in legs:
         try:
             leg()
         except Exception as e:
             print('LEG failed: ' + repr(e), flush=True)
             screen('leg_failure')
+    adb('shell', 'cmd', 'uimode', 'night', 'yes')
+    print('THEME dark, uimode=' + adb('shell', 'cmd', 'uimode', 'night').decode().strip(), flush=True)
+    try:
+        leg_open_close('dark')
+    except Exception as e:
+        print('LEG failed: ' + repr(e), flush=True)
+    adb('shell', 'cmd', 'uimode', 'night', 'no')
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
     print('SCALE now=' + adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip(), flush=True)
     try:
