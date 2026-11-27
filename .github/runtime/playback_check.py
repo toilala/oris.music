@@ -244,6 +244,32 @@ def back():
     adb('shell', 'input', 'keyevent', '4')
     time.sleep(1)
 
+
+def stop_app():
+    """force-stop returns before the package finishes stopping; an immediate am start
+    can then be dropped silently (run 7 sat on the launcher for 60s with no crash in
+    logcat). Wait for the process to actually die before a caller starts it again."""
+    adb('shell', 'am', 'force-stop', PKG)
+    end = time.monotonic() + 10
+    while pidof(PKG) and time.monotonic() < end:
+        time.sleep(0.5)
+
+
+def restart_app(label='Home', seconds=60):
+    """Stop fully, start, and retry the start once when the label does not show
+    promptly: a dropped start leaves the launcher on screen, not a crash."""
+    stop_app()
+    adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+    end = time.monotonic() + 15
+    while time.monotonic() < end:
+        for node in tree().iter('node'):
+            if (node.get('package') or '') == PKG and label in (node.get('text'), node.get('content-desc')):
+                return node
+        time.sleep(1)
+    adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+    return wait_label(label, seconds=seconds, pkg=PKG)
+
+
 def still_open():
     assert PKG in adb('shell', 'dumpsys', 'activity', 'activities').decode().split('mResumedActivity:')[-1].split('\n')[0]
 

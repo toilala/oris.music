@@ -1,2 +1,2 @@
-nav_hide_check.py
-morph_gesture_check.py
+stream_probe.py
+startup_probe.py
