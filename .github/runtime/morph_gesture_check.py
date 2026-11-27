@@ -2,8 +2,10 @@
 """Gesture robustness for the pill<->player morph: real drags and interrupts on the new
 interaction, each leg recorded to mp4. After every interruption the app must show exactly
 one honest state - the open player or the pill - never a stranded invisible sheet, and the
-package stays foreground. A tap during the reverse can be swallowed by the morph window
-covering the pill; that is expected and the leg asserts only end-state consistency."""
+package stays foreground. Two honest limits: a tap during the reverse can be swallowed by
+the morph window covering the pill (asserted only for end-state consistency), and a true
+gesture CANCEL (ACTION_CANCEL mid-stream) is not scriptable via `adb shell input` - that
+leg is explicitly missing here and must be covered by hands-on device testing before release."""
 import os
 import re
 import subprocess
@@ -157,5 +159,18 @@ time.sleep(1.5)
 assert player_open(), 'leg6: a small in-player scroll must not dismiss the player'
 record_stop('morph-leg6-inplayer-scroll.mp4', proc)
 
+# Leg 7: a grab DURING the close animation reasserts open intent and settles open.
+if not player_open():
+    pill = pill_visible()
+    adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
+    wait_label('Collapse player', seconds=10)
+proc = record_start('morph-leg7-drag-during-close.mp4', 14)
 adb('shell', 'input', 'keyevent', '4')
-print('PASS: morph gesture robustness, all six legs consistent', flush=True)
+time.sleep(0.3)
+swipe(540, 1700, 540, 500, 250)  # fast upward grab mid-close = reopen intent
+time.sleep(2)
+assert player_open(), 'leg7: grabbing the sheet mid-close must settle back to open'
+record_stop('morph-leg7-drag-during-close.mp4', proc)
+
+adb('shell', 'input', 'keyevent', '4')
+print('PASS: morph gesture robustness, all seven legs consistent', flush=True)

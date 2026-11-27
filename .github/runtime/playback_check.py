@@ -2,10 +2,12 @@
 """Deterministic navigation smoke check. Never asks YouTube to play a song."""
 import base64
 import glob
+import json
 import os
 import re
 import subprocess
 import time
+import traceback
 import xml.etree.ElementTree as ET
 
 OUT = 'runtime-evidence'
@@ -173,7 +175,7 @@ def back():
 def still_open():
     assert PKG in adb('shell', 'dumpsys', 'activity', 'activities').decode().split('mResumedActivity:')[-1].split('\n')[0]
 
-if __name__ == '__main__':
+def main():
     adb('wait-for-device')
     adb('shell', 'input', 'keyevent', '82')
     adb('install', '-r', glob.glob('app/build/outputs/apk/foss/debug/*.apk')[0])
@@ -183,18 +185,25 @@ if __name__ == '__main__':
     tap('Queue')
     wait_label('Nothing queued yet. Pick a song on Home.')
     screen('queue')
-    tap('Open player')
-    time.sleep(3)
-    screen('player_after_open_tap')
-    wait_label('Lyrics', seconds=90)
-    wait_label('Play')
-    screen('player_idle')
-    back()
-    wait_label('Nothing queued yet. Pick a song on Home.')
-    still_open()
-    screen('back_to_queue')
+    wait_label('Open player')
+    # the content-desc sits on the icon child; enabled lives on the button that owns it.
+    # a disabled control may drop its click semantics, so the owner is the nearest node
+    # that is clickable or reports enabled=false, and the chain goes to the log as evidence.
+    root = tree()
+    parents = {c: p for p in root.iter('node') for c in p}
+    node = next(n for n in root.iter('node') if 'Open player' in (n.get('text'), n.get('content-desc')))
+    chain, n = [], node
+    while n is not None and len(chain) < 6:
+        chain.append({k: n.get(k) for k in ('clickable', 'enabled', 'class')})
+        n = parents.get(n)
+    print('OPEN_PLAYER_CHAIN ' + json.dumps(chain), flush=True)
+    owner = node
+    while owner is not None and owner.get('clickable') != 'true' and owner.get('enabled') != 'false':
+        owner = parents.get(owner)
+    assert owner is not None and owner.get('enabled') == 'false', 'Open player must be disabled while the queue is empty'
     back()
     wait_label('Liked (0)')
+    still_open()
     back()
     wait_label('Home')
     still_open()
@@ -242,9 +251,27 @@ if __name__ == '__main__':
     focus = adb('shell', 'dumpsys', 'window').decode()
     assert not any(PKG in line for line in focus.splitlines() if 'mCurrentFocus' in line)
     print('PASS: idle player, nested Back, tab history, Home system exit; no playback network request', flush=True)
-    # Run both checks even if one fails, so a lifecycle regression cannot hide lyric evidence.
+
+if __name__ == '__main__':
+    # A failed assertion must not block the remaining checks and their screenshots.
+    failure = None
+    try:
+        main()
+    except BaseException:
+        failure = traceback.format_exc()
+        print(failure, flush=True)
     failures = []
-    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'morph_gesture_check.py', 'motion_record.py']:
+    # offline_check stays last when present: it cuts the radios and keeps them cut as evidence.
+    # battery.txt overrides the default set so a focused evidence run can skip the rest.
+    default_battery = ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'morph_gesture_check.py', 'motion_record.py', 'offline_check.py']
+    battery_file = '.github/runtime/battery.txt'
+    if os.path.exists(battery_file):
+        battery = [line.strip() for line in open(battery_file) if line.strip()]
+        print('BATTERY from battery.txt: ' + ', '.join(battery), flush=True)
+    else:
+        battery = default_battery
+    for check in battery:
         result = subprocess.run(['python3', '.github/runtime/'+check])
         if result.returncode: failures.append(check)
+    if failure is not None: raise SystemExit(1)
     if failures: raise AssertionError('Runtime checks failed: '+', '.join(failures))

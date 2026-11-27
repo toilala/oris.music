@@ -423,12 +423,13 @@ class MainActivity : ComponentActivity() {
                                                         dragScope.launch {
                                                             val v = (dragDeltas.average() * 60).toFloat() // px/s, down positive
                                                             dragDeltas.fill(0f)
-                                                            if (morph.value < 0.8f || v > 900f) {
+                                                            // Upward flick is opening intent even below the threshold.
+                                                            if (v < -900f || morph.value >= 0.8f) {
+                                                                morph.animateTo(1f, OrisMotion.smooth(), initialVelocity = (-v / fullH).coerceIn(-12f, 12f))
+                                                            } else {
                                                                 // The effect runs the close; hand it the flick speed.
                                                                 morphVelocity = (-v / fullH).coerceIn(-12f, 0f)
                                                                 navigation = navigation.closePlayer()
-                                                            } else {
-                                                                morph.animateTo(1f, OrisMotion.smooth(), initialVelocity = (-v / fullH).coerceIn(-12f, 12f))
                                                             }
                                                         }
                                                     },
