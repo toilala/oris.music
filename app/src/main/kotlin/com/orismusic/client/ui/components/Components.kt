@@ -192,6 +192,7 @@ object LoadedCovers {
         urls.add(url)
         while (urls.size > 400) urls.remove(urls.first())
     }
+    @Synchronized fun remove(url: String?) { urls.remove(url) }
     @Synchronized fun clear() = urls.clear()
 }
 
@@ -266,7 +267,7 @@ fun Artwork(
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         onSuccess = { loaded = true; LoadedCovers.add(url); onLoaded?.invoke() },
-        onError = { failed = true },
+        onError = { failed = true; LoadedCovers.remove(url) },
         modifier = modifier.clip(shape).background(pulse),
     )
 }

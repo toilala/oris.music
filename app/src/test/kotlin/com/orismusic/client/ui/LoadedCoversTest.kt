@@ -21,6 +21,12 @@ class LoadedCoversTest {
         assertTrue(LoadedCovers.has("https://img/a"))
     }
 
+    @Test fun aCoverThatFailsToLoadIsForgotten() {
+        LoadedCovers.add("https://img/a")
+        LoadedCovers.remove("https://img/a")
+        assertFalse(LoadedCovers.has("https://img/a"))
+    }
+
     @Test fun oldestCoversAreDroppedPastTheLimit() {
         repeat(450) { LoadedCovers.add("https://img/$it") }
         assertFalse(LoadedCovers.has("https://img/0"))
