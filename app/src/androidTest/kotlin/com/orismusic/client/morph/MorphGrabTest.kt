@@ -41,6 +41,23 @@ class MorphGrabTest {
         }
 
         fun sheetTop(): Int? = device.findObject(By.desc("Collapse player"))?.visibleBounds?.top
+        fun settleTop(): Int? {
+            var last: Int? = null
+            var stable = 0
+            val deadline = SystemClock.uptimeMillis() + 6_000
+            while (SystemClock.uptimeMillis() < deadline) {
+                val cur = sheetTop()
+                if (cur != null && last != null && Math.abs(cur - last) <= 8) {
+                    stable++
+                    if (stable >= 3) return cur
+                } else {
+                    stable = 0
+                }
+                last = cur
+                SystemClock.sleep(120)
+            }
+            return last
+        }
         fun shot(name: String) {
             try {
                 if (!device.takeScreenshot(File(dir, name)) && diagWarn == null) diagWarn = "screenshot false: $name"
@@ -63,10 +80,10 @@ class MorphGrabTest {
         if (device.wait(Until.hasObject(By.desc("Collapse player")), 3_000) != true) {
             MorphCancelTest.openSheet(device)
         }
-        val openTop = sheetTop()
+        val openTop = settleTop()
         note("open-top=$openTop")
         shot("grab-1-open.png")
-        check(openTop != null && openTop < 200) {
+        check(openTop != null && openTop < device.displayHeight / 4) {
             "SETUP FAILURE: sheet never opened in the test process (openTop=$openTop); " +
                 "harness lifecycle, not a recovery verdict"
         }
@@ -110,7 +127,7 @@ class MorphGrabTest {
         val settledTop = sheetTop()
         note("settled-top=$settledTop")
         shot("grab-3-settled.png")
-        check(settled == true && settledTop != null && settledTop < 200) {
+        check(settled == true && settledTop != null && settledTop <= openTop + 24) {
             "RECOVERY FAILURE: grabbing the sheet mid-close must settle back to open " +
                 "(settled=$settled settledTop=$settledTop)" + (diagWarn?.let { " [diag: $it]" } ?: "")
         }

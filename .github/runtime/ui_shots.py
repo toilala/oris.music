@@ -114,6 +114,31 @@ screen('dock_nav_hidden_a')
 time.sleep(0.7)
 screen('dock_nav_hidden_b')
 screen('shot_home_scrolled')
+
+# Enabled hide-on-scroll: the dial defaults off (NavSettings.hideOnScroll=false), so the
+# frames above correctly hold nav visible. With the dial on, the same swipe must tuck
+# nav inside the shared body while the mini player stays visible.
+nav_xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
+           '<bool name="hide_on_scroll" value="true" /></map>')
+adb('shell', 'am', 'force-stop', PKG)
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/navigation.xml'"],
+               input=nav_xml.encode(), check=True)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_greeting()
+time.sleep(2)
+adb('shell', 'input', 'swipe', '540', '1200', '540', '400', '350')
+time.sleep(0.35)
+screen('dock_nav_hidden_enabled')
+time.sleep(1.5)
+screen('dock_nav_hidden_enabled_settled')
+nav_off = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
+           '<bool name="hide_on_scroll" value="false" /></map>')
+adb('shell', 'am', 'force-stop', PKG)
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'cat > shared_prefs/navigation.xml'"],
+               input=nav_off.encode(), check=True)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_greeting()
+time.sleep(2)
 # The scrolled frame above carries the tucked-away nav; settle back at the top for the
 # rested unified cluster (mini player and nav in one shared body, edges aligned).
 adb('shell', 'input', 'swipe', '540', '500', '540', '2000', '500')

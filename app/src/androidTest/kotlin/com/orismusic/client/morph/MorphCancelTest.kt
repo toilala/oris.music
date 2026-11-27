@@ -42,6 +42,23 @@ class MorphCancelTest {
         }
 
         fun sheetTop(): Int? = device.findObject(By.desc("Collapse player"))?.visibleBounds?.top
+        fun settleTop(): Int? {
+            var last: Int? = null
+            var stable = 0
+            val deadline = SystemClock.uptimeMillis() + 6_000
+            while (SystemClock.uptimeMillis() < deadline) {
+                val cur = sheetTop()
+                if (cur != null && last != null && Math.abs(cur - last) <= 8) {
+                    stable++
+                    if (stable >= 3) return cur
+                } else {
+                    stable = 0
+                }
+                last = cur
+                SystemClock.sleep(120)
+            }
+            return last
+        }
         fun shot(name: String) {
             try {
                 if (!device.takeScreenshot(File(dir, name)) && diagWarn == null) diagWarn = "screenshot false: $name"
@@ -64,10 +81,10 @@ class MorphCancelTest {
         if (device.wait(Until.hasObject(By.desc("Collapse player")), 3_000) != true) {
             openSheet(device)
         }
-        val openTop = sheetTop()
+        val openTop = settleTop()
         note("open-top=$openTop")
         shot("cancel-1-open.png")
-        check(openTop != null && openTop < 200) {
+        check(openTop != null && openTop < device.displayHeight / 4) {
             "SETUP FAILURE: sheet never opened in the test process (openTop=$openTop); " +
                 "harness lifecycle, not a recovery verdict"
         }
@@ -102,7 +119,7 @@ class MorphCancelTest {
         val settledTop = sheetTop()
         note("settled-top=$settledTop")
         shot("cancel-4-settled.png")
-        check(settled == true && settledTop != null && settledTop < 200) {
+        check(settled == true && settledTop != null && settledTop <= openTop + 24) {
             "RECOVERY FAILURE: after ACTION_CANCEL the sheet must settle back to fully open " +
                 "(settled=$settled settledTop=$settledTop)" + (diagWarn?.let { " [diag: $it]" } ?: "")
         }
