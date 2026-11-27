@@ -247,26 +247,18 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        var miniPillBounds by remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-                        var morphPill by remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
                         var morphVelocity by remember { androidx.compose.runtime.mutableStateOf(0f) }
                         val morph = remember { androidx.compose.animation.core.Animatable(0f) }
                         val dragScope = androidx.compose.runtime.rememberCoroutineScope()
                         val dragDeltas = remember { FloatArray(4) }
                         var dragDeltaIx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-                        // One progress value owns the whole transition: open, reverse, drag and
-                        // settle all move the same pill->fullscreen interpolation, so no handoff
-                        // can jump. Navigation state owns the intent; this effect is the animator
-                        // of record and Animatable's serialization absorbs overlapping mutations.
+                        // One progress value owns the sheet: open, reverse, drag and settle all
+                        // move the same fullscreen slide, so no handoff can jump. Navigation
+                        // state owns the intent; this effect is the animator of record.
                         androidx.compose.runtime.LaunchedEffect(showPlayer) {
                             if (showPlayer) {
-                                // Freeze the pill rect only on a fresh open; a reopen mid-close
-                                // keeps the original so the reverse path stays symmetric.
-                                if (morph.value <= 0.01f) {
-                                    morphPill = miniPillBounds?.takeIf { it.width > 0f && it.height > 0f }
-                                }
                                 morph.animateTo(1f, OrisMotion.smooth())
-                            } else if (morph.value > 0.01f) {
+                            } else if (morph.value > 0.005f) {
                                 val iv = morphVelocity
                                 morphVelocity = 0f
                                 morph.animateTo(0f, OrisMotion.pop(), initialVelocity = iv)
@@ -282,7 +274,6 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
                                             connection = it,
                                             onExpand = { navigation = navigation.openPlayer() },
-                                            onBounds = { miniPillBounds = it },
                                         )
                                     }
                                     FloatingNav(
@@ -375,48 +366,26 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        if ((showPlayer || morph.value > 0.01f) && connection != null) {
+                        if ((showPlayer || morph.value > 0.005f) && connection != null) {
                             connection?.let { conn ->
-                                val morphMeta = conn.currentMetadata.collectAsState().value
-                                val morphTint = com.orismusic.client.ui.components.rememberArtworkColor(
-                                    morphMeta?.artworkUri?.toString(),
-                                )
                                 androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-                                    val fullW = constraints.maxWidth.toFloat()
                                     val fullH = constraints.maxHeight.toFloat()
                                     val t = morph.value
-                                    val pill = morphPill
-                                    val left = androidx.compose.ui.util.lerp(pill?.left ?: 0f, 0f, t)
-                                    val top = androidx.compose.ui.util.lerp(pill?.top ?: fullH, 0f, t)
-                                    val w = androidx.compose.ui.util.lerp(pill?.width ?: fullW, fullW, t)
-                                    val h = androidx.compose.ui.util.lerp(pill?.height ?: fullH, fullH, t)
-                                    val corner = minOf(w, h) * androidx.compose.ui.util.lerp(0.5f, 0f, t)
-                                    val clipShape = remember(t, pill, fullW, fullH) {
-                                        object : androidx.compose.ui.graphics.Shape {
-                                            override fun createOutline(
-                                                size: androidx.compose.ui.geometry.Size,
-                                                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                                                density: androidx.compose.ui.unit.Density,
-                                            ) = androidx.compose.ui.graphics.Outline.Rounded(
-                                                androidx.compose.ui.geometry.RoundRect(left, top, left + w, top + h, corner, corner)
-                                            )
-                                        }
-                                    }
-                                    val windowTint = (
-                                        morphTint?.let {
-                                            androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerHigh, it, 0.30f)
-                                        } ?: MaterialTheme.colorScheme.surfaceContainerHigh
-                                        ).copy(alpha = (t / 0.3f).coerceIn(0f, 1f))
+                                    // A standard modal sheet: the player slides up over home and
+                                    // dismisses by drag-down as one fullscreen surface. There is no
+                                    // shrinking hit region, so a grab mid-close always lands on it.
                                     androidx.compose.foundation.layout.Box(
                                         Modifier
                                             .fillMaxSize()
-                                            .clip(clipShape)
-                                            .background(windowTint)
+                                            .graphicsLayer {
+                                                translationY = (1f - t) * size.height
+                                                alpha = (t / 0.25f).coerceIn(0f, 1f)
+                                            }
                                             .pointerInput(Unit) {
                                                 detectVerticalDragGestures(
                                                     onDragStart = {
-                                                        // Grabbing a sheet mid-close reasserts open intent,
-                                                        // so gesture state and navigation state cannot fork.
+                                                        // Grabbing the sheet mid-close reasserts open
+                                                        // intent, so gesture and navigation never fork.
                                                         if (!navigation.playerOpen) navigation = navigation.openPlayer()
                                                     },
                                                     onDragEnd = {
@@ -438,43 +407,25 @@ class MainActivity : ComponentActivity() {
                                                         change.consume()
                                                         dragDeltas[dragDeltaIx % 4] = amount
                                                         dragDeltaIx++
-                                                        // Floor at 0.02 so the overlay cannot dispose itself out from under
+                                                        // Floor at 0.01 so the overlay cannot dispose itself out from under
                                                         // an active gesture; the release path owns the final close.
-                                                        dragScope.launch { morph.snapTo((morph.value - amount / fullH).coerceIn(0.02f, 1f)) }
+                                                        dragScope.launch { morph.snapTo((morph.value - amount / fullH).coerceIn(0.01f, 1f)) }
                                                     },
                                                 )
                                             },
                                     ) {
-                                        val contentAlpha = ((t - 0.7f) / 0.25f).coerceIn(0f, 1f)
-                                        // The artwork's own bounds ride the window rect: it grows with
-                                        // the pill's frame into the full-bleed backdrop, then crossfades
-                                        // into the NowPlaying layout. Tint behind covers image load.
-                                        val windowDensity = androidx.compose.ui.platform.LocalDensity.current
-                                        coil3.compose.AsyncImage(
-                                            model = morphMeta?.artworkUri,
-                                            contentDescription = null,
-                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                            modifier = Modifier
-                                                .offset { IntOffset(left.toInt(), top.toInt()) }
-                                                .size(with(windowDensity) { w.toDp() }, with(windowDensity) { h.toDp() })
-                                                .graphicsLayer { alpha = 1f - contentAlpha },
+                                        NowPlayingScreen(
+                                            connection = conn,
+                                            onCollapse = { navigation = navigation.closePlayer() },
+                                            onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
+                                            onOpenArtist = { id, name ->
+                                                openScope.launch {
+                                                    com.orismusic.client.ui.screens.openOrPlay(
+                                                        com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
+                                                    ) { navigation = navigation.closePlayer(); detail = it; detailBack = null }
+                                                }
+                                            },
                                         )
-                                        androidx.compose.foundation.layout.Box(
-                                            Modifier.fillMaxSize().graphicsLayer { alpha = contentAlpha },
-                                        ) {
-                                            NowPlayingScreen(
-                                                connection = conn,
-                                                onCollapse = { navigation = navigation.closePlayer() },
-                                                onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
-                                                onOpenArtist = { id, name ->
-                                                    openScope.launch {
-                                                        com.orismusic.client.ui.screens.openOrPlay(
-                                                            com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
-                                                        ) { navigation = navigation.closePlayer(); detail = it; detailBack = null }
-                                                    }
-                                                },
-                                            )
-                                        }
                                     }
                                 }
                             }

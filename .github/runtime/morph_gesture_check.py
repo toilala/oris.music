@@ -137,8 +137,21 @@ if not player_open():
 proc = record_start('morph-leg7-drag-during-close.mp4', 20)
 adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '4')
 adb('shell', 'input', 'keyevent', '4')
-time.sleep(0.35)
-swipe(540, 1200, 540, 600, 250)  # fast upward grab mid-close = reopen intent
+# Wait until the sheet has actually started moving before grabbing: input injection
+# on a loaded emulator can lag the script by seconds, and grabbing a sheet that has
+# not started closing proves nothing about the grab itself.
+end = time.monotonic() + 8
+moved = False
+while time.monotonic() < end and not moved:
+    for n in tree().iter('node'):
+        if n.get('content-desc') == 'Collapse player':
+            top = int(re.findall(r'\d+', n.get('bounds'))[1])
+            if top > 150:
+                moved = True
+                break
+    if not moved:
+        time.sleep(0.2)
+swipe(540, 1600, 540, 700, 250)  # fast upward grab mid-close = reopen intent
 time.sleep(4)
 adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
 ok7 = player_open()
