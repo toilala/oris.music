@@ -139,12 +139,19 @@ fun Modifier.shimmer(): Modifier = composed {
     )
 }
 
+/** Rows that already played their entrance on a screen that is rebuilt on return. Null means always play. */
+val LocalEntranceSeen = androidx.compose.runtime.staticCompositionLocalOf<MutableSet<Int>?> { null }
+
 /** Fades and slides a list item in once, 55ms after the row before it. */
 fun Modifier.entrance(index: Int = 0): Modifier = composed {
     val reduced = rememberReducedMotion()
-    val progress = remember { Animatable(if (reduced) 1f else 0f) }
+    val seen = LocalEntranceSeen.current
+    val slot = androidx.compose.runtime.currentCompositeKeyHash
+    val already = seen?.contains(slot) == true
+    val progress = remember { Animatable(if (reduced || already) 1f else 0f) }
     LaunchedEffect(Unit) {
-        if (reduced) return@LaunchedEffect
+        if (reduced || already) return@LaunchedEffect
+        seen?.add(slot)
         delay((index.coerceAtMost(8) * 55).toLong())
         progress.animateTo(1f, OrisMotion.standard())
     }
@@ -179,6 +186,7 @@ fun Artwork(
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
     contentDescription: String? = null,
     px: Int = 600,
+    onLoaded: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val request = remember(url, px) { ImageRequest.Builder(context).data(upscaleCover(url, px)).crossfade(300).build() }
@@ -223,7 +231,7 @@ fun Artwork(
         model = request,
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
-        onSuccess = { loaded = true },
+        onSuccess = { loaded = true; onLoaded?.invoke() },
         onError = { failed = true },
         modifier = modifier.clip(shape).background(pulse),
     )

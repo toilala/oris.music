@@ -106,6 +106,7 @@ private sealed interface HomeFeedState {
 private var cachedFeed: HomeFeedState.Ready? = null
 private var cachedAlbums: List<com.music.innertube.models.AlbumItem> = emptyList()
 private var feedGeneration = 0
+private val entranceSeen = HashSet<Int>()
 private var feedGenerationLoaded = -1
 private var albumsGenerationLoaded = -1
 private var feedSessionLoaded = ""
@@ -193,27 +194,38 @@ fun HomeScreen(
     val scroll: () -> Int = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 4000 }
     val scope = rememberCoroutineScope()
     val heroOn = HomeSettings.bannerOn
-    val heroSongs = remember(feed, heroOn) {
-        if (!heroOn) emptyList() else (feed as? HomeFeedState.Ready)?.page?.sections
-            ?.flatMap { MusicCandidates.select(it.items.filterIsInstance<SongItem>()) }
-            .orEmpty().distinctBy { it.id }.take(5)
-    }
-
     val quickKey = listOf((feed as? HomeFeedState.Ready)?.page, refreshTick, filters, taste.artists, feedSession())
-    val quickPicks by produceState<Pair<List<SongItem>, String>?>(quickSnapshot.peek(quickKey), quickKey) {
-        quickSnapshot.peek(quickKey)?.let { value = it; return@produceState }
-        value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it, filters, taste.artists) }
-        if (value != null && refreshTick == feedGeneration) quickSnapshot.store(quickKey, value)
+    val quickResult by produceState<QuickResult?>(quickSnapshot.peek(quickKey)?.let { QuickResult(it) }, quickKey) {
+        quickSnapshot.peek(quickKey)?.let { value = QuickResult(it); return@produceState }
+        val page = (feed as? HomeFeedState.Ready)?.page
+        if (page == null) { value = null; return@produceState }
+        val picks = loadQuickPicks(page, filters, taste.artists)
+        value = QuickResult(picks)
+        if (picks != null && refreshTick == feedGeneration) quickSnapshot.store(quickKey, picks)
     }
+    val quickPicks = quickResult?.picks
+    val phase = when (feed) {
+        HomeFeedState.Loading -> FeedPhase.Loading
+        is HomeFeedState.Failed -> FeedPhase.Failed
+        is HomeFeedState.Ready -> FeedPhase.Ready
+    }
+    val feedSongs = remember(feed) {
+        (feed as? HomeFeedState.Ready)?.page?.sections?.flatMap { it.items.filterIsInstance<SongItem>() }.orEmpty()
+    }
+    val hero = remember(heroOn, phase, feedSongs, quickResult, history) {
+        chooseHero(heroOn, phase, feedSongs, quickResult != null, quickPicks?.first, history)
+    }
+    val heroSongs = (hero as? HeroPick.Ready)?.songs.orEmpty()
+    androidx.compose.runtime.CompositionLocalProvider(com.orismusic.client.ui.components.LocalEntranceSeen provides entranceSeen) {
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize()
                 .artworkTintBackdrop(heroSongs.firstOrNull()?.thumbnail ?: history.firstOrNull()?.thumbnail)
                 .padding(outerPadding)) {
             val auroraTint = com.orismusic.client.ui.components.rememberArtworkColor(history.firstOrNull()?.thumbnail)
-            if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
+            if (heroSongs.isEmpty() && hero !is HeroPick.Pending) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = { refreshing = true; feedGeneration++; refreshTick = feedGeneration },
+                onRefresh = { refreshing = true; feedGeneration++; entranceSeen.clear(); refreshTick = feedGeneration },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 LazyColumn(
@@ -232,7 +244,7 @@ fun HomeScreen(
                                 HomeHeader(scroll, overArtwork = !deck)
                             }
                             // Same height as the deck so the feed arriving does not move anything below.
-                            heroOn && deck && feed is HomeFeedState.Loading -> Box(Modifier.fillMaxWidth().height(500.dp + topInset)) {
+                            hero is HeroPick.Pending && deck -> Box(Modifier.fillMaxWidth().height(500.dp + topInset)) {
                                 HomeHeader(scroll)
                                 Box(
                                     Modifier.fillMaxWidth().statusBarsPadding().padding(top = 64.dp, start = 78.dp, end = 78.dp)
@@ -265,7 +277,7 @@ fun HomeScreen(
                                 title = "Could not load your home feed",
                                 body = "You're offline, or the service can't be reached right now.",
                                 details = state.message,
-                                onRetry = { feedGeneration++; refreshTick = feedGeneration },
+                                onRetry = { feedGeneration++; entranceSeen.clear(); refreshTick = feedGeneration },
                             )
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {
@@ -289,6 +301,7 @@ fun HomeScreen(
             }
 
         }
+    }
     }
 }
 
@@ -668,7 +681,8 @@ private fun GenericCard(
         modifier = modifier.width(150.dp)
             .then(if (onClick != null) Modifier.pressClickable(onClick) else Modifier),
     ) {
-        Artwork(thumbnail, Modifier.sharedCover(coverKey).size(150.dp), HomeSettings.corners.shape(16), title)
+        val artShown = androidx.compose.runtime.remember(thumbnail) { androidx.compose.runtime.mutableStateOf(false) }
+        Artwork(thumbnail, Modifier.sharedCover(if (artShown.value) coverKey else null).size(150.dp), HomeSettings.corners.shape(16), title, onLoaded = { artShown.value = true })
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
@@ -678,3 +692,5 @@ private fun GenericCard(
         )
     }
 }
+
+private class QuickResult(val picks: Pair<List<SongItem>, String>?)

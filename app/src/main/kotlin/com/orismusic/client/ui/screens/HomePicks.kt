@@ -286,7 +286,8 @@ fun CommunityPlaylistsSection(
                     Modifier.entrance(index).width(OrisDimens.GridCard).clip(OrisShapes.Card)
                         .pressClickable({ playlist.toDetailTarget()?.let(onOpen) }),
                 ) {
-                    Artwork(playlist.thumbnail, Modifier.sharedCover(playlist.toDetailTarget()?.let { coverKey(it) }).size(OrisDimens.GridCard), OrisShapes.Card, playlist.title)
+                    val artShown = androidx.compose.runtime.remember(playlist.thumbnail) { androidx.compose.runtime.mutableStateOf(false) }
+                    Artwork(playlist.thumbnail, Modifier.sharedCover(playlist.toDetailTarget()?.let { coverKey(it) }.takeIf { artShown.value }).size(OrisDimens.GridCard), OrisShapes.Card, playlist.title, onLoaded = { artShown.value = true })
                     Text(
                         playlist.title, style = MaterialTheme.typography.titleSmall,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
