@@ -1,4 +1,4 @@
-ui_shots.py
-large_text_check.py
-offline_check.py
-light_dock_check.py
+morph_gesture_check.py
+morph_cancel_check.py
+playlist_journey_check.py
+motion_record.py

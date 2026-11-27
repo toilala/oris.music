@@ -1,5 +1,6 @@
 package com.orismusic.client.morph
 
+import android.content.Intent
 import android.os.SystemClock
 import android.view.MotionEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -89,11 +90,30 @@ class MorphCancelTest {
     }
 
     companion object {
-        /** Open the player sheet by tapping the mini-player pill, from any resting state. */
-        fun openSheet(device: UiDevice, tone: String = "Runtime local tone") {
-            check(device.wait(Until.hasObject(By.text(tone)), 10_000)) {
+        /** Start the debug tone inside the instrumentation process: am instrument restarts
+         *  the app process, so any session the launch script began is already dead. */
+        fun ensureTone(device: UiDevice, tone: String = "Runtime local tone") {
+            if (device.wait(Until.hasObject(By.text(tone)), 3_000) == true) return
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val pkg = ctx.packageName
+            ctx.startActivity(
+                Intent().setClassName(pkg, "com.orismusic.client.debug.LocalPlaybackCheckActivity")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            check(device.wait(Until.hasObject(By.text("Local audio playing")), 30_000)) {
+                "SETUP FAILURE: local tone never reached playing in the test process"
+            }
+            SystemClock.sleep(2_000)
+            ctx.startActivity(
+                Intent().setClassName(pkg, "com.orismusic.client.MainActivity")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+            check(device.wait(Until.hasObject(By.text(tone)), 25_000)) {
                 "SETUP FAILURE: no track title on screen to open the sheet from"
             }
+        }
+
+        /** Open the player sheet by tapping the mini-player pill, from any resting state. */
+        fun openSheet(device: UiDevice, tone: String = "Runtime local tone") {
+            ensureTone(device, tone)
             // The pill is the lowest occurrence of the track title on screen; rows with
             // the same title in lists sit higher.
             val pill = device.findObjects(By.text(tone)).maxByOrNull { it.visibleBounds.top }
