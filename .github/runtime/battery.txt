@@ -1,1 +1,3 @@
-ui_shots.py
+nav_hide_check.py
+morph_gesture_check.py
+morph_cancel_check.py

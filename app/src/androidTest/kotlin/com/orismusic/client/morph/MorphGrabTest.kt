@@ -12,11 +12,11 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * Self-contained grab-mid-close diagnostic (leg 7, moved in-process): BACK starts the
- * close, the test catches the sheet while its top edge is moving, grabs INSIDE the
- * live sheet bounds and holds. Movement and hit region are proven from live bounds
- * and UiDevice screenshots before the settle assertion runs, so input latency and
- * harness restarts read as setup failures, never as product recovery verdicts.
+ * Self-contained grab-mid-close diagnostic: an injected drag puts the sheet partway
+ * down, release starts the close, and a second touch re-grabs it while its top edge
+ * is still on the move. The grab point is chosen from where the drag left the sheet,
+ * so no polling has to race the close animation. Movement and hit region are proven
+ * from live bounds and UiDevice screenshots before the settle assertion runs.
  */
 @RunWith(AndroidJUnit4::class)
 class MorphGrabTest {
@@ -76,7 +76,6 @@ class MorphGrabTest {
         }
         if (diagWarn != null) note("DIAG WARNING: " + diagWarn)
 
-        // 1. Establish open in this lifecycle.
         if (device.wait(Until.hasObject(By.desc("Collapse player")), 3_000) != true) {
             MorphCancelTest.openSheet(device)
         }
@@ -88,45 +87,60 @@ class MorphGrabTest {
                 "harness lifecycle, not a recovery verdict"
         }
 
-        // 2. BACK starts the close; catch the sheet while it is actually moving.
-        device.pressBack()
-        var grabTop: Int? = null
-        var probes = 0
-        while (probes < 600) {
-            val t = sheetTop()
-            if (t == null) break // closed before a grab could land
-            if (t > 480) { grabTop = t; break }
-            SystemClock.sleep(5)
-            probes++
-        }
-        note("grab-top=$grabTop probes=$probes")
-        check(grabTop != null) {
-            "SETUP FAILURE: the close finished before any grab could land; never saw the sheet mid-close"
-        }
-
-        // 3. Grab inside the live sheet bounds and hold: changed mind, sheet must reopen.
+        // Drag the sheet partway down; the release then starts a real close.
         val cx = device.displayWidth / 2f
-        val gy = (grabTop + 600f).coerceAtMost(device.displayHeight - 200f)
-        note("grab-point=($cx,$gy) sheet-top-at-grab=$grabTop")
         val t0 = SystemClock.uptimeMillis()
-        fun ev(action: Int, x: Float, y: Float, t: Long) = MotionEvent.obtain(t0, t, action, x, y, 0)
-        check(ui.injectInputEvent(ev(MotionEvent.ACTION_DOWN, cx, gy, t0), true)) { "DOWN not delivered" }
-        SystemClock.sleep(120)
+        check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_DOWN, cx, 900f, t0, t0), true)) { "DOWN not delivered" }
+        var y = 900f
+        for (i in 1..12) {
+            y += 55f
+            SystemClock.sleep(16)
+            check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_MOVE, cx, y, SystemClock.uptimeMillis(), t0), true)) { "MOVE not delivered" }
+        }
+        SystemClock.sleep(150)
+        val draggedTop = sheetTop()
+        note("dragged-top=$draggedTop")
+        shot("grab-2-dragged.png")
+        check(draggedTop != null && draggedTop > openTop + 300 && draggedTop < openTop + 1000) {
+            "SETUP FAILURE: injected drag left the sheet at $draggedTop (openTop=$openTop); " +
+                "gesture delivery problem, not a grab verdict"
+        }
+        check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_UP, cx, y, SystemClock.uptimeMillis(), t0), true)) { "UP not delivered" }
+
+        // Re-grab while the close is in flight. The drag left the sheet near draggedTop,
+        // and a finger at grabY stays on the sheet for the first stretch of the close.
+        SystemClock.sleep(60)
+        val grabY = (draggedTop + 700f).coerceAtMost(device.displayHeight - 240f)
+        val t1 = SystemClock.uptimeMillis()
+        check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_DOWN, cx, grabY, t1, t1), true)) { "grab DOWN not delivered" }
+        SystemClock.sleep(30)
+        val grabTop = sheetTop()
+        note("grab-top=$grabTop grab-y=$grabY")
+        check(grabTop != null && grabTop > openTop + 200) {
+            "SETUP FAILURE: the close finished before the re-grab could land (grabTop=$grabTop)"
+        }
+        check(grabTop < grabY) {
+            "SETUP FAILURE: grab finger missed the sheet (sheet top $grabTop below finger $grabY)"
+        }
+        // Engage the drag detector, then hold: the grab itself is the changed mind.
+        check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_MOVE, cx, grabY + 40f, SystemClock.uptimeMillis(), t1), true)) { "grab MOVE not delivered" }
+        SystemClock.sleep(250)
+        for (i in 1..4) {
+            check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_MOVE, cx, grabY + 40f + 2f * i, SystemClock.uptimeMillis(), t1), true)) { "hold MOVE not delivered" }
+            SystemClock.sleep(10)
+        }
         val heldTop = sheetTop()
         note("held-top=$heldTop")
-        shot("grab-2-held.png")
+        shot("grab-3-held.png")
         check(heldTop != null) { "SETUP FAILURE: sheet vanished under the grab (hit region missed)" }
-        // Small wiggle so the drag detector owns the gesture, then release.
-        check(ui.injectInputEvent(ev(MotionEvent.ACTION_MOVE, cx, gy - 40f, SystemClock.uptimeMillis()), true)) { "MOVE not delivered" }
-        SystemClock.sleep(250)
-        check(ui.injectInputEvent(ev(MotionEvent.ACTION_UP, cx, gy - 40f, SystemClock.uptimeMillis()), true)) { "UP not delivered" }
+        check(ui.injectInputEvent(MorphCancelTest.ev(MotionEvent.ACTION_UP, cx, grabY + 48f, SystemClock.uptimeMillis(), t1), true)) { "grab UP not delivered" }
 
-        // 4. Settle: the grab interrupted a close, so the sheet must settle open.
+        // The grab interrupted a close, so the sheet must settle back to open.
         val settled = device.wait(Until.hasObject(By.desc("Collapse player")), 6_000)
         SystemClock.sleep(500)
         val settledTop = sheetTop()
         note("settled-top=$settledTop")
-        shot("grab-3-settled.png")
+        shot("grab-4-settled.png")
         check(settled == true && settledTop != null && settledTop <= openTop + 24) {
             "RECOVERY FAILURE: grabbing the sheet mid-close must settle back to open " +
                 "(settled=$settled settledTop=$settledTop)" + (diagWarn?.let { " [diag: $it]" } ?: "")

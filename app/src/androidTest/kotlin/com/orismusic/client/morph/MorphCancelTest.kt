@@ -2,6 +2,7 @@ package com.orismusic.client.morph
 
 import android.content.Intent
 import android.os.SystemClock
+import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -16,8 +17,8 @@ import java.io.File
  * Self-contained cancel-recovery diagnostic: the sheet is opened inside THIS
  * instrumentation lifecycle immediately before injecting, so a harness process
  * restart surfaces as a setup failure, never as a product recovery verdict.
- * UiDevice screenshots and live sheet positions are captured pre-injection,
- * post-MOVE and post-CANCEL into the app cache diag dir (pulled over run-as) before any assertion.
+ * Touch events are fully sourced (finger/touchscreen); a sparse event can be
+ * dropped by the input pipeline before Compose ever sees it.
  */
 @RunWith(AndroidJUnit4::class)
 class MorphCancelTest {
@@ -77,7 +78,6 @@ class MorphCancelTest {
         }
         if (diagWarn != null) note("DIAG WARNING: " + diagWarn)
 
-        // 1. Establish the starting state in this lifecycle: the sheet must be open.
         if (device.wait(Until.hasObject(By.desc("Collapse player")), 3_000) != true) {
             openSheet(device)
         }
@@ -89,16 +89,15 @@ class MorphCancelTest {
                 "harness lifecycle, not a recovery verdict"
         }
 
-        // 2. Inject DOWN + MOVEs onto the sheet, then prove the sheet actually moved.
+        // Drag the sheet down, then prove it moved before the cancel lands.
         val cx = device.displayWidth / 2f
         val t0 = SystemClock.uptimeMillis()
-        fun ev(action: Int, x: Float, y: Float, t: Long) = MotionEvent.obtain(t0, t, action, x, y, 0)
-        check(ui.injectInputEvent(ev(MotionEvent.ACTION_DOWN, cx, 900f, t0), true)) { "DOWN not delivered" }
+        check(ui.injectInputEvent(ev(MotionEvent.ACTION_DOWN, cx, 900f, t0, t0), true)) { "DOWN not delivered" }
         var y = 900f
         for (i in 1..8) {
             y += 55f
             SystemClock.sleep(16)
-            check(ui.injectInputEvent(ev(MotionEvent.ACTION_MOVE, cx, y, SystemClock.uptimeMillis()), true)) { "MOVE not delivered" }
+            check(ui.injectInputEvent(ev(MotionEvent.ACTION_MOVE, cx, y, SystemClock.uptimeMillis(), t0), true)) { "MOVE not delivered" }
         }
         SystemClock.sleep(150)
         val movedTop = sheetTop()
@@ -109,8 +108,7 @@ class MorphCancelTest {
                 "gesture delivery problem, not a recovery verdict"
         }
 
-        // 3. CANCEL: the sheet must settle back to fully open.
-        check(ui.injectInputEvent(ev(MotionEvent.ACTION_CANCEL, cx, y, SystemClock.uptimeMillis()), true)) { "CANCEL not delivered" }
+        check(ui.injectInputEvent(ev(MotionEvent.ACTION_CANCEL, cx, y, SystemClock.uptimeMillis(), t0), true)) { "CANCEL not delivered" }
         SystemClock.sleep(120)
         note("after-cancel-top=" + sheetTop())
         shot("cancel-3-after-cancel.png")
@@ -126,6 +124,25 @@ class MorphCancelTest {
     }
 
     companion object {
+        /** A complete touchscreen event: sparse MotionEvents can be dropped before
+         *  they reach the app's pointer input handlers. */
+        fun ev(action: Int, x: Float, y: Float, t: Long, t0: Long): MotionEvent {
+            val props = arrayOf(MotionEvent.PointerProperties().apply {
+                id = 0
+                toolType = MotionEvent.TOOL_TYPE_FINGER
+            })
+            val coords = arrayOf(MotionEvent.PointerCoords().apply {
+                this.x = x
+                this.y = y
+                pressure = 1f
+                size = 1f
+            })
+            return MotionEvent.obtain(
+                t0, t, action, 1, props, coords, 0, 0, 1f, 1f, 0, 0,
+                InputDevice.SOURCE_TOUCHSCREEN, 0,
+            )
+        }
+
         /** Start the debug tone inside the instrumentation process: am instrument restarts
          *  the app process, so any session the launch script began is already dead. */
         fun ensureTone(device: UiDevice, tone: String = "Runtime local tone") {
@@ -150,8 +167,6 @@ class MorphCancelTest {
         /** Open the player sheet by tapping the mini-player pill, from any resting state. */
         fun openSheet(device: UiDevice, tone: String = "Runtime local tone") {
             ensureTone(device, tone)
-            // The pill is the lowest occurrence of the track title on screen; rows with
-            // the same title in lists sit higher.
             val pill = device.findObjects(By.text(tone)).maxByOrNull { it.visibleBounds.top }
             check(pill != null) { "SETUP FAILURE: mini player pill not found" }
             val b = pill.visibleBounds
