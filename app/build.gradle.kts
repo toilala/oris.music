@@ -13,6 +13,10 @@ android {
     compileSdk = 37
     ndkVersion = "27.0.12077973"
 
+    testOptions {
+        unitTests { isIncludeAndroidResources = true }
+    }
+
     defaultConfig {
         applicationId = "toilala.oris"
         minSdk = 26

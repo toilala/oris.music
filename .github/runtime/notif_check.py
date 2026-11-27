@@ -22,6 +22,11 @@ adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', COMPONENT, '-f', '0x10008000')
 wait_label('Local audio playing', seconds=30)
 
+# Baseline session while the tone is known to be playing, so a later mismatch can be
+# compared against what the session carried at the start of this check.
+early_sessions = adb('shell', 'dumpsys', 'media_session').decode()
+open(OUT + '/dumpsys-media-session-early.txt', 'w').write(early_sessions)
+
 notifications = adb('shell', 'dumpsys', 'notification').decode()
 open(OUT + '/dumpsys-notification.txt', 'w').write(notifications)
 svc = services()
@@ -51,14 +56,11 @@ assert 'category=transport' in late_dump, \
     'steady-state notification is not a media notification (no transport category)'
 assert 'android.mediaSession=Token' in late_dump, \
     'steady-state notification has no live media session token'
-media_sessions = ''
-for _ in range(10):
-    media_sessions = adb('shell', 'dumpsys', 'media_session').decode()
-    if 'Runtime local tone' in media_sessions:
-        break
-    time.sleep(2)
+media_sessions = adb('shell', 'dumpsys', 'media_session').decode()
 open(OUT + '/dumpsys-media-session.txt', 'w').write(media_sessions)
-assert 'Runtime local tone' in media_sessions, 'media session is not carrying the track title'
+assert 'Runtime local tone' in media_sessions, \
+    'media session lost the tone; compare dumpsys-media-session-early.txt, current metadata: ' + \
+    ', '.join(re.findall(r'description=[^\n]+', media_sessions))
 assert 'Oris test' in media_sessions, 'media session is not carrying the track artist'
 # The shade chronometer ticks while playing, so uiautomator never reaches idle; pause,
 # read the rendered shade, then resume before the survival checks below.

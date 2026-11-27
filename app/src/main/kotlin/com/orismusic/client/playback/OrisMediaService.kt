@@ -533,6 +533,10 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
 
 
         // Bring the last queue back, paused where it left off (Echo/Mochy persistent queue idea).
+        // Applied inline instead of through playQueue's coroutine: the restore must be complete
+        // before onCreate returns, or playback that begins in that window (a controller bind, a
+        // media button, a quick tap) can be replaced by the late apply. Raw player calls bypass
+        // playQueue's generation check, so ordering is the only safe arbitration here.
         if (com.orismusic.client.settings.PlaybackPreferences(this).persistentQueue) {
             QueueSnapshotStore.load(this)?.let { snap ->
                 val restoredItems = snap.items.map { it.toMediaItem() }
@@ -543,10 +547,14 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
                         player.repeatMode = repeat
                         player.shuffleModeEnabled = shuffle
                     }
-                    playQueue(
-                        com.orismusic.client.playback.queues.ListQueue(snap.title, restoredItems, snap.index, snap.positionMs),
-                        playWhenReady = false,
-                    )
+                    queueGeneration++
+                    currentQueue = com.orismusic.client.playback.queues.ListQueue(snap.title, restoredItems, snap.index, snap.positionMs)
+                    queueTitle = snap.title
+                    pinnedMediaId = restoredItems.getOrNull(snap.index)?.mediaId
+                    player.setMediaItems(restoredItems, snap.index, snap.positionMs)
+                    player.playWhenReady = false
+                    player.prepare()
+                    fillUpcomingMusic()
                 }
             }
         }
