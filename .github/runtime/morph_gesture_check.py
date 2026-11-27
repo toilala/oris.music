@@ -211,6 +211,11 @@ for name in names7:
         open(os.path.join(grab_dir, name), 'wb').write(r7.stdout)
         pulled7 += 1
 print('DIAG PULL files=' + str(pulled7), flush=True)
+if pulled7 == 0:
+    lg = subprocess.run(['adb', 'logcat', '-d', '-s', 'OrisMorphDiag'],
+                        capture_output=True).stdout.decode(errors='replace')
+    print('DIAG FALLBACK logcat OrisMorphDiag:', flush=True)
+    print(lg[-2000:], flush=True)
 if os.path.isdir(OUT + '/grab-diag'):
     for name in sorted(os.listdir(OUT + '/grab-diag')):
         path = os.path.join(OUT + '/grab-diag', name)

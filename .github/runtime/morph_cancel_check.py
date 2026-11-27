@@ -57,6 +57,11 @@ for name in names:
         open(os.path.join(diag_dir, name), 'wb').write(r.stdout)
         pulled += 1
 print('DIAG PULL files=' + str(pulled), flush=True)
+if pulled == 0:
+    lg = subprocess.run(['adb', 'logcat', '-d', '-s', 'OrisMorphDiag'],
+                        capture_output=True).stdout.decode(errors='replace')
+    print('DIAG FALLBACK logcat OrisMorphDiag:', flush=True)
+    print(lg[-2000:], flush=True)
 if os.path.isdir(diag_dir):
     for name in sorted(os.listdir(diag_dir)):
         path = os.path.join(diag_dir, name)

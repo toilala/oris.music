@@ -30,16 +30,35 @@ class MorphCancelTest {
         val ui = instrumentation.uiAutomation
         val device = UiDevice.getInstance(instrumentation)
         val dir = File(instrumentation.targetContext.cacheDir, "oris-morph-diag")
-        dir.mkdirs()
+        var diagWarn: String? = null
+        try {
+            dir.mkdirs()
+            val probe = File(dir, "probe.txt")
+            probe.writeText("ok")
+            if (probe.readText() != "ok") diagWarn = "diag probe read-back mismatch"
+            probe.delete()
+        } catch (e: Exception) {
+            diagWarn = "diag probe failed: ${e.message}"
+        }
 
         fun sheetTop(): Int? = device.findObject(By.desc("Collapse player"))?.visibleBounds?.top
         fun shot(name: String) {
-            device.takeScreenshot(File(dir, name))
+            try {
+                if (!device.takeScreenshot(File(dir, name)) && diagWarn == null) diagWarn = "screenshot false: $name"
+            } catch (e: Exception) {
+                if (diagWarn == null) diagWarn = "screenshot failed $name: ${e.message}"
+            }
         }
         fun note(line: String) {
             diag.appendLine(line)
-            File(dir, "cancel-diag.txt").writeText(diag.toString())
+            android.util.Log.i("OrisMorphDiag", line)
+            try {
+                File(dir, "cancel-diag.txt").writeText(diag.toString())
+            } catch (e: Exception) {
+                if (diagWarn == null) diagWarn = "diag write failed: ${e.message}"
+            }
         }
+        if (diagWarn != null) note("DIAG WARNING: " + diagWarn)
 
         // 1. Establish the starting state in this lifecycle: the sheet must be open.
         if (device.wait(Until.hasObject(By.desc("Collapse player")), 3_000) != true) {
@@ -85,7 +104,7 @@ class MorphCancelTest {
         shot("cancel-4-settled.png")
         check(settled == true && settledTop != null && settledTop < 200) {
             "RECOVERY FAILURE: after ACTION_CANCEL the sheet must settle back to fully open " +
-                "(settled=$settled settledTop=$settledTop)"
+                "(settled=$settled settledTop=$settledTop)" + (diagWarn?.let { " [diag: $it]" } ?: "")
         }
     }
 
