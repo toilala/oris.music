@@ -1,4 +1,1 @@
-morph_gesture_check.py
-morph_cancel_check.py
-playlist_journey_check.py
-motion_record.py
+ui_shots.py
