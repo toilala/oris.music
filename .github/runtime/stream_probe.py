@@ -12,7 +12,7 @@ from playback_check import adb, tree, wait_label, screen, restart_app, PKG, OUT
 
 FAIL_FRAGMENTS = ['refused', 'not a bot', 'No playable stream', 'TIMED OUT', 'NETWORK', 'no connection']
 KEEP = ('OrisDiag', 'YTPlayerUtils', 'BitChord', 'InnerTube', 'PoToken', 'poToken', 'BotGuard',
-        'AndroidRuntime', 'ExoPlayer', 'visitor', 'ITX')
+        'AndroidRuntime', 'ExoPlayer', 'visitor', 'ITX', 'OrisHarness')
 
 def media_position():
     out = adb('shell', 'dumpsys', 'media_session').decode(errors='replace')
@@ -60,7 +60,9 @@ with open(f'{OUT}/stream-probe-logcat.txt', 'w') as f:
 print('PROBE ui-state=' + state + (' fragment=' + frag if frag else ''), flush=True)
 print('PROBE positions p1=' + str(p1) + ' p2=' + str(p2), flush=True)
 print('PROBE logcat evidence (' + str(len(lines)) + ' lines):', flush=True)
-for line in lines[-140:]:
+mark = next((i for i, l in enumerate(lines) if 'phase=probe-tap' in l), None)
+print('PROBE tap marker at kept-line index ' + str(mark) + ' of ' + str(len(lines)), flush=True)
+for line in (lines[mark:mark + 400] if mark is not None else lines[-140:]):
     print(line, flush=True)
 joined = '\n'.join(lines)
 started = 'playback started' in joined

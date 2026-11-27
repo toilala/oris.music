@@ -1,1 +1,2 @@
+cover_transition_check.py
 stream_probe.py
