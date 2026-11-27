@@ -261,7 +261,8 @@ if __name__ == '__main__':
         failure = traceback.format_exc()
         print(failure, flush=True)
     failures = []
-    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py']:
+    # offline_check stays last: it cuts the radios and keeps them cut as evidence.
+    for check in ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'offline_check.py']:
         result = subprocess.run(['python3', '.github/runtime/'+check])
         if result.returncode: failures.append(check)
     if failure is not None: raise SystemExit(1)
