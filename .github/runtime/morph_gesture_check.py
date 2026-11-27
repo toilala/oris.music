@@ -151,15 +151,17 @@ assert ok7, 'leg7: grabbing the sheet mid-close must settle back to open'
 proc = record_start('morph-leg2-drag-restore.mp4', 12)
 swipe(540, 900, 540, 1250, 450)
 time.sleep(2)
-assert player_open(), 'leg2: short drag must settle back to open, not close'
+ok2 = player_open()
 record_stop('morph-leg2-drag-restore.mp4', proc)
+assert ok2, 'leg2: short drag must settle back to open, not close'
 
 # Leg 3: long fast drag closes into the pill.
 proc = record_start('morph-leg3-drag-close.mp4', 12)
 swipe(540, 800, 540, 2100, 300)
 time.sleep(2)
-assert not player_open() and pill_visible(), 'leg3: long drag must close back to the pill'
+ok3 = not player_open() and pill_visible()
 record_stop('morph-leg3-drag-close.mp4', proc)
+assert ok3, 'leg3: long drag must close back to the pill'
 
 # Leg 4: a drag during the OPEN animation reverses without stranding the sheet.
 pill = pill_visible()
@@ -167,8 +169,8 @@ proc = record_start('morph-leg4-midopen-reverse.mp4', 14)
 adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
 time.sleep(0.25)
 swipe(540, 800, 540, 2100, 300)
-assert_consistent('leg4')
 record_stop('morph-leg4-midopen-reverse.mp4', proc)
+assert_consistent('leg4')
 
 # Leg 5: tap/back flapping never strands the sheet.
 proc = record_start('morph-leg5-flapping.mp4', 20)
@@ -179,8 +181,8 @@ for _ in range(3):
         time.sleep(0.35)
     adb('shell', 'input', 'keyevent', '4')
     time.sleep(0.35)
-final_open = assert_consistent('leg5')
 record_stop('morph-leg5-flapping.mp4', proc)
+final_open = assert_consistent('leg5')
 
 # Leg 6: a slow small scroll inside the player does not dismiss it.
 if not final_open:
@@ -190,8 +192,9 @@ if not final_open:
 proc = record_start('morph-leg6-inplayer-scroll.mp4', 12)
 swipe(540, 1500, 540, 1250, 600)
 time.sleep(1.5)
-assert player_open(), 'leg6: a small in-player scroll must not dismiss the player'
+ok6 = player_open()
 record_stop('morph-leg6-inplayer-scroll.mp4', proc)
+assert ok6, 'leg6: a small in-player scroll must not dismiss the player'
 
 adb('shell', 'input', 'keyevent', '4')
 print('PASS: morph gesture robustness, all seven legs consistent', flush=True)
