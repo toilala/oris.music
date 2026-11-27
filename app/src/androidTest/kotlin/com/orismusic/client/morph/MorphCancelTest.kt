@@ -17,7 +17,7 @@ import java.io.File
  * instrumentation lifecycle immediately before injecting, so a harness process
  * restart surfaces as a setup failure, never as a product recovery verdict.
  * UiDevice screenshots and live sheet positions are captured pre-injection,
- * post-MOVE and post-CANCEL into /sdcard/oris-morph-diag/ before any assertion.
+ * post-MOVE and post-CANCEL into the app cache diag dir (pulled over run-as) before any assertion.
  */
 @RunWith(AndroidJUnit4::class)
 class MorphCancelTest {
@@ -29,7 +29,7 @@ class MorphCancelTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val ui = instrumentation.uiAutomation
         val device = UiDevice.getInstance(instrumentation)
-        val dir = File("/sdcard/oris-morph-diag")
+        val dir = File(instrumentation.targetContext.cacheDir, "oris-morph-diag")
         dir.mkdirs()
 
         fun sheetTop(): Int? = device.findObject(By.desc("Collapse player"))?.visibleBounds?.top

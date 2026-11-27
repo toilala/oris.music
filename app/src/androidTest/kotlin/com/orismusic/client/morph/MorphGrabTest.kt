@@ -28,7 +28,7 @@ class MorphGrabTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val ui = instrumentation.uiAutomation
         val device = UiDevice.getInstance(instrumentation)
-        val dir = File("/sdcard/oris-morph-diag")
+        val dir = File(instrumentation.targetContext.cacheDir, "oris-morph-diag")
         dir.mkdirs()
 
         fun sheetTop(): Int? = device.findObject(By.desc("Collapse player"))?.visibleBounds?.top

@@ -199,9 +199,18 @@ res7 = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'class',
                       capture_output=True, timeout=180)
 out7 = res7.stdout.decode()
 print(out7[-1200:], flush=True)
-pulled7 = subprocess.run(['adb', 'pull', '/sdcard/oris-morph-diag/.', OUT + '/grab-diag/'],
-                         capture_output=True)
-print('DIAG PULL rc=' + str(pulled7.returncode), flush=True)
+grab_dir = OUT + '/grab-diag'
+os.makedirs(grab_dir, exist_ok=True)
+names7 = subprocess.run(['adb', 'shell', 'run-as', PKG, 'ls', 'cache/oris-morph-diag'],
+                        capture_output=True).stdout.decode().split()
+pulled7 = 0
+for name in names7:
+    r7 = subprocess.run(['adb', 'exec-out', 'run-as', PKG, 'cat',
+                         'cache/oris-morph-diag/' + name], capture_output=True)
+    if r7.returncode == 0 and r7.stdout:
+        open(os.path.join(grab_dir, name), 'wb').write(r7.stdout)
+        pulled7 += 1
+print('DIAG PULL files=' + str(pulled7), flush=True)
 if os.path.isdir(OUT + '/grab-diag'):
     for name in sorted(os.listdir(OUT + '/grab-diag')):
         path = os.path.join(OUT + '/grab-diag', name)

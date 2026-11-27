@@ -45,10 +45,18 @@ print(out[-1200:], flush=True)
 
 # Evidence before the verdict: pull the diagnostic stills and the position log the
 # test captured at each stage, whatever the instrumentation outcome was.
-pulled = subprocess.run(['adb', 'pull', '/sdcard/oris-morph-diag/.', OUT + '/cancel-diag/'],
-                        capture_output=True)
-print('DIAG PULL rc=' + str(pulled.returncode), flush=True)
 diag_dir = OUT + '/cancel-diag'
+os.makedirs(diag_dir, exist_ok=True)
+names = subprocess.run(['adb', 'shell', 'run-as', PKG, 'ls', 'cache/oris-morph-diag'],
+                       capture_output=True).stdout.decode().split()
+pulled = 0
+for name in names:
+    r = subprocess.run(['adb', 'exec-out', 'run-as', PKG, 'cat',
+                        'cache/oris-morph-diag/' + name], capture_output=True)
+    if r.returncode == 0 and r.stdout:
+        open(os.path.join(diag_dir, name), 'wb').write(r.stdout)
+        pulled += 1
+print('DIAG PULL files=' + str(pulled), flush=True)
 if os.path.isdir(diag_dir):
     for name in sorted(os.listdir(diag_dir)):
         path = os.path.join(diag_dir, name)

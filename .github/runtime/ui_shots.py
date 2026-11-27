@@ -108,6 +108,11 @@ for i in range(8):
         print(crash[-3000:], flush=True)
         screen('failure')
         raise AssertionError('app crashed while scrolling Home')
+adb('shell', 'input', 'swipe', '540', '1200', '540', '400', '350')
+time.sleep(0.15)
+screen('dock_nav_hidden_a')
+time.sleep(0.7)
+screen('dock_nav_hidden_b')
 screen('shot_home_scrolled')
 # The scrolled frame above carries the tucked-away nav; settle back at the top for the
 # rested unified cluster (mini player and nav in one shared body, edges aligned).
@@ -137,7 +142,9 @@ try:
     time.sleep(6)
     back()
     time.sleep(2)
-    wait_label('Artist', seconds=90)
+    wait_label('Artists', seconds=90)
+    tap('Artists')
+    wait_label('Adele', seconds=60)
     screen('search_results_artist')
     tap('Adele')
     wait_label('Shuffle', seconds=90)
