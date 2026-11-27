@@ -22,8 +22,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
-import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
-import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.orismusic.client.extensions.metadata
 import com.orismusic.client.extensions.toMediaItem
 import com.orismusic.client.utils.GuestAccessRefused
@@ -692,12 +690,7 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .setHandleAudioBecomingNoisy(true)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory())
-                .setLoadErrorHandlingPolicy(object : DefaultLoadErrorHandlingPolicy() {
-                    override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                        if (com.orismusic.client.utils.hasGuestRefusal(info.exception)) return C.TIME_UNSET
-                        return super.getRetryDelayMsFor(info)
-                    }
-                }))
+                .setLoadErrorHandlingPolicy(OrisLoadErrorPolicy()))
             .build()
     }
 

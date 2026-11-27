@@ -8,7 +8,7 @@ position is sampled twice so source acceptance and advancing playback are measur
 not assumed. Classifies what it captured; asserts only that real evidence exists."""
 import re
 import time
-from playback_check import adb, tree, wait_label, screen, restart_app, PKG
+from playback_check import adb, tree, wait_label, screen, restart_app, PKG, OUT
 
 FAIL_FRAGMENTS = ['refused', 'not a bot', 'No playable stream', 'TIMED OUT', 'NETWORK', 'no connection']
 KEEP = ('OrisDiag', 'YTPlayerUtils', 'BitChord', 'InnerTube', 'PoToken', 'poToken', 'BotGuard',
@@ -53,6 +53,10 @@ elif frag:
 screen('stream_probe_end')
 raw = adb('shell', 'logcat', '-d').decode(errors='replace')
 lines = [l for l in raw.splitlines() if any(k in l for k in KEEP)]
+# Retain the full filtered evidence in the artifact on every outcome; the job log
+# prints only the tail, and resolve-phase lines were lost when it truncated.
+with open(f'{OUT}/stream-probe-logcat.txt', 'w') as f:
+    f.write('\n'.join(lines) + '\n')
 print('PROBE ui-state=' + state + (' fragment=' + frag if frag else ''), flush=True)
 print('PROBE positions p1=' + str(p1) + ' p2=' + str(p2), flush=True)
 print('PROBE logcat evidence (' + str(len(lines)) + ' lines):', flush=True)
@@ -60,14 +64,20 @@ for line in lines[-140:]:
     print(line, flush=True)
 joined = '\n'.join(lines)
 started = 'playback started' in joined
+fetch_refused = re.search(r'Response code: 403|responseCode=403', joined) is not None
+terminal_stop = 'failed to load after retrying' in joined or 'failed in a row' in joined
 if started and state == 'advancing':
     diag = 'RESOLVED: source accepted, playback advancing (%s -> %s ms)' % (p1, p2)
 elif started:
     diag = 'RESOLVED: source accepted, position delta unavailable (p1=%s p2=%s)' % (p1, p2)
-elif 'not a bot' in joined or 'LOGIN_REQUIRED' in joined:
-    diag = 'REFUSED_BY_YOUTUBE_BOT_CHECK on this connection'
+# A deeper fetch outcome outranks a mid-chain refusal fragment: the direct stage can
+# log LOGIN_REQUIRED and the catalog still mint a URL that the media host then refuses.
+elif terminal_stop and fetch_refused:
+    diag = 'REFUSED_AT_MEDIA_FETCH: minted URL got HTTP 403, bounded retries stopped (minting stage unknown)'
 elif re.search(r'resolve r\d+ ok', joined):
     diag = 'RESOLVED (resolve ok, no playback-started line)'
+elif 'not a bot' in joined or 'LOGIN_REQUIRED' in joined:
+    diag = 'REFUSED_BY_YOUTUBE_BOT_CHECK on this connection'
 elif 'timed out' in joined:
     diag = 'TIMED OUT'
 elif 'no network' in joined:

@@ -114,6 +114,13 @@ object YTPlayerUtils {
         resolved.keys.removeIf { it.startsWith("$videoId|") }
     }
 
+    /** Forget a resolved stream by its minted media address, for example after the
+     *  media fetch was refused. Covers both minting stages. */
+    internal fun evictUrl(url: String) {
+        directHeaders.remove(url)
+        resolved.entries.removeIf { it.value.second.streamUrl == url }
+    }
+
     /** Warm the resolver for an upcoming song; failures are ignored. */
     suspend fun prefetch(videoId: String, audioQuality: AudioQuality, context: android.content.Context) {
         runCatching { getPlaybackData(videoId, audioQuality, context, quiet = true) }

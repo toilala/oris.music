@@ -345,6 +345,18 @@ object InnerTubeXResolver {
     return refused.videoId
   }
 
+  // Test seams. Production never calls these; unit tests plant and observe refusal state.
+  internal fun rememberForTest(extracted: Extracted) {
+    minted[extracted.url] = extracted
+  }
+
+  internal fun excludedForTest(videoId: String): Set<String> = excludedFor(videoId)
+
+  internal fun clearRefusalStateForTest() {
+    minted.clear()
+    excluded.clear()
+  }
+
   fun exclude(videoId: String, profileId: String) {
     Timber.tag(TAG).w("InnerTubeX: $profileId refused $videoId; skipping it for this track")
     excluded.getOrPut(videoId) { ConcurrentHashMap() }[profileId] =
