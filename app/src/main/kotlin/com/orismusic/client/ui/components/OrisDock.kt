@@ -1,7 +1,6 @@
 package com.orismusic.client.ui.components
 
 import com.orismusic.client.ui.theme.OrisMotion
-import com.orismusic.client.ui.theme.OrisShapes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,8 +14,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -71,10 +70,10 @@ fun OrisDock(
     val showLabels = NavSettings.labels
     val effect = NavSettings.effect
     val tabH = (if (showLabels) 54 else 50).dp + NavSettings.size.extra.dp
-    // Anchored bar: flush to the screen edges with only the top corners eased, so it
-    // reads as the floor of the page instead of a second floating pill.
-    val shape = OrisShapes.Sheet
-    val lensShape = OrisShapes.Row
+    // Floating pill: hugs its tabs and rounds fully, so it reads as one stack with the
+    // mini player above it instead of a second anchored bar.
+    val shape = CircleShape
+    val lensShape = CircleShape
     val scheme = MaterialTheme.colorScheme
     val (accent, onAccent) = when (NavSettings.accent) {
         NavAccent.Warm -> scheme.tertiary to scheme.onTertiary
@@ -95,13 +94,13 @@ fun OrisDock(
     LaunchedEffect(sel) { previous = sel }
     val stretch = effect == NavEffect.Stretch
     val haptic = LocalHapticFeedback.current
-    // A grounded slab, not a second floating pill: the mini player floats, the dock anchors.
-    // Tabs share the full width; the width setting shapes how wide the lens sits in its tab.
-    androidx.compose.foundation.layout.BoxWithConstraints(
-        modifier.fillMaxWidth(),
+    // Compact tabs: each is just wide enough for its icon (and label), the width setting
+    // still shapes how wide the lens sits in its tab.
+    val tabW = (if (showLabels) 76 else 60).dp + (NavSettings.size.extra / 2).dp
+    Box(
+        modifier.width(tabW * count + 8.dp),
     ) {
-        val tabW = maxWidth / count
-        val lensInset = (16 - NavSettings.width.extra / 4).dp
+        val lensInset = (12 - NavSettings.width.extra / 4).dp
         val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
         val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
     Box(
