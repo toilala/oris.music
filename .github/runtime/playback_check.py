@@ -343,6 +343,10 @@ if __name__ == '__main__':
     else:
         battery = default_battery
     for check in battery:
+        # A check may leave the radio off (offline_check disables it on purpose):
+        # every check starts from a known-connected emulator.
+        subprocess.run(['adb', 'shell', 'svc', 'wifi', 'enable'], capture_output=True)
+        subprocess.run(['adb', 'shell', 'svc', 'data', 'enable'], capture_output=True)
         result = subprocess.run(['python3', '.github/runtime/'+check])
         if result.returncode: failures.append(check)
     if failure is not None: raise SystemExit(1)
