@@ -1,5 +1,6 @@
 package com.orismusic.client.ui.player
 
+import com.orismusic.client.ui.components.entrance
 import com.orismusic.client.ui.theme.OrisMotion
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
@@ -185,12 +186,14 @@ fun LyricsPane(connection: PlayerConnection, onClose: () -> Unit, embedded: Bool
                         contentPadding=PaddingValues(top = if (embedded) 8.dp else 24.dp, bottom = if (embedded) 48.dp else 320.dp),
                     ) {
                         itemsIndexed(lyrics.lines) { index, line ->
+                            Box(Modifier.entrance(index)) {
                             LyricRow(
                                 line = line, timed = lyrics.timed, selected = index == active,
                                 distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active),
                                 position = position + lyricOffset, embedded = embedded,
                                 onSeek = { ms -> connection.player.seekTo((ms - lyricOffset).coerceAtLeast(0)) },
                             )
+                            }
                         }
                     }
                 }
@@ -367,12 +370,14 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(22.dp),
                     ) {
                         itemsIndexed(lyrics.lines) { index, line ->
+                            Box(Modifier.entrance(index)) {
                             LyricRow(
                                 line = line, timed = lyrics.timed, selected = index == active,
                                 distance = if (!lyrics.timed || active < 0) 0 else kotlin.math.abs(index - active),
                                 position = position + lyricOffset, embedded = true,
                                 onSeek = { ms -> connection.player.seekTo((ms - lyricOffset).coerceAtLeast(0)) },
                             )
+                            }
                         }
                     }
                     // The words melt away before they reach the header or the bottom bar.

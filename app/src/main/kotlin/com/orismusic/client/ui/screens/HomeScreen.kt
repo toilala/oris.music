@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.orismusic.client.ui.components.Artwork
+import com.orismusic.client.ui.components.artworkTintBackdrop
 import com.orismusic.client.ui.components.DiagnosticHistoryDialog
 import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.SkeletonCard
@@ -171,7 +172,8 @@ fun HomeScreen(
         value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it, filters, taste.artists) }
     }
     Scaffold(modifier = modifier) { outerPadding ->
-        Box(Modifier.fillMaxSize().padding(outerPadding)) {
+        Box(Modifier.fillMaxSize().padding(outerPadding)
+                .artworkTintBackdrop(heroSongs.firstOrNull()?.thumbnail ?: history.firstOrNull()?.thumbnail)) {
             val auroraTint = com.orismusic.client.ui.components.rememberArtworkColor(history.firstOrNull()?.thumbnail)
             if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(

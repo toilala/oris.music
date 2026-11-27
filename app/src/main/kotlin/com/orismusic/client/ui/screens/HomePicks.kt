@@ -1,7 +1,6 @@
 package com.orismusic.client.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
@@ -51,7 +51,10 @@ import com.orismusic.client.playback.queues.ListQueue
 import com.orismusic.client.playback.queues.MusicRadioQueue
 import com.orismusic.client.ui.components.Artwork
 import com.orismusic.client.ui.components.SectionHeader
+import com.orismusic.client.ui.components.entrance
 import com.orismusic.client.ui.components.pressClickable
+import com.orismusic.client.ui.theme.OrisDimens
+import com.orismusic.client.ui.theme.OrisShapes
 import com.orismusic.client.ui.components.pressCombinedClickable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -168,7 +171,7 @@ fun QuickPicksSection(
                             pair.forEachIndexed { col, song ->
                                 QuickPickChip(
                                     song = song,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).entrance(page * PICKS_PER_PAGE + row * 2 + col),
                                     onClick = { playFrom(page * PICKS_PER_PAGE + row * 2 + col) },
                                     onPlayNext = connection?.let { c -> { c.playNext(song.toMediaItem()) } },
                                     onAddToQueue = connection?.let { c -> { c.addToQueue(song.toMediaItem()) } },
@@ -208,7 +211,7 @@ private fun QuickPickChip(
     Box(modifier) {
         var menu by remember { mutableStateOf(false) }
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+            Modifier.fillMaxWidth().clip(OrisShapes.Row)
                 .pressCombinedClickable(
                     onClick,
                     onLongClick = { menu = true },
@@ -217,7 +220,7 @@ private fun QuickPickChip(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(song.thumbnail, Modifier.size(48.dp), RoundedCornerShape(12.dp), song.title, px = 160)
+            Artwork(song.thumbnail, Modifier.size(OrisDimens.ListThumb), OrisShapes.Thumb, song.title, px = 160)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(song.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -276,12 +279,12 @@ fun CommunityPlaylistsSection(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.padding(top = 4.dp),
         ) {
-            items(playlists, key = { it.id }) { playlist ->
+            itemsIndexed(playlists, key = { _, it -> it.id }) { index, playlist ->
                 Column(
-                    Modifier.width(150.dp).clip(RoundedCornerShape(16.dp))
-                        .clickable { playlist.toDetailTarget()?.let(onOpen) },
+                    Modifier.entrance(index).width(OrisDimens.GridCard).clip(OrisShapes.Card)
+                        .pressClickable({ playlist.toDetailTarget()?.let(onOpen) }),
                 ) {
-                    Artwork(playlist.thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), playlist.title, px = 300)
+                    Artwork(playlist.thumbnail, Modifier.size(OrisDimens.GridCard), OrisShapes.Card, playlist.title, px = 300)
                     Text(
                         playlist.title, style = MaterialTheme.typography.titleSmall,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,

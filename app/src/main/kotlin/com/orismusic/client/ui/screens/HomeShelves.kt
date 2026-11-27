@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +49,8 @@ import com.orismusic.client.ui.components.OrbitRow
 import com.orismusic.client.ui.components.SectionHeader
 import com.orismusic.client.ui.components.entrance
 import com.orismusic.client.ui.components.pressClickable
+import com.orismusic.client.ui.theme.OrisDimens
+import com.orismusic.client.ui.theme.OrisShapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -140,12 +141,12 @@ fun LazyListScope.listeningShelves(
                         pair.forEach { s ->
                             // Artwork-led rows, no container: the covers carry this shelf.
                             Row(
-                                Modifier.weight(1f).clip(RoundedCornerShape(18.dp))
+                                Modifier.weight(1f).clip(HomeSettings.corners.shape(18))
                                     .pressClickable({ playHistory(connection, "Jump back in", tiles, s) }, 0.97f)
                                     .padding(horizontal = 6.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Artwork(s.thumbnail, Modifier.size(56.dp), RoundedCornerShape(16.dp), s.title)
+                                Artwork(s.thumbnail, Modifier.size(56.dp), HomeSettings.corners.shape(16), s.title)
                                 Column(Modifier.padding(start = 12.dp, end = 6.dp)) {
                                     Text(s.title, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                                         overflow = TextOverflow.Ellipsis)
@@ -201,13 +202,13 @@ fun LazyListScope.listeningShelves(
         Column {
             SectionHeader(title = "Most played", subtitle = "Counted on this phone")
             Column(
-                Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(OrisShapes.Panel)
                     .background(MaterialTheme.colorScheme.surfaceContainerLow)
                     .padding(vertical = 6.dp),
             ) {
                 top.forEachIndexed { i, (s, n) ->
                     Row(
-                        Modifier.fillMaxWidth().pressClickable({
+                        (if (lively) Modifier.entrance(i) else Modifier).fillMaxWidth().pressClickable({
                             playHistory(connection, "Most played", top.map { it.first }, s)
                         }, 0.98f).padding(horizontal = 14.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -215,7 +216,7 @@ fun LazyListScope.listeningShelves(
                         Text("${i + 1}", style = MaterialTheme.typography.headlineSmall,
                             color = if (i == 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.width(30.dp))
-                        Artwork(s.thumbnail, Modifier.size(52.dp), RoundedCornerShape(12.dp), s.title)
+                        Artwork(s.thumbnail, Modifier.size(OrisDimens.ListThumb), OrisShapes.Thumb, s.title)
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                             Text(s.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.artist, style = MaterialTheme.typography.bodySmall,
@@ -265,13 +266,13 @@ fun LazyListScope.listeningShelves(
     if (rows.isNotEmpty()) item(key = "history") {
         Column {
             SectionHeader(title = "History")
-            rows.forEach { s ->
+            rows.forEachIndexed { i, s ->
                 Row(
-                    Modifier.fillMaxWidth().pressClickable({ playHistory(connection, "History", rows, s) }, 0.98f)
+                    (if (lively) Modifier.entrance(i) else Modifier).fillMaxWidth().pressClickable({ playHistory(connection, "History", rows, s) }, 0.98f)
                         .padding(horizontal = 20.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Artwork(s.thumbnail, Modifier.size(48.dp), RoundedCornerShape(10.dp), s.title)
+                    Artwork(s.thumbnail, Modifier.size(OrisDimens.ListThumb), OrisShapes.Thumb, s.title)
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(s.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(s.artist, style = MaterialTheme.typography.bodySmall,
