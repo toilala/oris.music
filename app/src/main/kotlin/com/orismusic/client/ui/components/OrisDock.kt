@@ -66,6 +66,7 @@ fun OrisDock(
     icon: (Int) -> ImageVector,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    tint: Color? = null,
 ) {
     val showLabels = NavSettings.labels
     val effect = NavSettings.effect
@@ -82,11 +83,17 @@ fun OrisDock(
         NavAccent.Primary -> scheme.primary to scheme.onPrimary
     }
     val dark = scheme.background.luminance() < 0.5f
-    val body = when (NavSettings.style) {
+    val bodyBase = when (NavSettings.style) {
         NavStyle.Glass -> scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.82f else 0.94f)
         NavStyle.Solid -> scheme.surfaceContainerHigh
         NavStyle.Clear -> scheme.surfaceContainerHigh.copy(alpha = 0.45f)
     }
+    // While a song plays the dock leans a little toward its artwork colour, so the dock
+    // and the mini player above it read as one set.
+    val body by animateColorAsState(
+        tint?.let { androidx.compose.ui.graphics.lerp(bodyBase, it, 0.12f) } ?: bodyBase,
+        OrisMotion.slow(), label = "dock body",
+    )
     val none = selected < 0
     val sel = selected.coerceAtLeast(0)
     var previous by remember { mutableIntStateOf(sel) }

@@ -26,6 +26,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -55,6 +58,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -243,6 +247,31 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        var miniPillBounds by remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                        var morphPill by remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                        var morphVelocity by remember { androidx.compose.runtime.mutableStateOf(0f) }
+                        val morph = remember { androidx.compose.animation.core.Animatable(0f) }
+                        val dragScope = androidx.compose.runtime.rememberCoroutineScope()
+                        val dragDeltas = remember { FloatArray(4) }
+                        var dragDeltaIx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+                        // One progress value owns the whole transition: open, reverse, drag and
+                        // settle all move the same pill->fullscreen interpolation, so no handoff
+                        // can jump. Navigation state owns the intent; this effect is the animator
+                        // of record and Animatable's serialization absorbs overlapping mutations.
+                        androidx.compose.runtime.LaunchedEffect(showPlayer) {
+                            if (showPlayer) {
+                                // Freeze the pill rect only on a fresh open; a reopen mid-close
+                                // keeps the original so the reverse path stays symmetric.
+                                if (morph.value <= 0.01f) {
+                                    morphPill = miniPillBounds?.takeIf { it.width > 0f && it.height > 0f }
+                                }
+                                morph.animateTo(1f, OrisMotion.smooth())
+                            } else if (morph.value > 0.01f) {
+                                val iv = morphVelocity
+                                morphVelocity = 0f
+                                morph.animateTo(0f, OrisMotion.pop(), initialVelocity = iv)
+                            }
+                        }
                         Scaffold(
                             modifier = Modifier.fillMaxSize().nestedScroll(navScroll),
                             contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
@@ -253,11 +282,13 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
                                             connection = it,
                                             onExpand = { navigation = navigation.openPlayer() },
+                                            onBounds = { miniPillBounds = it },
                                         )
                                     }
                                     FloatingNav(
                                         selected = selectedTab,
                                         collapsed = navCollapsed,
+                                        tint = rememberNavTint(connection),
                                         onSelect = { tab ->
                                             detail = null; detailBack = null; navCollapsed = false
                                             navigation = navigation.select(tab.ordinal)
@@ -344,68 +375,106 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        val playerDrag = remember { androidx.compose.animation.core.Animatable(0f) }
-                        val dragScope = androidx.compose.runtime.rememberCoroutineScope()
-                        val dragDeltas = remember { FloatArray(4) }
-                        var dragDeltaIx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-                        androidx.compose.runtime.LaunchedEffect(showPlayer) { if (showPlayer) playerDrag.snapTo(0f) }
-                        // One critically damped spring both ways: the sheet leaves briskly and
-                        // settles without bouncing, the way the reference players move.
-                        AnimatedVisibility(
-                            visible = showPlayer && connection != null,
-                            enter = slideInVertically(animationSpec = OrisMotion.pop(), initialOffsetY = { it * 2 / 3 }) +
-                                fadeIn(OrisMotion.quick()) +
-                                androidx.compose.animation.scaleIn(OrisMotion.pop(), initialScale = 0.9f,
-                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
-                            exit = slideOutVertically(animationSpec = OrisMotion.pop(), targetOffsetY = { it * 2 / 3 }) +
-                                fadeOut(OrisMotion.quick()) +
-                                androidx.compose.animation.scaleOut(OrisMotion.pop(), targetScale = 0.9f,
-                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)),
-                        ) {
-                            connection?.let {
-                                androidx.compose.foundation.layout.Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            translationY = playerDrag.value
-                                            val f = (playerDrag.value / size.height).coerceIn(0f, 1f)
-                                            scaleX = 1f - 0.08f * f; scaleY = 1f - 0.08f * f
-                                            alpha = 1f - 0.5f * f
+                        if ((showPlayer || morph.value > 0.01f) && connection != null) {
+                            connection?.let { conn ->
+                                val morphMeta = conn.currentMetadata.collectAsState().value
+                                val morphTint = com.orismusic.client.ui.components.rememberArtworkColor(
+                                    morphMeta?.artworkUri?.toString(),
+                                )
+                                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                                    val fullW = constraints.maxWidth.toFloat()
+                                    val fullH = constraints.maxHeight.toFloat()
+                                    val t = morph.value
+                                    val pill = morphPill
+                                    val left = androidx.compose.ui.util.lerp(pill?.left ?: 0f, 0f, t)
+                                    val top = androidx.compose.ui.util.lerp(pill?.top ?: fullH, 0f, t)
+                                    val w = androidx.compose.ui.util.lerp(pill?.width ?: fullW, fullW, t)
+                                    val h = androidx.compose.ui.util.lerp(pill?.height ?: fullH, fullH, t)
+                                    val corner = minOf(w, h) * androidx.compose.ui.util.lerp(0.5f, 0f, t)
+                                    val clipShape = remember(t, pill, fullW, fullH) {
+                                        object : androidx.compose.ui.graphics.Shape {
+                                            override fun createOutline(
+                                                size: androidx.compose.ui.geometry.Size,
+                                                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                                                density: androidx.compose.ui.unit.Density,
+                                            ) = androidx.compose.ui.graphics.Outline.Rounded(
+                                                androidx.compose.ui.geometry.RoundRect(left, top, left + w, top + h, corner, corner)
+                                            )
                                         }
-                                        .pointerInput(Unit) {
-                                            detectVerticalDragGestures(
-                                                onDragEnd = {
-                                                    dragScope.launch {
-                                                        // Carry the release's speed into the close so a flick keeps moving.
-                                                        val v = (dragDeltas.average() * 60).toFloat()
-                                                        if (playerDrag.value > 220f || v > 900f) {
-                                                            playerDrag.animateTo(size.height.toFloat(), OrisMotion.pop(), initialVelocity = v.coerceIn(0f, 8000f))
-                                                            navigation = navigation.closePlayer()
-                                                        } else playerDrag.animateTo(0f, OrisMotion.smooth(), initialVelocity = v.coerceIn(-4000f, 4000f))
+                                    }
+                                    val windowTint = (
+                                        morphTint?.let {
+                                            androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerHigh, it, 0.30f)
+                                        } ?: MaterialTheme.colorScheme.surfaceContainerHigh
+                                        ).copy(alpha = (t / 0.3f).coerceIn(0f, 1f))
+                                    androidx.compose.foundation.layout.Box(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(clipShape)
+                                            .background(windowTint)
+                                            .pointerInput(Unit) {
+                                                detectVerticalDragGestures(
+                                                    onDragStart = {
+                                                        // Grabbing a sheet mid-close reasserts open intent,
+                                                        // so gesture state and navigation state cannot fork.
+                                                        if (!navigation.playerOpen) navigation = navigation.openPlayer()
+                                                    },
+                                                    onDragEnd = {
+                                                        dragScope.launch {
+                                                            val v = (dragDeltas.average() * 60).toFloat() // px/s, down positive
+                                                            dragDeltas.fill(0f)
+                                                            if (morph.value < 0.8f || v > 900f) {
+                                                                // The effect runs the close; hand it the flick speed.
+                                                                morphVelocity = (-v / fullH).coerceIn(-12f, 0f)
+                                                                navigation = navigation.closePlayer()
+                                                            } else {
+                                                                morph.animateTo(1f, OrisMotion.smooth(), initialVelocity = (-v / fullH).coerceIn(-12f, 12f))
+                                                            }
+                                                        }
+                                                    },
+                                                    onDragCancel = { dragScope.launch { morph.animateTo(1f, OrisMotion.smooth()) } },
+                                                    onVerticalDrag = { change, amount ->
+                                                        change.consume()
+                                                        dragDeltas[dragDeltaIx % 4] = amount
+                                                        dragDeltaIx++
+                                                        // Floor at 0.02 so the overlay cannot dispose itself out from under
+                                                        // an active gesture; the release path owns the final close.
+                                                        dragScope.launch { morph.snapTo((morph.value - amount / fullH).coerceIn(0.02f, 1f)) }
+                                                    },
+                                                )
+                                            },
+                                    ) {
+                                        val contentAlpha = ((t - 0.15f) / 0.6f).coerceIn(0f, 1f)
+                                        // The artwork's own bounds ride the window rect: it grows with
+                                        // the pill's frame into the full-bleed backdrop, then crossfades
+                                        // into the NowPlaying layout. Tint behind covers image load.
+                                        val windowDensity = androidx.compose.ui.platform.LocalDensity.current
+                                        coil3.compose.AsyncImage(
+                                            model = morphMeta?.artworkUri,
+                                            contentDescription = null,
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                            modifier = Modifier
+                                                .offset { IntOffset(left.toInt(), top.toInt()) }
+                                                .size(with(windowDensity) { w.toDp() }, with(windowDensity) { h.toDp() })
+                                                .graphicsLayer { alpha = 1f - contentAlpha },
+                                        )
+                                        androidx.compose.foundation.layout.Box(
+                                            Modifier.fillMaxSize().graphicsLayer { alpha = contentAlpha },
+                                        ) {
+                                            NowPlayingScreen(
+                                                connection = conn,
+                                                onCollapse = { navigation = navigation.closePlayer() },
+                                                onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
+                                                onOpenArtist = { id, name ->
+                                                    openScope.launch {
+                                                        com.orismusic.client.ui.screens.openOrPlay(
+                                                            com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
+                                                        ) { navigation = navigation.closePlayer(); detail = it; detailBack = null }
                                                     }
                                                 },
-                                                onDragCancel = { dragScope.launch { playerDrag.animateTo(0f, OrisMotion.smooth()) } },
-                                                onVerticalDrag = { change, amount ->
-                                                    change.consume()
-                                                    dragDeltas[dragDeltaIx % 4] = amount
-                                                    dragDeltaIx++
-                                                    dragScope.launch { playerDrag.snapTo((playerDrag.value + amount).coerceAtLeast(0f)) }
-                                                },
                                             )
-                                        },
-                                ) {
-                                    NowPlayingScreen(
-                                        connection = it,
-                                        onCollapse = { navigation = navigation.closePlayer() },
-                                        onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
-                                        onOpenArtist = { id, name ->
-                                            openScope.launch {
-                                                com.orismusic.client.ui.screens.openOrPlay(
-                                                    com.orismusic.client.ui.screens.DetailTarget("artist", id, name, null), connection,
-                                                ) { navigation = navigation.closePlayer(); detail = it; detailBack = null }
-                                            }
-                                        },
-                                    )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -455,13 +524,24 @@ private fun ComingSoonTab(title: String, modifier: Modifier = Modifier) {
 }
 
 
+/** The dock's share of the artwork colour: present only while music is actually playing. */
+@androidx.compose.runtime.Composable
+private fun rememberNavTint(connection: com.orismusic.client.playback.PlayerConnection?): androidx.compose.ui.graphics.Color? {
+    val meta by (connection?.currentMetadata?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.media3.common.MediaMetadata?>(null) })
+    val playing by (connection?.isPlaying?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) })
+    val tint = com.orismusic.client.ui.components.rememberArtworkColor(meta?.artworkUri?.toString())
+    return if (playing) tint else null
+}
+
 /**
  * The floating bar. At rest it is one pill with labels. When the page scrolls
  * down it splits: the current tab pops out as a circle and the other tabs
  * gather in a small pill beside it.
  */
 @androidx.compose.runtime.Composable
-private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -> Unit) {
+private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compose.ui.graphics.Color?, onSelect: (MainTab) -> Unit) {
     val tabs = MainTab.entries.filter { it != MainTab.Queue }
     fun icon(tab: MainTab) = when (tab) {
         MainTab.Home -> Icons.Rounded.Home
@@ -486,6 +566,7 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, onSelect: (MainTab) -
             label = { tabs[it].label },
             icon = { icon(tabs[it]) },
             onSelect = { onSelect(tabs[it]) },
+            tint = tint,
         )
     }
 }

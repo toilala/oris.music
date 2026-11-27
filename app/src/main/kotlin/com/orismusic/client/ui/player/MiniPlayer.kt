@@ -58,6 +58,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -81,8 +83,14 @@ fun MiniPlayer(
     connection: PlayerConnection,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
-    val metadata = connection.currentMetadata.collectAsState().value ?: return
+    val metadata = connection.currentMetadata.collectAsState().value
+    if (metadata == null) {
+        // No pill on screen: an empty rect tells the player morph to fall back to a plain rise.
+        androidx.compose.runtime.SideEffect { onBounds(androidx.compose.ui.geometry.Rect.Zero) }
+        return
+    }
     val scope = rememberCoroutineScope()
     val offX = remember { Animatable(0f) }
     val offY = remember { Animatable(0f) }
@@ -95,7 +103,10 @@ fun MiniPlayer(
     val isPlaying by connection.isPlaying.collectAsState()
     val playbackState by connection.playbackState.collectAsState()
     LaunchedEffect(isPlaying) { if (isPlaying) dismissed = false }
-    if (dismissed) return
+    if (dismissed) {
+        androidx.compose.runtime.SideEffect { onBounds(androidx.compose.ui.geometry.Rect.Zero) }
+        return
+    }
     val position by connection.currentPosition.collectAsState()
     val duration by connection.duration.collectAsState()
     val error by connection.error.collectAsState()
@@ -128,6 +139,8 @@ fun MiniPlayer(
         modifier = modifier
             .widthIn(max = 340.dp)
             .padding(horizontal = 12.dp, vertical = 4.dp)
+            // The resting rect, before any swipe translation: the player morph starts here.
+            .onGloballyPositioned { onBounds(it.boundsInRoot()) }
             .graphicsLayer {
                 translationX = offX.value; translationY = offY.value
                 alpha = 1f - minOf(0.85f, abs(offX.value) / 700f + offY.value.coerceAtLeast(0f) / 350f)
