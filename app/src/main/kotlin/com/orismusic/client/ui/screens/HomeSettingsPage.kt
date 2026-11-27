@@ -102,7 +102,7 @@ private fun HomePreview() {
     val side = (64 * k).dp
     val colors = listOf(0xFF8E5B52, 0xFF4F6B5E, 0xFF6C5A86, 0xFF8A7A52)
     androidx.compose.material3.Surface(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        shape = com.orismusic.client.ui.theme.OrisShapes.Panel,
         color = androidx.compose.ui.graphics.Color(0xFF151312), modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy((HomeSettings.density.gap / 2).dp)) {

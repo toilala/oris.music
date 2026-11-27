@@ -183,7 +183,7 @@ private fun GroupLabel(text: String) {
 
 @Composable
 private fun SurfacePreview() {
-    androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+    androidx.compose.material3.Surface(shape = com.orismusic.client.ui.theme.OrisShapes.Panel,
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {

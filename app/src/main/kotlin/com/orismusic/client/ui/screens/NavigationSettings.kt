@@ -101,7 +101,7 @@ internal fun ToggleRow(title: String, detail: String, checked: Boolean, onChange
 internal fun <T> ChoiceRow(title: String, options: List<T>, selected: T, label: (T) -> String, onPick: (T) -> Unit) {
     var open by remember { androidx.compose.runtime.mutableStateOf(false) }
     Surface(onClick = { open = true }, color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
+        shape = com.orismusic.client.ui.theme.OrisShapes.Row) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             Text(label(selected), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,

@@ -33,7 +33,7 @@ fun LyricsProviderSettings(onBack: () -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text("Lyrics") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Surface(shape = com.orismusic.client.ui.theme.OrisShapes.Panel, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val align = if(PlayerSettings.lyricsCentered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
                     Text("Let the night unfold", Modifier.fillMaxWidth(), style = com.orismusic.client.ui.player.lyricReadingStyle(),

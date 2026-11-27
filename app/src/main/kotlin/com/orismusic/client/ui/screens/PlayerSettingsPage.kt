@@ -60,7 +60,7 @@ internal fun PlayerLookPreview() {
         PlayerBackgroundStyle.Blur -> listOf(Color(0xFF635B4B), Color(0xFF3B4549), Color(0xFF161E22))
         PlayerBackgroundStyle.Solid -> listOf(Color.Black, Color.Black)
     }.let { stops -> if (lightMode) stops.mapIndexed { i, c -> if (i == stops.lastIndex) bg else lerp(c, bg, 0.55f + 0.18f * i) } else stops }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.verticalGradient(gradient)).padding(16.dp),
+    Column(Modifier.fillMaxWidth().clip(com.orismusic.client.ui.theme.OrisShapes.Panel).background(Brush.verticalGradient(gradient)).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         StyledArtwork(null, "Artwork preview", Modifier.size(142.dp), sample = true)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
