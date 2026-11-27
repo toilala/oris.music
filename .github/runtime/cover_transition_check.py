@@ -1,18 +1,42 @@
 #!/usr/bin/env python3
-"""Card to page cover transition, as recordings and dense frame sheets: open, back,
-reversal (back pressed mid-open), and open again with animations removed. Whether the page
-opens at all depends on the network from this runner, so each leg reports what it
-confirmed and never claims a result it did not see."""
+"""Home top section and card-to-page transition: loading, populated, offline and legacy
+minimal states, light and dark through the app's own theme preference, open/close/reversal
+and an animations-off pass. Recordings are read by content: the transition start is found
+from the frames, not from a fixed offset. Each leg prints what it confirmed."""
 import os
 import re
 import subprocess
 import time
 
-from playback_check import (adb, tree, screen, emit_image, ensure_ffmpeg, restart_app,
+from playback_check import (adb, tree, emit_image, ensure_ffmpeg, restart_app, stop_app,
                             wait_label, pidof, PKG, OUT)
 
-SHEET_FROM = 1.3
-SHEET_SPAN = 2.0
+APPEARANCE = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><string name=\"theme\">%s</string></map>"
+HOME_MINIMAL = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><boolean name=\"minimal\" value=\"true\" /></map>"
+
+
+def prefs(name, body):
+    if body is None:
+        adb('shell', 'run-as', PKG, 'rm', '-f', 'shared_prefs/%s.xml' % name)
+        return
+    local = '/tmp/%s.xml' % name
+    open(local, 'w').write(body)
+    adb('push', local, '/data/local/tmp/%s.xml' % name)
+    adb('shell', 'run-as', PKG, 'sh', '-c',
+        "'mkdir -p shared_prefs && cp /data/local/tmp/%s.xml shared_prefs/%s.xml'" % (name, name))
+
+
+def shot(name):
+    png = adb('exec-out', 'screencap', '-p')
+    path = '%s/%s.png' % (OUT, name)
+    open(path, 'wb').write(png)
+    if ensure_ffmpeg():
+        jpg = '%s/%s.jpg' % (OUT, name)
+        subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', path, '-vf', 'scale=540:-1', '-q:v', '4', jpg])
+        if os.path.exists(jpg):
+            emit_image(name, open(jpg, 'rb').read())
+            return
+    emit_image(name, png)
 
 
 def labels():
@@ -24,37 +48,57 @@ def labels():
     return out
 
 
+def bounds(n):
+    return tuple(map(int, re.findall(r'\d+', n.get('bounds'))))
+
+
 def find_card():
-    """First clickable, portrait-ish card below the Quick picks header: a cover with a
-    caption under it. Returns (cx, cy, bounds)."""
+    """First clickable, portrait-ish card below the Quick picks header (cover with a caption
+    under it). Returns (cx, cy, bounds, caption)."""
     root = tree()
     qp = next((n for n in root.iter('node') if 'Quick picks' in (n.get('text') or '')), None)
-    top = int(re.findall(r'\d+', qp.get('bounds'))[3]) if qp is not None else 0
+    top = bounds(qp)[3] if qp is not None else 0
     best = None
     for n in root.iter('node'):
         if n.get('clickable') != 'true':
             continue
-        x1, y1, x2, y2 = map(int, re.findall(r'\d+', n.get('bounds')))
+        x1, y1, x2, y2 = bounds(n)
         w, h = x2 - x1, y2 - y1
         if y1 > top + 200 and 250 <= w <= 700 and h > w and x1 >= 0 and x2 <= 1090:
             if best is None or y1 < best[1]:
-                best = ((x1 + x2) // 2, y1 + w // 2, n.get('bounds'))
+                caption = ' | '.join(sorted(t.get('text') for t in n.iter('node') if t.get('text')))
+                best = ((x1 + x2) // 2, y1 + w // 2, n.get('bounds'), caption)
     return best
 
 
 def sheet(name, mp4):
+    """Frames from the moment the picture starts to change. Reads the recording at 20fps,
+    finds the first frame that differs strongly from the one before it, and tiles 30 frames
+    from just before that point."""
     if not ensure_ffmpeg() or not os.path.exists(mp4):
         print('SHEET SKIPPED ' + name, flush=True)
         return
-    jpg = f'{OUT}/{name}_sheet.jpg'
-    subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', str(SHEET_FROM), '-t', str(SHEET_SPAN), '-i', mp4,
-                    '-vf', 'fps=10,scale=200:-1,tile=10x2', '-frames:v', '1', '-q:v', '5', jpg])
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', mp4, '-vf', 'fps=20,scale=48:96,format=gray',
+                          '-f', 'rawvideo', '-'], capture_output=True).stdout
+    size = 48 * 96
+    frames = [raw[i:i + size] for i in range(0, len(raw) - size + 1, size)]
+    start = None
+    for i in range(1, len(frames)):
+        diff = sum(abs(a - b) for a, b in zip(frames[i], frames[i - 1])) / size
+        if diff > 2.0:
+            start = i
+            break
+    print('SHEET %s frames=%d change-at=%s' % (name, len(frames), None if start is None else '%.2fs' % (start / 20)), flush=True)
+    if start is None:
+        return
+    jpg = '%s/%s_sheet.jpg' % (OUT, name)
+    subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', '%.2f' % max(0, start / 20 - 0.1), '-i', mp4,
+                    '-vf', 'fps=20,scale=200:-1,tile=10x3', '-frames:v', '1', '-q:v', '5', jpg])
     if os.path.exists(jpg):
-        print('SHEET ' + name + ' bytes=' + str(os.path.getsize(jpg)), flush=True)
         emit_image(name + '_sheet', open(jpg, 'rb').read())
 
 
-def record(name, action, seconds=9):
+def record(name, action, seconds=10):
     proc = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', str(seconds), '/sdcard/' + name],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     time.sleep(1.5)
@@ -76,61 +120,99 @@ def record(name, action, seconds=9):
     sheet(name[:-4], OUT + '/' + name)
 
 
-def open_card(card):
-    adb('shell', 'input', 'tap', str(card[0]), str(card[1]))
-    print('TAP card ' + card[2], flush=True)
-
-
 def on_page():
     ls = labels()
     return 'Back' in ls and 'Quick picks' not in ls
 
 
-def home_ready():
-    wait_label('Quick picks', seconds=40, pkg=PKG)
+def start(theme, home=None):
+    stop_app()
+    prefs('appearance', APPEARANCE % theme)
+    prefs('home', home)
+    adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
 
 
-def signature():
-    return sorted(n.get('text') for n in tree().iter('node') if n.get('text'))
+def header_top():
+    for n in tree().iter('node'):
+        if (n.get('text') or '').isupper() and ',' in (n.get('text') or '') and n.get('package') == PKG:
+            return bounds(n)
+    return None
 
 
-def leg_open_close(tag):
-    restart_app('Home', seconds=60)
-    home_ready()
+def leg_states(theme):
+    """Cold start: screenshots while loading, then populated, with where the date header sits."""
+    start(theme)
+    t0 = time.monotonic()
+    seen = []
+    for i in range(10):
+        time.sleep(0.6)
+        seen.append(round(time.monotonic() - t0, 1))
+        if i in (1, 3):
+            shot('%s_load_%d' % (theme, i))
+    wait_label('Quick picks', seconds=60, pkg=PKG)
+    time.sleep(2)
+    print('LEG %s populated header-bounds=%s' % (theme, header_top()), flush=True)
+    shot('%s_populated' % theme)
+
+
+def leg_offline():
+    adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'enable')
+    time.sleep(3)
+    try:
+        start('Light')
+        time.sleep(14)
+        print('LEG offline labels-have-retry=' + str(any('Retry' in l or 'could not' in l.lower() for l in labels())), flush=True)
+        shot('offline_state')
+    finally:
+        adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'disable')
+        time.sleep(5)
+
+
+def leg_legacy_minimal():
+    start('Light', HOME_MINIMAL)
+    wait_label('Quick picks', seconds=60, pkg=PKG)
+    time.sleep(2)
+    print('LEG legacy-minimal header-bounds=%s' % (header_top(),), flush=True)
+    shot('legacy_minimal')
+    prefs('home', None)
+
+
+def leg_open_close(tag, theme):
+    start(theme)
+    wait_label('Quick picks', seconds=60, pkg=PKG)
     time.sleep(2)
     card = find_card()
-    scrolled = False
-    if card is not None:
-        adb('shell', 'input', 'swipe', '540', '1500', '540', '1100', '300')
+    if card is None:
+        adb('shell', 'input', 'swipe', '540', '1500', '540', '1000', '300')
         time.sleep(1.5)
-        moved = find_card()
-        if moved is not None:
-            card, scrolled = moved, True
-    sig_before = signature()
+        card = find_card()
     print('CARD ' + str(card), flush=True)
     if card is None:
-        screen(tag + '_nocard')
+        shot(tag + '_nocard')
         return
-    screen(tag + '_before')
-    record(tag + '_open.mp4', lambda: open_card(card))
+    shot(tag + '_before')
+    sig_before = sorted(n.get('text') for n in tree().iter('node') if n.get('text'))
+    record(tag + '_open.mp4', lambda: adb('shell', 'input', 'tap', str(card[0]), str(card[1])))
     opened = on_page()
     print('LEG ' + tag + ' page-open-confirmed=' + str(opened), flush=True)
-    screen(tag + '_page')
-    if opened:
-        record(tag + '_close.mp4', lambda: adb('shell', 'input', 'keyevent', '4'))
-        time.sleep(1.5)
-        sig_after = signature()
-        back_home = bool(sig_after) and 'Back' not in labels()
-        print('LEG ' + tag + ' home-visible=' + str(back_home) + ' scrolled-before-open=' + str(scrolled)
-              + ' text-signature-equal=' + str(sig_before == sig_after)
-              + ' only-before=' + str(sorted(set(sig_before) - set(sig_after))[:6])
-              + ' only-after=' + str(sorted(set(sig_after) - set(sig_before))[:6]), flush=True)
-        screen(tag + '_after')
+    shot(tag + '_page')
+    if not opened:
+        return
+    record(tag + '_close.mp4', lambda: adb('shell', 'input', 'keyevent', '4'))
+    time.sleep(1.5)
+    after = find_card()
+    sig_after = sorted(n.get('text') for n in tree().iter('node') if n.get('text'))
+    print('LEG ' + tag + ' home-visible=' + str('Quick picks' in labels())
+          + ' source-card-before=' + str(card[2:]) + ' source-card-after=' + str(after[2:] if after else None)
+          + ' text-signature-equal=' + str(sig_before == sig_after)
+          + ' only-before=' + str(sorted(set(sig_before) - set(sig_after))[:6])
+          + ' only-after=' + str(sorted(set(sig_after) - set(sig_before))[:6]), flush=True)
+    shot(tag + '_after')
 
 
-def leg_reversal():
-    restart_app('Home', seconds=60)
-    home_ready()
+def leg_reversal(theme):
+    start(theme)
+    wait_label('Quick picks', seconds=60, pkg=PKG)
     time.sleep(2)
     card = find_card()
     if card is None:
@@ -138,43 +220,41 @@ def leg_reversal():
         return
 
     def act():
-        open_card(card)
+        adb('shell', 'input', 'tap', str(card[0]), str(card[1]))
         time.sleep(0.28)
         adb('shell', 'input', 'keyevent', '4')
         print('BACK pressed 280ms after tap (nominal; adb latency not measured)', flush=True)
 
     record('reversal.mp4', act)
     print('LEG reversal home-visible=' + str('Quick picks' in labels()) + ' page-visible=' + str(on_page()), flush=True)
-    screen('reversal_after')
+    shot('reversal_after')
 
 
 def main():
     adb('wait-for-device')
     original = adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip()
-    print('SCALE initial=' + original, flush=True)
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
     adb('shell', 'cmd', 'uimode', 'night', 'no')
-    print('THEME light, uimode=' + adb('shell', 'cmd', 'uimode', 'night').decode().strip(), flush=True)
-    legs = [lambda: leg_open_close('default'), leg_reversal]
-    for leg in legs:
+    steps = [
+        ('light states', lambda: leg_states('Light')),
+        ('dark states', lambda: leg_states('Dark')),
+        ('legacy minimal', leg_legacy_minimal),
+        ('light open/close', lambda: leg_open_close('light', 'Light')),
+        ('light reversal', lambda: leg_reversal('Light')),
+        ('dark open/close', lambda: leg_open_close('dark', 'Dark')),
+        ('offline', leg_offline),
+    ]
+    for name, step in steps:
         try:
-            leg()
+            step()
         except Exception as e:
-            print('LEG failed: ' + repr(e), flush=True)
-            screen('leg_failure')
-    adb('shell', 'cmd', 'uimode', 'night', 'yes')
-    print('THEME dark, uimode=' + adb('shell', 'cmd', 'uimode', 'night').decode().strip(), flush=True)
-    try:
-        leg_open_close('dark')
-    except Exception as e:
-        print('LEG failed: ' + repr(e), flush=True)
-    adb('shell', 'cmd', 'uimode', 'night', 'no')
+            print('LEG failed: ' + name + ' ' + repr(e), flush=True)
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
     print('SCALE now=' + adb('shell', 'settings', 'get', 'global', 'animator_duration_scale').decode().strip(), flush=True)
     try:
-        leg_open_close('noanim')
+        leg_open_close('noanim', 'Light')
     except Exception as e:
-        print('LEG failed: ' + repr(e), flush=True)
+        print('LEG failed: noanim ' + repr(e), flush=True)
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', original if original not in ('null', '') else '1')
 
 
