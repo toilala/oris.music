@@ -335,7 +335,7 @@ fun LyricsMode(connection: PlayerConnection, onClose: () -> Unit) {
                 Icon(Icons.Rounded.KeyboardArrowDown, "Back to player", Modifier.size(22.dp), tint = PlayerTextButtonColor.copy(alpha = 0.85f))
             }
             Spacer(Modifier.width(12.dp))
-            com.orismusic.client.ui.components.Artwork(artUrl, Modifier.size(44.dp), RoundedCornerShape(8.dp), null, px = 200)
+            com.orismusic.client.ui.components.Artwork(artUrl, Modifier.size(44.dp), com.orismusic.client.ui.theme.OrisShapes.Thumb, null, px = 200)
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Text(title.ifBlank { "No song selected" }, style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1,

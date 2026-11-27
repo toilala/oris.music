@@ -202,7 +202,7 @@ fun NowPlayingScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (lyricsOpen) {
-                    Artwork(art, Modifier.size(56.dp), RoundedCornerShape(6.dp), title, px = 200)
+                    Artwork(art, Modifier.size(56.dp), com.orismusic.client.ui.theme.OrisShapes.Thumb, title, px = 200)
                     Spacer(Modifier.width(12.dp))
                     Text(
                         title,

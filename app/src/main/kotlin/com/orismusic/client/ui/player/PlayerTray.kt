@@ -22,6 +22,10 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Info
@@ -78,6 +82,13 @@ internal fun PlayerTray(
     val index by connection.currentMediaItemIndex.collectAsState()
     val metadata by connection.currentMetadata.collectAsState()
     val song = remember(metadata, index) { connection.currentSavedSong() }
+    val savedOffline by com.orismusic.client.playback.OfflineAudio.downloaded.collectAsState()
+    val offlineBusy by com.orismusic.client.playback.OfflineAudio.inProgress.collectAsState()
+    val offlineFailed by com.orismusic.client.playback.OfflineAudio.failed.collectAsState()
+    val offlineStatus by com.orismusic.client.playback.OfflineAudio.status.collectAsState()
+    val offline = song?.let { sg ->
+        com.orismusic.client.playback.offlineRowStatus(sg.id, savedOffline.any { it.id == sg.id }, offlineBusy, offlineFailed, offlineStatus)
+    }
     val player = connection.player
     val prev = remember(index) { player.previousMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { player.getMediaItemAt(it) } }
     val next = remember(index) { player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { player.getMediaItemAt(it) } }
@@ -117,6 +128,32 @@ internal fun PlayerTray(
                     repeat != Player.REPEAT_MODE_OFF, 68.dp, Modifier.weight(1f),
                 ) { connection.toggleRepeatMode() }
                 ActionTile(Icons.Rounded.QueueMusic, "Queue", false, 68.dp, Modifier.weight(1f)) { onDismiss(); onQueue() }
+                ActionTile(
+                    when (offline) {
+                        com.orismusic.client.playback.OfflineStatus.READY -> Icons.Rounded.DownloadDone
+                        com.orismusic.client.playback.OfflineStatus.DOWNLOADING -> Icons.Rounded.Downloading
+                        com.orismusic.client.playback.OfflineStatus.FAILED,
+                        com.orismusic.client.playback.OfflineStatus.PARTIAL,
+                        com.orismusic.client.playback.OfflineStatus.UNKNOWN -> Icons.Rounded.Refresh
+                        null -> Icons.Rounded.Download
+                    },
+                    when (offline) {
+                        com.orismusic.client.playback.OfflineStatus.READY -> "Remove offline"
+                        com.orismusic.client.playback.OfflineStatus.DOWNLOADING -> "Cancel save"
+                        com.orismusic.client.playback.OfflineStatus.FAILED -> "Retry save"
+                        com.orismusic.client.playback.OfflineStatus.PARTIAL,
+                        com.orismusic.client.playback.OfflineStatus.UNKNOWN -> "Retry save"
+                        null -> "Save offline"
+                    },
+                    offline == com.orismusic.client.playback.OfflineStatus.READY, 68.dp, Modifier.weight(1f),
+                ) {
+                    val sg = song ?: return@ActionTile
+                    when (offline) {
+                        com.orismusic.client.playback.OfflineStatus.DOWNLOADING -> com.orismusic.client.playback.OfflineAudio.cancel(context, sg.id)
+                        com.orismusic.client.playback.OfflineStatus.READY -> com.orismusic.client.playback.OfflineAudio.remove(context, sg.id)
+                        else -> com.orismusic.client.playback.OfflineAudio.download(context, sg)
+                    }
+                }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 var playlistMenu by remember { mutableStateOf(false) }

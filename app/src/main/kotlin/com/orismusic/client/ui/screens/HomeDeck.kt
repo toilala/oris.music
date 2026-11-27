@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.orismusic.client.settings.HomeSettings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -117,11 +118,11 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
                         translationY = a * 14.dp.toPx()
                         this.alpha = 1f - 0.35f * a.coerceAtMost(1f)
                         shadowElevation = 18.dp.toPx() * (1f - a.coerceAtMost(1f))
-                        shape = RoundedCornerShape(26.dp)
+                        shape = HomeSettings.corners.shape(24)
                         clip = true
                     }.pressClickable({ startFrom(connection, scope, songs, s) }, 0.97f),
                 ) {
-                    Artwork(s.thumbnail, Modifier.fillMaxSize(), RoundedCornerShape(26.dp), s.title, 800)
+                    Artwork(s.thumbnail, Modifier.fillMaxSize(), HomeSettings.corners.shape(24), s.title, 800)
                 }
             }
             val cur = songs[pager.currentPage.coerceIn(0, songs.lastIndex)]
