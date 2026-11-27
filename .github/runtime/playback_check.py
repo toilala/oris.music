@@ -30,7 +30,12 @@ def screen(name):
 def emit_mp4_frames(tag, mp4_path, frames=4):
     """Key frames of a recorded transition as ORIS_IMAGE chunks, so the motion itself
     is inspectable from the log rather than only start/end stills or the artifact zip.
-    ffmpeg/ffprobe are present on the runner."""
+    ffmpeg/ffprobe are NOT on this runner, so frame emission is best-effort only and
+    must never take a check down with it."""
+    import shutil
+    if not shutil.which('ffprobe') or not shutil.which('ffmpeg'):
+        print('FRAMES SKIPPED ' + tag + ' (no ffmpeg on runner)', flush=True)
+        return
     if not os.path.exists(mp4_path):
         print('FRAMES MISSING ' + tag + ' (' + mp4_path + ')', flush=True)
         return

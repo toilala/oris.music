@@ -65,8 +65,8 @@ out = result.stdout.decode()
 print(out[-600:], flush=True)
 assert 'INSTRUMENTATION_CODE: -1' in out or 'OK (1 test)' in out, \
     'cancel injection instrumentation failed; tail printed above'
-time.sleep(2)
-assert has_label('Collapse player'), 'after ACTION_CANCEL the sheet must settle back to fully open'
+# Evidence before the verdict: stop and pull the recording first, so a failed settle
+# still leaves the motion inspectable instead of dying empty-handed.
 pid = pidof('screenrecord')
 if pid:
     adb('shell', 'kill', '-2', pid[0])
@@ -81,4 +81,10 @@ size = os.path.getsize(OUT + '/morph-cancel.mp4') if os.path.exists(OUT + '/morp
 print('RECORDED morph-cancel.mp4 bytes=' + str(size), flush=True)
 assert size > 20000, 'cancel leg never recorded real frames'
 emit_mp4_frames('morph-cancel', OUT + '/morph-cancel.mp4')
+time.sleep(4)
+if not has_label('Collapse player'):
+    labels = sorted({(n.get('text') or n.get('content-desc') or '')[:60]
+                     for n in tree().iter('node') if n.get('text') or n.get('content-desc')})
+    print('CANCEL STATE DUMP ' + repr(labels[:40]), flush=True)
+assert has_label('Collapse player'), 'after ACTION_CANCEL the sheet must settle back to fully open'
 print('PASS: ACTION_CANCEL settles the sheet back to open', flush=True)

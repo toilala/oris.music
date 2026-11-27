@@ -62,7 +62,8 @@ screen('playlist_created_open')
 print('PASS: playlist created through the real dialog', flush=True)
 
 # ADD: song-actions sheet on a Liked row now lists the playlist; tap it.
-back()
+# No BackHandler on the playlist detail: leave it through its own row action.
+tap('All playlists')
 wait_label('Playlists (1)')
 tap('Liked (5)')
 wait_label('Midnight City')

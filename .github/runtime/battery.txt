@@ -1,8 +1,4 @@
 playlist_journey_check.py
-notif_check.py
-home_picks_check.py
-eq_check.py
 morph_gesture_check.py
 morph_cancel_check.py
 motion_record.py
-light_dock_check.py
