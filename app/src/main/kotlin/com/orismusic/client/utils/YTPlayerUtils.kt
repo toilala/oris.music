@@ -157,8 +157,15 @@ object YTPlayerUtils {
         active != null &&
             cm.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }
-    internal var resolveStage: suspend (String, Int, Boolean, Int) -> PlaybackData =
+    internal val defaultResolveStage: suspend (String, Int, Boolean, Int) -> PlaybackData =
         { v, k, q, a -> resolveInner(v, k, q, a) }
+    internal var resolveStage: suspend (String, Int, Boolean, Int) -> PlaybackData = defaultResolveStage
+    internal val defaultDirectStage: suspend (String, Int, Boolean) -> PlaybackData? =
+        { v, k, q -> directAnonymous(v, k, q) }
+    internal var directStage: suspend (String, Int, Boolean) -> PlaybackData? = defaultDirectStage
+    internal val defaultExtractStage: suspend (String, Int) -> InnerTubeXResolver.Extracted? =
+        { v, k -> InnerTubeXResolver.extract(videoId = v, maxKbps = k) }
+    internal var extractStage: suspend (String, Int) -> InnerTubeXResolver.Extracted? = defaultExtractStage
 
     private suspend fun resolveFresh(
         videoId: String,
@@ -193,19 +200,22 @@ object YTPlayerUtils {
         quiet: Boolean,
         attempt: Int,
     ): PlaybackData {
+        // A refusal of the direct stage rules out that stage, not the connection: the
+        // catalog is the supported fallback for a challenged one (innertubex classifies
+        // LOGIN_REQUIRED as a per-client token failure, not a stop signal).
+        var guestRefusal: GuestAccessRefused? = null
         try {
-            directAnonymous(videoId, maxKbps, quiet)?.let {
+            directStage(videoId, maxKbps, quiet)?.let {
                 PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok VISIONOS-direct")
                 if (!quiet) PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
                 return it
             }
         } catch (refused: GuestAccessRefused) {
-            PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "refused")
-            if (!quiet) PlaybackDiagnostic.reportFailure(refused.message.orEmpty(), videoId)
-            throw refused
+            guestRefusal = refused
+            if (!quiet) PlaybackDiagnostic.report("Direct guest playback refused; trying the catalog.")
         }
         val extracted = try {
-            InnerTubeXResolver.extract(videoId = videoId, maxKbps = maxKbps)
+            extractStage(videoId, maxKbps)
                 ?: run {
                     PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no playable stream")
                     throw IOException("No playable stream found for $videoId")
@@ -217,7 +227,7 @@ object YTPlayerUtils {
             throw cancelled
         } catch (failure: StreamResolveException) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: ${failure.reason}")
-            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. ${failure.reason}", videoId)
+            if (!quiet) PlaybackDiagnostic.reportFailure(guestRefusal?.message ?: "No playable stream came back. ${failure.reason}", videoId)
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
                 Timber.tag(TAG).w(
@@ -226,7 +236,13 @@ object YTPlayerUtils {
             }
             // ExoPlayer's loading contract expects IOException for a normal
             // network/extraction failure, not an unexpected runtime exception.
-            throw IOException("Cannot resolve $videoId: ${failure.reason}", failure)
+            throw IOException("Cannot resolve $videoId: ${failure.reason}", failure).also { io ->
+                // Keep the refusal on the final error so retry suppression still engages.
+                guestRefusal?.let(io::addSuppressed)
+            }
+        } catch (failure: IOException) {
+            guestRefusal?.let(failure::addSuppressed)
+            throw failure
         }
         PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok ${extracted.clientName}")
         Timber.tag(TAG).d("Resolved $videoId via ${extracted.clientName} (${extracted.kbps}kbps ${extracted.mimeType})")

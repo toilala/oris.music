@@ -111,6 +111,7 @@ fun hasGuestRefusal(error: Throwable?): Boolean {
     var cause = error
     repeat(12) {
         if (cause is GuestAccessRefused) return true
+        if (cause?.suppressed?.any { it is GuestAccessRefused } == true) return true
         cause = cause?.cause
     }
     return false
