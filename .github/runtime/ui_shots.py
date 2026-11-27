@@ -300,3 +300,10 @@ wait_greeting()
 time.sleep(2)
 screen('dark_home_rested')
 print('PASS: rested dark home after theme round-trip', flush=True)
+
+# The remaining cluster state: dismissing the pill leaves the nav alone in the shared
+# body until the next track. Photographed last so nothing later needs the mini player.
+adb('shell', 'input', 'swipe', '540', '2010', '540', '2340', '300')
+time.sleep(2)
+screen('dock_nav_alone')
+print('PASS: dock states', flush=True)
