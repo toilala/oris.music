@@ -100,6 +100,13 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
                 Brush.verticalGradient(0f to MaterialTheme.colorScheme.background.copy(alpha = 0.7f), 0.28f to Color.Transparent),
             ),
         )
+        // The backdrop fades out toward the bottom, so the caption sits on the page background:
+        // give it a background-coloured wash and use the theme's own foreground for the text.
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(0.5f to Color.Transparent, 0.74f to MaterialTheme.colorScheme.background.copy(alpha = 0.88f)),
+            ),
+        )
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             HorizontalPager(
                 state = pager,
@@ -128,11 +135,11 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
             val cur = songs[pager.currentPage.coerceIn(0, songs.lastIndex)]
             Crossfade(targetState = cur, animationSpec = OrisMotion.standard(), label = "deck-title") { song ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Picked for you", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.7f))
-                    Text(song.title, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1,
+                    Text("Picked for you", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f))
+                    Text(song.title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp))
                     Text(song.artists.joinToString { it.name }, style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.78f), maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                 }
             }
             Row(
@@ -151,7 +158,7 @@ fun HomeDeck(songs: List<SongItem>, connection: PlayerConnection?, scroll: () ->
                     val w by animateDpAsState(if (active) 20.dp else 6.dp, OrisMotion.settle(), label = "dot")
                     Box(
                         Modifier.padding(horizontal = 2.dp).height(6.dp).width(w).clip(RoundedCornerShape(3.dp))
-                            .background(Color.White.copy(alpha = if (active) 0.95f else 0.35f)),
+                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = if (active) 0.9f else 0.3f)),
                     )
                 }
             }

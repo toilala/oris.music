@@ -292,7 +292,7 @@ fun LazyListScope.listeningShelves(
             SectionHeader(title = "New from your artists", subtitle = "Albums and singles from artists you play")
             OrbitRow(items = releases, key = { "na-${it.browseId}" }) { a, _, orbit ->
                 Column(orbit.width(HomeSettings.coverSize.dp(150)).pressClickable({ a.toDetailTarget()?.let(onOpen) })) {
-                    val artShown = androidx.compose.runtime.remember(a.thumbnail) { androidx.compose.runtime.mutableStateOf(false) }
+                    val artShown = androidx.compose.runtime.remember(a.thumbnail) { androidx.compose.runtime.mutableStateOf(com.orismusic.client.ui.components.LoadedCovers.has(a.thumbnail)) }
                     Artwork(a.thumbnail, Modifier.sharedCover(a.toDetailTarget()?.let { coverKey(it) }.takeIf { artShown.value }).size(HomeSettings.coverSize.dp(150)), HomeSettings.corners.shape(16), a.title, onLoaded = { artShown.value = true })
                     Text(a.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))

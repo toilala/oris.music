@@ -246,14 +246,6 @@ fun HomeScreen(
                                 else HomeHero(heroSongs, playerConnection, scroll)
                                 HomeHeader(scroll, overArtwork = !deck)
                             }
-                            // Same height as the deck so the feed arriving does not move anything below.
-                            hero is HeroPick.Pending && deck -> Box(Modifier.fillMaxWidth().height(500.dp + topInset)) {
-                                HomeHeader(scroll)
-                                Box(
-                                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 64.dp, start = 78.dp, end = 78.dp)
-                                        .height(268.dp).clip(RoundedCornerShape(24.dp)).shimmer(),
-                                )
-                            }
                             else -> HomeHeader(scroll)
                         }
                         }
@@ -685,7 +677,7 @@ private fun GenericCard(
         modifier = modifier.width(150.dp)
             .then(if (onClick != null) Modifier.pressClickable(onClick) else Modifier),
     ) {
-        val artShown = androidx.compose.runtime.remember(thumbnail) { androidx.compose.runtime.mutableStateOf(false) }
+        val artShown = androidx.compose.runtime.remember(thumbnail) { androidx.compose.runtime.mutableStateOf(com.orismusic.client.ui.components.LoadedCovers.has(thumbnail)) }
         Artwork(thumbnail, Modifier.sharedCover(if (artShown.value) coverKey else null).size(150.dp), HomeSettings.corners.shape(16), title, onLoaded = { artShown.value = true })
         Text(
             text = title,

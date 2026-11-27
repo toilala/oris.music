@@ -179,6 +179,22 @@ fun Modifier.entrance(index: Int = 0): Modifier = composed {
     }
 }
 
+/**
+ * Covers that have already drawn once in this process. A card that comes back on screen can then
+ * offer its shared-cover key from the first frame, before Coil reports success again.
+ */
+object LoadedCovers {
+    private val urls = LinkedHashSet<String>()
+    @Synchronized fun has(url: String?) = url != null && url in urls
+    @Synchronized fun add(url: String?) {
+        if (url.isNullOrBlank()) return
+        urls.remove(url)
+        urls.add(url)
+        while (urls.size > 400) urls.remove(urls.first())
+    }
+    @Synchronized fun clear() = urls.clear()
+}
+
 /** Cover art with a soft placeholder and a crossfade when it arrives. */
 /**
  * YouTube Music hands out small cover URLs (60 to 226 px). Their image host serves any size from the same
@@ -208,7 +224,7 @@ fun Artwork(
 ) {
     val context = LocalContext.current
     val request = remember(url, px) { ImageRequest.Builder(context).data(upscaleCover(url, px)).crossfade(300).build() }
-    var loaded by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
+    var loaded by remember(url) { androidx.compose.runtime.mutableStateOf(LoadedCovers.has(url)) }
     var failed by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
     // A soft pulse while the cover loads, so empty boxes read as "loading" and not "broken".
     val base = MaterialTheme.colorScheme.surfaceVariant
@@ -249,7 +265,7 @@ fun Artwork(
         model = request,
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
-        onSuccess = { loaded = true; onLoaded?.invoke() },
+        onSuccess = { loaded = true; LoadedCovers.add(url); onLoaded?.invoke() },
         onError = { failed = true },
         modifier = modifier.clip(shape).background(pulse),
     )
