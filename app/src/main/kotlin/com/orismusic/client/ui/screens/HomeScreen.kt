@@ -172,8 +172,9 @@ fun HomeScreen(
         value = (feed as? HomeFeedState.Ready)?.page?.let { loadQuickPicks(it, filters, taste.artists) }
     }
     Scaffold(modifier = modifier) { outerPadding ->
-        Box(Modifier.fillMaxSize().padding(outerPadding)
-                .artworkTintBackdrop(heroSongs.firstOrNull()?.thumbnail ?: history.firstOrNull()?.thumbnail)) {
+        Box(Modifier.fillMaxSize()
+                .artworkTintBackdrop(heroSongs.firstOrNull()?.thumbnail ?: history.firstOrNull()?.thumbnail)
+                .padding(outerPadding)) {
             val auroraTint = com.orismusic.client.ui.components.rememberArtworkColor(history.firstOrNull()?.thumbnail)
             if (heroSongs.isEmpty() && (!heroOn || feed !is HomeFeedState.Loading)) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(

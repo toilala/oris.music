@@ -461,7 +461,9 @@ def seed_liked():
 
 
 def open_row_menu():
-    tap('Add to playlist')
+    # The row's overflow icon carries this content-desc; the shared SongActionsSheet it
+    # opens holds the offline and playlist actions the legs assert on.
+    tap('Song actions')
 
 
 def dismiss_menu():

@@ -139,8 +139,8 @@ fun QueueScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .artworkTintBackdrop(nowArt),
+                .artworkTintBackdrop(nowArt)
+                .padding(innerPadding),
         ) {
             if (!queueTitle.isNullOrBlank()) {
                 Text(
