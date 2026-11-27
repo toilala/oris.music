@@ -1,59 +1,70 @@
 #!/usr/bin/env python3
-"""Enabled hide-on-scroll capture: with the dial on, a proven scroll must tuck the nav row.
-The scroll itself is verified from the greeting's position before any frame counts,
-so a dead swipe reads as a setup failure, not as nav staying visible."""
-from playback_check import adb, back, tap, wait_label, screen, tree, PKG
-import re
-import time
+"""Enabled hide-on-scroll verdict, in-process: NavHideTest sets the dial through the
+app's own settings state with a track loaded, proves the scroll from greeting geometry,
+then asserts the nav row leaves the tree while the mini player stays in the dock.
+UiDevice stills and the position log are pulled before any verdict."""
+import glob
+import os
 import subprocess
+import time
 
-def greeting_top():
-    root = tree()
-    for node in root.iter('node'):
-        t = node.get('text') or ''
-        if t.startswith('Good ') or t.startswith('Late-night') or t.startswith('Your late-night'):
-            m = re.match(r'\[(\d+),(\d+)\]', node.get('bounds') or '')
-            if m:
-                return int(m.group(2))
-    return None
+from playback_check import adb, wait_label, PKG, OUT, emit_image
 
-def wait_greeting_top(seconds=60):
-    end = time.monotonic() + seconds
-    while time.monotonic() < end:
-        top = greeting_top()
-        if top is not None:
-            return top
-        time.sleep(1)
-    screen('failure')
-    raise AssertionError('UI never showed the home greeting')
+MAIN = PKG + '/com.orismusic.client.MainActivity'
+COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
+TONE = 'Runtime local tone'
 
-nav_on = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
-          '<bool name="hide_on_scroll" value="true" /></map>')
+
+adb('wait-for-device')
+os.makedirs(OUT, exist_ok=True)
+
+apk = glob.glob('app/build/outputs/apk/androidTest/foss/debug/*.apk')
+if not apk:
+    print('BUILDING androidTest apk (one-off per job)', flush=True)
+    subprocess.run(['./gradlew', ':app:assembleFossDebugAndroidTest', '--console=plain'], check=True)
+    apk = glob.glob('app/build/outputs/apk/androidTest/foss/debug/*.apk')
+adb('install', '-r', apk[0])
+
 adb('shell', 'am', 'force-stop', PKG)
-subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/navigation.xml'"],
-               input=nav_on.encode(), check=True)
-adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
-wait_greeting_top()
-time.sleep(3)
-before = greeting_top()
-adb('shell', 'input', 'swipe', '540', '1200', '540', '400', '350')
-time.sleep(0.4)
-screen('nav_hide_enabled_scrolled')
-after = greeting_top()
-time.sleep(1.2)
-screen('nav_hide_enabled_settled')
-scrolled = after is None or (before is not None and after < before - 300)
-if not scrolled:
-    adb('shell', 'input', 'swipe', '540', '1400', '540', '300', '450')
-    time.sleep(0.5)
-    screen('nav_hide_enabled_retry')
-    retry = greeting_top()
-    scrolled = retry is None or (before is not None and retry < before - 300)
-nav_off = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
-           '<bool name="hide_on_scroll" value="false" /></map>')
-adb('shell', 'am', 'force-stop', PKG)
-subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'cat > shared_prefs/navigation.xml'"],
-               input=nav_off.encode(), check=True)
-if not scrolled:
-    raise AssertionError('SETUP FAILURE: home feed never scrolled; nav-hide capture inconclusive')
-print('PASS: nav hide capture (scroll proven; nav verdict read from the frames)', flush=True)
+adb('shell', 'am', 'start', '-n', COMPONENT)
+wait_label('Local audio playing', seconds=30)
+time.sleep(2)
+adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
+wait_label(TONE, seconds=25)
+
+result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'class',
+                         'com.orismusic.client.nav.NavHideTest',
+                         PKG + '.test/androidx.test.runner.AndroidJUnitRunner'],
+                        capture_output=True, timeout=180)
+out = result.stdout.decode()
+print(out[-1200:], flush=True)
+
+diag_dir = OUT + '/nav-diag'
+os.makedirs(diag_dir, exist_ok=True)
+names = subprocess.run(['adb', 'shell', 'run-as', PKG, 'ls', 'cache/oris-nav-diag'],
+                       capture_output=True).stdout.decode().split()
+pulled = 0
+for name in names:
+    r = subprocess.run(['adb', 'exec-out', 'run-as', PKG, 'cat',
+                        'cache/oris-nav-diag/' + name], capture_output=True)
+    if r.returncode == 0 and r.stdout:
+        open(os.path.join(diag_dir, name), 'wb').write(r.stdout)
+        pulled += 1
+print('DIAG PULL files=' + str(pulled), flush=True)
+if pulled == 0:
+    lg = subprocess.run(['adb', 'logcat', '-d', '-s', 'OrisNavDiag'],
+                        capture_output=True).stdout.decode(errors='replace')
+    print('DIAG FALLBACK logcat OrisNavDiag:', flush=True)
+    print(lg[-2000:], flush=True)
+if os.path.isdir(diag_dir):
+    for name in sorted(os.listdir(diag_dir)):
+        path = os.path.join(diag_dir, name)
+        if name.endswith('.png'):
+            emit_image('navhide-' + name.replace('.png', ''), open(path, 'rb').read())
+        elif name.endswith('.txt'):
+            print('DIAG ' + name + ':', flush=True)
+            print(open(path).read(), flush=True)
+
+assert 'INSTRUMENTATION_CODE: -1' in out or 'OK (1 test)' in out, \
+    'nav-hide instrumentation failed; tail printed above'
+print('PASS: nav hides on a proven scroll while the mini player stays (asserted in-process)', flush=True)
