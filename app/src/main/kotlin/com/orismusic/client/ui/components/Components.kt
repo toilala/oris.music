@@ -5,7 +5,9 @@
  */
 package com.orismusic.client.ui.components
 
+import com.orismusic.client.ui.theme.OrisDimens
 import com.orismusic.client.ui.theme.OrisMotion
+import com.orismusic.client.ui.theme.OrisShapes
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -135,11 +138,13 @@ fun Modifier.shimmer(): Modifier = composed {
     )
 }
 
-/** Fades and slides a list item in once, a little later for each index. */
+/** Fades and slides a list item in once, 55ms after the row before it. */
 fun Modifier.entrance(index: Int = 0): Modifier = composed {
-    val progress = remember { Animatable(0f) }
+    val reduced = rememberReducedMotion()
+    val progress = remember { Animatable(if (reduced) 1f else 0f) }
     LaunchedEffect(Unit) {
-        delay((index.coerceAtMost(8) * 45).toLong())
+        if (reduced) return@LaunchedEffect
+        delay((index.coerceAtMost(8) * 55).toLong())
         progress.animateTo(1f, OrisMotion.standard())
     }
     this.graphicsLayer {
@@ -258,14 +263,15 @@ fun SongRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .heightIn(min = OrisDimens.ListRowHeight)
+            .padding(horizontal = 12.dp)
+            .clip(OrisShapes.Row)
             .background(if (highlight) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
             .pressClickable(onClick, 0.98f)
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(thumbnail, Modifier.size(54.dp), RoundedCornerShape(10.dp), px = 300)
+        Artwork(thumbnail, Modifier.size(OrisDimens.ListThumb), OrisShapes.Thumb, px = 300)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -285,7 +291,7 @@ fun SongRow(
 @Composable
 fun SkeletonCard(size: androidx.compose.ui.unit.Dp = 140.dp) {
     Column(Modifier.width(size)) {
-        Box(Modifier.size(size).clip(RoundedCornerShape(14.dp)).shimmer())
+        Box(Modifier.size(size).clip(OrisShapes.Card).shimmer())
         Spacer(Modifier.height(8.dp))
         Box(Modifier.fillMaxWidth(0.8f).height(12.dp).clip(RoundedCornerShape(6.dp)).shimmer())
         Spacer(Modifier.height(6.dp))
@@ -308,6 +314,20 @@ fun rememberArtworkColor(url: String?): Color? {
         value = bitmap?.let { sampleColor(it) } ?: value
     }
     return color
+}
+
+/** The screen wears a tint of the given artwork, dissolving into the page background. */
+fun Modifier.artworkTintBackdrop(url: String?, strength: Float = 0.3f): Modifier = composed {
+    val bg = MaterialTheme.colorScheme.background
+    val tint by androidx.compose.animation.animateColorAsState(
+        targetValue = rememberArtworkColor(url) ?: bg,
+        animationSpec = OrisMotion.slow(),
+        label = "artwork tint",
+    )
+    val extent = with(androidx.compose.ui.platform.LocalDensity.current) { 420.dp.toPx() }
+    this.background(
+        Brush.verticalGradient(listOf(tint.copy(alpha = strength), bg), endY = extent),
+    )
 }
 
 private fun sampleColor(bitmap: Bitmap): Color {

@@ -57,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import com.orismusic.client.ui.components.SongRow
+import com.orismusic.client.ui.components.artworkTintBackdrop
 import com.orismusic.client.ui.components.Artwork
 import com.orismusic.client.ui.components.pressClickable
 import com.orismusic.client.ui.components.entrance
@@ -210,7 +211,7 @@ fun LibraryScreen(
             dismissButton = { TextButton(onClick = { importing = false }) { Text("Cancel") } },
         )
     }
-    Column(modifier = modifier) {
+    Column(modifier = modifier.artworkTintBackdrop(history.firstOrNull()?.thumbnail)) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Library",

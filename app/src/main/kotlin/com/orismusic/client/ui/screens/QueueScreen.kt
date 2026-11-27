@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.orismusic.client.ui.components.artworkTintBackdrop
 import com.orismusic.client.ui.components.entrance
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -133,10 +134,12 @@ fun QueueScreen(
         val count = try { version.let { player.mediaItemCount } } catch (e: Exception) { 0 }
         val view = androidx.compose.ui.platform.LocalView.current
 
+        val nowArt = try { version.let { player.getMediaItemAt(currentIndex).mediaMetadata.artworkUri?.toString() } } catch (e: Exception) { null }
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .artworkTintBackdrop(nowArt),
         ) {
             if (!queueTitle.isNullOrBlank()) {
                 Text(

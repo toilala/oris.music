@@ -1,6 +1,7 @@
 package com.orismusic.client.ui.player
 
 import com.orismusic.client.ui.theme.OrisMotion
+import com.orismusic.client.ui.theme.OrisShapes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
@@ -86,7 +86,7 @@ internal fun PlayerTray(
         onDismissRequest = onDismiss,
         sheetState = sheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        shape = OrisShapes.Sheet,
     ) {
         Column(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
@@ -189,7 +189,7 @@ private fun ActionTile(
     Surface(
         onClick = onClick,
         interactionSource = press,
-        shape = RoundedCornerShape(22.dp),
+        shape = OrisShapes.Panel,
         color = container,
         modifier = modifier.height(height).graphicsLayer { scaleX = scale; scaleY = scale },
     ) {
@@ -205,12 +205,12 @@ private fun PeekCard(label: String, item: androidx.media3.common.MediaItem?, mod
     Surface(
         onClick = onClick,
         enabled = item != null,
-        shape = RoundedCornerShape(18.dp),
+        shape = OrisShapes.Panel,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier.height(64.dp),
     ) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Artwork(item?.mediaMetadata?.artworkUri?.toString(), Modifier.size(48.dp), RoundedCornerShape(12.dp), px = 200)
+            Artwork(item?.mediaMetadata?.artworkUri?.toString(), Modifier.size(48.dp), OrisShapes.Thumb, px = 200)
             Column(Modifier.padding(start = 10.dp)) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(

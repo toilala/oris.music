@@ -1,6 +1,7 @@
 package com.orismusic.client.ui.components
 
 import com.orismusic.client.ui.theme.OrisMotion
+import com.orismusic.client.ui.theme.OrisShapes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -72,8 +73,8 @@ fun OrisDock(
     val tabH = (if (showLabels) 54 else 50).dp + NavSettings.size.extra.dp
     // Anchored bar: flush to the screen edges with only the top corners eased, so it
     // reads as the floor of the page instead of a second floating pill.
-    val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-    val lensShape = RoundedCornerShape(14.dp)
+    val shape = OrisShapes.Sheet
+    val lensShape = OrisShapes.Row
     val scheme = MaterialTheme.colorScheme
     val (accent, onAccent) = when (NavSettings.accent) {
         NavAccent.Warm -> scheme.tertiary to scheme.onTertiary
