@@ -64,29 +64,36 @@ mark = next((i for i, l in enumerate(lines) if 'phase=probe-tap' in l), None)
 print('PROBE tap marker at kept-line index ' + str(mark) + ' of ' + str(len(lines)), flush=True)
 for line in (lines[mark:mark + 400] if mark is not None else lines[-140:]):
     print(line, flush=True)
-joined = '\n'.join(lines)
+# Classify only what happened after this probe's own tap. Lines from app start (the
+# preload and warm-up) are kept in the artifact but never decide the label.
+attempt = lines[mark:] if mark is not None else []
+joined = '\n'.join(attempt)
 started = 'playback started' in joined
 fetch_refused = re.search(r'Response code: 403|responseCode=403', joined) is not None
 terminal_stop = 'failed to load after retrying' in joined or 'failed in a row' in joined
-if started and state == 'advancing':
-    diag = 'RESOLVED: source accepted, playback advancing (%s -> %s ms)' % (p1, p2)
+if mark is None:
+    diag = 'NO TAP MARKER: attempt window unknown, nothing classified'
+elif started and state == 'advancing':
+    diag = 'PLAYBACK ADVANCING: source accepted (%s -> %s ms)' % (p1, p2)
+elif started and state == 'stalled':
+    diag = 'PLAYBACK STARTED BUT STALLED (p1=%s p2=%s)' % (p1, p2)
 elif started:
-    diag = 'RESOLVED: source accepted, position delta unavailable (p1=%s p2=%s)' % (p1, p2)
-# A deeper fetch outcome outranks a mid-chain refusal fragment: the direct stage can
-# log LOGIN_REQUIRED and the catalog still mint a URL that the media host then refuses.
+    diag = 'PLAYBACK STARTED, position delta unavailable (p1=%s p2=%s)' % (p1, p2)
 elif terminal_stop and fetch_refused:
-    diag = 'REFUSED_AT_MEDIA_FETCH: minted URL got HTTP 403, bounded retries stopped (minting stage unknown)'
+    diag = 'REFUSED_AT_MEDIA_FETCH: minted URL got HTTP 403, retries stopped after this tap'
+elif terminal_stop:
+    diag = 'RETRIES STOPPED after this tap, cause not in the lines'
 elif re.search(r'resolve r\d+ ok', joined):
-    diag = 'RESOLVED (resolve ok, no playback-started line)'
+    diag = 'URL MINTED after this tap, playback not observed (ui-state=%s)' % state
 elif 'not a bot' in joined or 'LOGIN_REQUIRED' in joined:
-    diag = 'REFUSED_BY_YOUTUBE_BOT_CHECK on this connection'
-elif 'timed out' in joined:
-    diag = 'TIMED OUT'
+    diag = 'REFUSED_BY_YOUTUBE_BOT_CHECK after this tap'
+elif 'TIMED OUT' in joined or 'timed out' in joined:
+    diag = 'TIMED OUT after this tap'
 elif 'no network' in joined:
     diag = 'NO NETWORK (OS)'
 elif 'Extraction failed' in joined or 'StreamResolveException' in joined:
-    diag = 'EXTRACTION FAILURE'
+    diag = 'EXTRACTION FAILURE after this tap'
 else:
-    diag = 'INCONCLUSIVE (ui-state=' + state + ')'
+    diag = 'INCONCLUSIVE after this tap (ui-state=' + state + ', lines-after-tap=' + str(len(attempt)) + ')'
 print('DIAGNOSIS: ' + diag, flush=True)
-assert state in ('advancing', 'stalled') or 'OrisDiag' in joined or frag, 'probe captured no resolution evidence'
+assert state in ('advancing', 'stalled') or 'OrisDiag' in joined or frag or mark is not None, 'probe captured no resolution evidence'

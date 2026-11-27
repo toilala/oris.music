@@ -66,6 +66,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,7 +107,7 @@ private sealed interface HomeFeedState {
 private var cachedFeed: HomeFeedState.Ready? = null
 private var cachedAlbums: List<com.music.innertube.models.AlbumItem> = emptyList()
 private var feedGeneration = 0
-private val entranceSeen = HashSet<Int>()
+private val entranceSeen = com.orismusic.client.ui.components.EntranceSeen()
 private var feedGenerationLoaded = -1
 private var albumsGenerationLoaded = -1
 private var feedSessionLoaded = ""
@@ -216,6 +217,7 @@ fun HomeScreen(
         chooseHero(heroOn, phase, feedSongs, quickResult != null, quickPicks?.first, history)
     }
     val heroSongs = (hero as? HeroPick.Ready)?.songs.orEmpty()
+    entranceSeen.enter(feedSession())
     androidx.compose.runtime.CompositionLocalProvider(com.orismusic.client.ui.components.LocalEntranceSeen provides entranceSeen) {
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize()
@@ -237,6 +239,7 @@ fun HomeScreen(
                     item(key = "top") {
                         val deck = HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck
                         val topInset = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                        Box(Modifier.animateContentSize(OrisMotion.standard())) {
                         when {
                             heroSongs.isNotEmpty() -> Box {
                                 if (deck) HomeDeck(heroSongs, playerConnection, scroll)
@@ -252,6 +255,7 @@ fun HomeScreen(
                                 )
                             }
                             else -> HomeHeader(scroll)
+                        }
                         }
                     }
                     listeningShelves(history, taste, shelves, playerConnection, onOpen, scope)

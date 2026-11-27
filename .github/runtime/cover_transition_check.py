@@ -98,7 +98,37 @@ def sheet(name, mp4):
         emit_image(name + '_sheet', open(jpg, 'rb').read())
 
 
-def record(name, action, seconds=10):
+def sheet_all(name, mp4):
+    """The whole recording at 6fps, 14 frames per row, for transitions that start with the launch."""
+    if not ensure_ffmpeg() or not os.path.exists(mp4):
+        print('SHEET SKIPPED ' + name, flush=True)
+        return
+    jpg = '%s/%s_sheet.jpg' % (OUT, name)
+    subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', mp4, '-vf', 'fps=6,scale=130:-1,tile=14x6',
+                    '-frames:v', '1', '-q:v', '5', jpg])
+    if os.path.exists(jpg):
+        emit_image(name + '_sheet', open(jpg, 'rb').read())
+        print('SHEET-ALL ' + name + ' at 6fps, 14 per row', flush=True)
+
+
+def art_variance(b):
+    """Pixel spread of the cover square of a card, 0 for a flat placeholder. Read from a screenshot."""
+    if not ensure_ffmpeg():
+        return None
+    x1, y1, x2, y2 = map(int, re.findall(r'\d+', b))
+    w = x2 - x1
+    png = adb('exec-out', 'screencap', '-p')
+    open('/tmp/art.png', 'wb').write(png)
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', '/tmp/art.png', '-vf',
+                          'crop=%d:%d:%d:%d,scale=16:16,format=gray' % (w, w, x1, y1), '-f', 'rawvideo', '-'],
+                         capture_output=True).stdout
+    if not raw:
+        return None
+    mean = sum(raw) / len(raw)
+    return round((sum((v - mean) ** 2 for v in raw) / len(raw)) ** 0.5, 1)
+
+
+def record(name, action, seconds=10, full=False):
     proc = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', str(seconds), '/sdcard/' + name],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     time.sleep(1.5)
@@ -117,7 +147,7 @@ def record(name, action, seconds=10):
     adb('pull', '/sdcard/' + name, OUT + '/' + name)
     adb('shell', 'rm', '/sdcard/' + name)
     print('RECORDED ' + name + ' bytes=' + str(os.path.getsize(OUT + '/' + name)), flush=True)
-    sheet(name[:-4], OUT + '/' + name)
+    (sheet_all if full else sheet)(name[:-4], OUT + '/' + name)
 
 
 def on_page():
@@ -155,17 +185,61 @@ def leg_states(theme):
     shot('%s_populated' % theme)
 
 
-def leg_offline():
+def fixture_cover(name, color):
+    ensure_ffmpeg()
+    jpg = '/tmp/%s.jpg' % name
+    subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=%s:s=600x600' % color,
+                    '-vf', 'drawgrid=w=100:h=100:t=6:c=white@0.6', '-frames:v', '1', jpg])
+    r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee', 'cache/%s.jpg' % name],
+                       input=open(jpg, 'rb').read(), capture_output=True)
+    assert r.returncode == 0, 'cover fixture write failed'
+    return 'file:///data/user/0/%s/cache/%s.jpg' % (PKG, name)
+
+
+def seed_history(rows):
+    import json
+    from xml.sax.saxutils import escape
+    xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map><string name=\"history\">"
+           + escape(json.dumps(rows)) + '</string></map>')
+    r = subprocess.run(['adb', 'shell', 'run-as', PKG, 'tee', 'shared_prefs/oris-library.xml'],
+                       input=xml.encode(), capture_output=True)
+    assert r.returncode == 0, 'history fixture write failed'
+
+
+def offline_leg(tag, history):
+    """Cold start with no network. No history: the loading placeholder must give way to a header
+    and the failure message. With seeded history (local covers, so loaded art): the placeholder
+    must give way to a banner built from that history."""
     adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'enable')
     time.sleep(3)
     try:
-        start('Light')
-        time.sleep(14)
-        print('LEG offline labels-have-retry=' + str(any('Retry' in l or 'could not' in l.lower() for l in labels())), flush=True)
-        shot('offline_state')
+        stop_app()
+        adb('shell', 'run-as', PKG, 'rm', '-f', 'shared_prefs/oris-library.xml')
+        if history:
+            colors = ['0xC0392B', '0x2E86C1', '0x28B463', '0xD4AC0D', '0x8E44AD']
+            rows = [{'id': 'fx%d' % i, 'title': 'Fixture song %d' % i, 'artist': 'Fixture artist',
+                     'thumbnail': fixture_cover('fxcover%d' % i, c)} for i, c in enumerate(colors)]
+            seed_history(rows)
+        prefs('appearance', APPEARANCE % 'Light')
+        prefs('home', None)
+        record(tag + '.mp4', lambda: adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity'),
+               seconds=14, full=True)
+        ls = labels()
+        print('LEG %s settled labels-have-retry=%s header-bounds=%s' % (
+            tag, any('Retry' in l or 'Try again' in l or 'could not' in l.lower() for l in ls), header_top()), flush=True)
+        shot(tag + '_settled')
     finally:
+        adb('shell', 'run-as', PKG, 'rm', '-f', 'shared_prefs/oris-library.xml')
         adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'disable')
         time.sleep(5)
+
+
+def leg_offline():
+    offline_leg('offline_empty', False)
+
+
+def leg_offline_history():
+    offline_leg('offline_history', True)
 
 
 def leg_legacy_minimal():
@@ -177,7 +251,7 @@ def leg_legacy_minimal():
     prefs('home', None)
 
 
-def leg_open_close(tag, theme):
+def leg_open_close(tag, theme, wait_art=False):
     start(theme)
     wait_label('Quick picks', seconds=60, pkg=PKG)
     time.sleep(2)
@@ -186,7 +260,13 @@ def leg_open_close(tag, theme):
         adb('shell', 'input', 'swipe', '540', '1500', '540', '1000', '300')
         time.sleep(1.5)
         card = find_card()
-    print('CARD ' + str(card), flush=True)
+    if card is not None and wait_art:
+        end = time.monotonic() + 45
+        while time.monotonic() < end and (art_variance(card[2]) or 0) < 8:
+            time.sleep(3)
+            card = find_card() or card
+    var = art_variance(card[2]) if card else None
+    print('CARD ' + str(card) + ' art-variance-at-tap=' + str(var) + ' (flat placeholder is near 0)', flush=True)
     if card is None:
         shot(tag + '_nocard')
         return
@@ -239,10 +319,10 @@ def main():
         ('light states', lambda: leg_states('Light')),
         ('dark states', lambda: leg_states('Dark')),
         ('legacy minimal', leg_legacy_minimal),
-        ('light open/close', lambda: leg_open_close('light', 'Light')),
-        ('light reversal', lambda: leg_reversal('Light')),
-        ('dark open/close', lambda: leg_open_close('dark', 'Dark')),
-        ('offline', leg_offline),
+        ('light open/close, art as it is at first tap', lambda: leg_open_close('light', 'Light')),
+        ('dark open/close, art loaded', lambda: leg_open_close('dark', 'Dark', wait_art=True)),
+        ('offline, no history', leg_offline),
+        ('offline, seeded history', leg_offline_history),
     ]
     for name, step in steps:
         try:

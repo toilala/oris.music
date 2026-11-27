@@ -139,21 +139,39 @@ fun Modifier.shimmer(): Modifier = composed {
     )
 }
 
-/** Rows that already played their entrance on a screen that is rebuilt on return. Null means always play. */
-val LocalEntranceSeen = androidx.compose.runtime.staticCompositionLocalOf<MutableSet<Int>?> { null }
+/**
+ * Which rows already played their entrance, for a screen that is rebuilt when you come back to it.
+ * Marks from a stale epoch (a refresh cleared the set meanwhile) are dropped, and a new scope
+ * (another account or session) starts empty.
+ */
+class EntranceSeen {
+    private val slots = HashSet<Int>()
+    private var scope: Any? = null
+    var epoch = 0
+        private set
+
+    fun has(slot: Int) = slot in slots
+    fun mark(slot: Int, markEpoch: Int) { if (markEpoch == epoch) slots.add(slot) }
+    fun clear() { epoch++; slots.clear() }
+    fun enter(newScope: Any?) { if (newScope != scope) { scope = newScope; clear() } }
+}
+
+/** Null means every row always plays its entrance. */
+val LocalEntranceSeen = androidx.compose.runtime.staticCompositionLocalOf<EntranceSeen?> { null }
 
 /** Fades and slides a list item in once, 55ms after the row before it. */
 fun Modifier.entrance(index: Int = 0): Modifier = composed {
     val reduced = rememberReducedMotion()
     val seen = LocalEntranceSeen.current
     val slot = androidx.compose.runtime.currentCompositeKeyHash
-    val already = seen?.contains(slot) == true
+    val epoch = remember { seen?.epoch ?: 0 }
+    val already = remember { seen?.has(slot) == true }
     val progress = remember { Animatable(if (reduced || already) 1f else 0f) }
     LaunchedEffect(Unit) {
         if (reduced || already) return@LaunchedEffect
-        seen?.add(slot)
         delay((index.coerceAtMost(8) * 55).toLong())
         progress.animateTo(1f, OrisMotion.standard())
+        seen?.mark(slot, epoch)
     }
     this.graphicsLayer {
         alpha = progress.value
