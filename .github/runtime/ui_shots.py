@@ -8,7 +8,7 @@ def wait_greeting(seconds=60):
         root = tree()
         for node in root.iter('node'):
             t = node.get('text') or ''
-            if t.startswith('Good ') or t.startswith('Your late-night'):
+            if t.startswith('Good ') or t.startswith('Late-night') or t.startswith('Your late-night'):
                 return node
         time.sleep(1)
     screen('failure')
