@@ -109,6 +109,7 @@ private sealed interface SearchState {
     data object Loading : SearchState
     data class Ready(val page: SearchSummaryPage) : SearchState
     data class Failed(val message: String) : SearchState
+    data class Empty(val query: String) : SearchState
 }
 
 private enum class SearchTab(val label: String) {
@@ -304,7 +305,7 @@ fun SearchScreen(
                     if (page.summaries.any { it.items.isNotEmpty() }) {
                         SearchState.Ready(page)
                     } else {
-                        SearchState.Failed("No results for \"$submittedQuery\"")
+                        SearchState.Empty(submittedQuery)
                     }
                 },
                 onFailure = {
@@ -524,9 +525,18 @@ fun SearchScreen(
                         }
                     }
                 }
-                is SearchState.Failed -> Column(Modifier.padding(24.dp)) {
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { attempts++ }) { Text("Try again") }
+                is SearchState.Failed -> com.orismusic.client.ui.components.AsyncError(
+                    title = "Search could not load",
+                    body = state.message,
+                    onRetry = { attempts++ },
+                )
+                is SearchState.Empty -> Column(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("No results for \"${state.query}\"", style = MaterialTheme.typography.titleMedium)
+                    Text("Check the spelling, or try different words.", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                 }
                 is SearchState.Ready -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = bottomInsetPadding()) {
                     val songsGroup = state.page.summaries.firstOrNull { g -> g.title == "Songs" }

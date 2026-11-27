@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -345,4 +346,43 @@ private fun sampleColor(bitmap: Bitmap): Color {
     }
     if (weight == 0.0) return Color.DarkGray
     return Color((r / weight).toInt(), (g / weight).toInt(), (b / weight).toInt())
+}
+
+@Composable
+fun AsyncError(
+    title: String,
+    modifier: Modifier = Modifier,
+    body: String? = null,
+    details: String? = null,
+    onRetry: (() -> Unit)? = null,
+) {
+    Column(
+        modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        if (body != null) Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (onRetry != null) TextButton(onClick = onRetry, modifier = Modifier.padding(top = 8.dp)) { Text("Try again") }
+        if (details != null) {
+            var show by remember { mutableStateOf(false) }
+            Text(
+                text = if (show) "Hide details" else "Details",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(12.dp))
+                    .clickable { show = !show }.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+            if (show) Text(
+                text = details,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
 }

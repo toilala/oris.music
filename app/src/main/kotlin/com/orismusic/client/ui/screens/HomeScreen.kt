@@ -214,41 +214,12 @@ fun HomeScreen(
                             }
                         }
                         is HomeFeedState.Failed -> item(key = "failed") {
-                            Column(
-                                Modifier.fillMaxWidth().padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Text("Could not load your home feed", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    text = "You're offline, or the service can't be reached right now.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 8.dp),
-                                )
-                                Text(
-                                    text = "Tap retry",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(12.dp))
-                                        .clickable { refreshTick++ }.padding(horizontal = 16.dp, vertical = 8.dp),
-                                )
-                                var showDetails by remember { mutableStateOf(false) }
-                                Text(
-                                    text = if (showDetails) "Hide details" else "Details",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
-                                        .clickable { showDetails = !showDetails }.padding(horizontal = 16.dp, vertical = 6.dp),
-                                )
-                                if (showDetails) {
-                                    Text(
-                                        text = state.message,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                        modifier = Modifier.padding(top = 4.dp),
-                                    )
-                                }
-                            }
+                            com.orismusic.client.ui.components.AsyncError(
+                                title = "Could not load your home feed",
+                                body = "You're offline, or the service can't be reached right now.",
+                                details = state.message,
+                                onRetry = { refreshTick++ },
+                            )
                         }
                         is HomeFeedState.Ready -> if (HomeSettings.youtube) {
                             quickPicks?.let { (picks, _) ->

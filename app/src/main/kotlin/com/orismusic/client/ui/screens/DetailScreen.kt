@@ -174,11 +174,11 @@ fun DetailScreen(
                     }
                 }
             }
-            DetailState.Failed -> Column(Modifier.padding(24.dp)) {
-                Text("This page could not load. Check your connection and try again.",
-                    color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = { attempt++ }) { Text("Try again") }
-            }
+            DetailState.Failed -> com.orismusic.client.ui.components.AsyncError(
+                title = "This page could not load",
+                body = "Check your connection and try again.",
+                onRetry = { attempt++ },
+            )
             is DetailState.Ready -> {
                 val content = s.content
                 fun play(start: Int, shuffle: Boolean = false) {
