@@ -82,6 +82,7 @@ internal fun PlayerTray(
     val index by connection.currentMediaItemIndex.collectAsState()
     val metadata by connection.currentMetadata.collectAsState()
     val song = remember(metadata, index) { connection.currentSavedSong() }
+    remember { com.orismusic.client.playback.OfflineAudio.load(context) }
     val savedOffline by com.orismusic.client.playback.OfflineAudio.downloaded.collectAsState()
     val offlineBusy by com.orismusic.client.playback.OfflineAudio.inProgress.collectAsState()
     val offlineFailed by com.orismusic.client.playback.OfflineAudio.failed.collectAsState()

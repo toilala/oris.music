@@ -42,6 +42,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.History
@@ -151,9 +152,49 @@ fun SearchScreen(
     val userPlaylists by playlistStore.playlists.collectAsState()
     val savedOffline by OfflineAudio.downloaded.collectAsState()
     val offlineStatus by OfflineAudio.status.collectAsState()
+    val offlineBusy by OfflineAudio.inProgress.collectAsState()
+    val offlineFailed by OfflineAudio.failed.collectAsState()
+    var menuFor by remember { androidx.compose.runtime.mutableStateOf<SavedSong?>(null) }
     // The badge follows validated cache coverage, never mere membership in the saves list.
     val readyOffline = remember(savedOffline, offlineStatus) {
         savedOffline.mapNotNull { s -> s.id.takeIf { offlineStatus[it] == OfflineStatus.READY } }.toSet()
+    }
+    menuFor?.let { sg ->
+        val unmatched = sg.isUnmatchedImport()
+        com.orismusic.client.ui.components.SongActionsSheet(
+            title = sg.title, subtitle = sg.artist, thumbnail = sg.thumbnail,
+            actions = mutableListOf<com.orismusic.client.ui.components.SongAction>().apply {
+                add(com.orismusic.client.ui.components.SongAction(
+                    if (liked.any { it.id == sg.id }) "Remove from liked" else "Like",
+                ) { libraryStore.toggleLike(sg); menuFor = null })
+                if (!unmatched) when (com.orismusic.client.playback.offlineRowStatus(
+                    sg.id, savedOffline.any { it.id == sg.id }, offlineBusy, offlineFailed, offlineStatus)) {
+                    com.orismusic.client.playback.OfflineStatus.DOWNLOADING ->
+                        add(com.orismusic.client.ui.components.SongAction("Cancel download") { OfflineAudio.cancel(appContext, sg.id); menuFor = null })
+                    com.orismusic.client.playback.OfflineStatus.FAILED ->
+                        add(com.orismusic.client.ui.components.SongAction("Retry download") { OfflineAudio.download(appContext, sg); menuFor = null })
+                    com.orismusic.client.playback.OfflineStatus.READY ->
+                        add(com.orismusic.client.ui.components.SongAction("Remove from offline",
+                            tint = MaterialTheme.colorScheme.error) { OfflineAudio.remove(appContext, sg.id); menuFor = null })
+                    com.orismusic.client.playback.OfflineStatus.PARTIAL,
+                    com.orismusic.client.playback.OfflineStatus.UNKNOWN -> {
+                        add(com.orismusic.client.ui.components.SongAction("Retry download") { OfflineAudio.download(appContext, sg); menuFor = null })
+                        add(com.orismusic.client.ui.components.SongAction("Remove from offline",
+                            tint = MaterialTheme.colorScheme.error) { OfflineAudio.remove(appContext, sg.id); menuFor = null })
+                    }
+                    null ->
+                        add(com.orismusic.client.ui.components.SongAction("Save for offline") { OfflineAudio.download(appContext, sg); menuFor = null })
+                }
+                if (userPlaylists.isEmpty()) {
+                    add(com.orismusic.client.ui.components.SongAction("Make a playlist first",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant) { menuFor = null })
+                }
+                userPlaylists.forEach { pl ->
+                    add(com.orismusic.client.ui.components.SongAction(pl.name) { playlistStore.add(pl.id, sg); menuFor = null })
+                }
+            },
+            onDismiss = { menuFor = null },
+        )
     }
     // Library mode derives results straight from the query, so edits and clears can never go stale.
     val localResults = remember(query, mode, liked, history, userPlaylists, savedOffline, readyOffline) {
@@ -411,6 +452,10 @@ fun SearchScreen(
                                             Spacer(Modifier.width(8.dp))
                                         }
                                         if (currentId == result.song.id) PlayingBars(isPlaying)
+                                        IconButton(onClick = { menuFor = result.song }) {
+                                            Icon(Icons.Filled.MoreVert, contentDescription = "Song actions",
+                                                tint = MaterialTheme.colorScheme.outline)
+                                        }
                                     }
                                 },
                             )
@@ -521,7 +566,16 @@ fun SearchScreen(
                                         modifier = Modifier.entrance(n),
                                         onClick = { playSong(summary.title, groupSongs, result) },
                                         trailing = {
-                                            if (currentId == result.id) PlayingBars(isPlaying)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (currentId == result.id) PlayingBars(isPlaying)
+                                                IconButton(onClick = {
+                                                    menuFor = SavedSong(result.id, result.title,
+                                                        result.artists.joinToString { it.name }.ifBlank { "Song" }, result.thumbnail)
+                                                }) {
+                                                    Icon(Icons.Filled.MoreVert, contentDescription = "Song actions",
+                                                        tint = MaterialTheme.colorScheme.outline)
+                                                }
+                                            }
                                         },
                                     )
                                     else -> SongRow(
