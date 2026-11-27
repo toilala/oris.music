@@ -386,3 +386,23 @@ fun AsyncError(
         }
     }
 }
+
+/** Name-and-create dialog for the song menus' "New playlist" action: creating from a
+ *  song menu adds that song to the fresh list, so the action never dead-ends. */
+@Composable
+fun CreatePlaylistDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New playlist") },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = name, onValueChange = { name = it }, singleLine = true,
+                label = { Text("Name") })
+        },
+        confirmButton = {
+            TextButton(onClick = { onCreate(name.trim()) }, enabled = name.isNotBlank()) { Text("Create") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}

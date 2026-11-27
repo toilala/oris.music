@@ -442,6 +442,10 @@ fun LibraryScreen(
                         onToggleLike = { store.toggleLike(song) },
                         playlists = playlists.map { it.id to it.name },
                         onAddToPlaylist = { id -> playlistStore.add(id, song) },
+                        onCreatePlaylist = { name ->
+                            val id = playlistStore.create(name)
+                            playlistStore.add(id, song)
+                        },
                         offline = com.orismusic.client.playback.offlineRowStatus(
                             song.id, saved.any { it.id == song.id }, offlineBusy, offlineFailed, offlineStatus),
                         onSaveOffline = { OfflineAudio.download(appContext, song) },
@@ -540,12 +544,14 @@ private fun SavedSongRow(
     onToggleLike: () -> Unit,
     playlists: List<Pair<String, String>> = emptyList(),
     onAddToPlaylist: (String) -> Unit = {},
+    onCreatePlaylist: (String) -> Unit = {},
     offline: com.orismusic.client.playback.OfflineStatus? = null,
     onSaveOffline: () -> Unit = {},
     onCancelOffline: () -> Unit = {},
     onRemoveOffline: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
     val unmatched = song.isUnmatchedImport()
     SongRow(title = song.title,
         subtitle = if (unmatched) listOf(song.artist, "Metadata only, can't play").filter { it.isNotBlank() }.joinToString(" \u00b7 ") else song.artist,
@@ -591,10 +597,7 @@ private fun SavedSongRow(
                 null ->
                     actions += com.orismusic.client.ui.components.SongAction("Save for offline") { onSaveOffline(); menu = false }
             }
-            if (playlists.isEmpty()) {
-                actions += com.orismusic.client.ui.components.SongAction("Make a playlist first",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant) { menu = false }
-            }
+            actions += com.orismusic.client.ui.components.SongAction("New playlist") { creating = true }
             playlists.forEach { (id, name) ->
                 actions += com.orismusic.client.ui.components.SongAction(name) { onAddToPlaylist(id); menu = false }
             }
@@ -604,6 +607,12 @@ private fun SavedSongRow(
                 thumbnail = song.thumbnail,
                 actions = actions,
                 onDismiss = { menu = false },
+            )
+        }
+        if (creating) {
+            com.orismusic.client.ui.components.CreatePlaylistDialog(
+                onCreate = { name -> onCreatePlaylist(name); creating = false; menu = false },
+                onDismiss = { creating = false },
             )
         }
         val heart by androidx.compose.animation.core.animateFloatAsState(

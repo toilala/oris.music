@@ -158,6 +158,7 @@ internal fun PlayerTray(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 var playlistMenu by remember { mutableStateOf(false) }
+                var creatingPlaylist by remember { mutableStateOf(false) }
                 val store = PlaylistStore.get(context)
                 val playlists by store.playlists.collectAsState()
                 Box(Modifier.weight(1f)) {
@@ -168,14 +169,24 @@ internal fun PlayerTray(
                             subtitle = song?.artist,
                             thumbnail = song?.thumbnail,
                             actions = mutableListOf<com.orismusic.client.ui.components.SongAction>().apply {
-                                if (playlists.isEmpty()) add(com.orismusic.client.ui.components.SongAction("Make a playlist in Library first",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant) { playlistMenu = false })
+                                add(com.orismusic.client.ui.components.SongAction("New playlist",
+                                    enabled = song != null) { creatingPlaylist = true; playlistMenu = false })
                                 playlists.forEach { p ->
                                     add(com.orismusic.client.ui.components.SongAction(p.name,
                                         enabled = song != null) { song?.let { store.add(p.id, it) }; playlistMenu = false })
                                 }
                             },
                             onDismiss = { playlistMenu = false },
+                        )
+                    }
+                    if (creatingPlaylist) {
+                        com.orismusic.client.ui.components.CreatePlaylistDialog(
+                            onCreate = { name ->
+                                val id = store.create(name)
+                                song?.let { store.add(id, it) }
+                                creatingPlaylist = false
+                            },
+                            onDismiss = { creatingPlaylist = false },
                         )
                     }
                 }

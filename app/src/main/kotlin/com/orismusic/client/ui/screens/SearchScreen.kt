@@ -156,6 +156,7 @@ fun SearchScreen(
     val offlineBusy by OfflineAudio.inProgress.collectAsState()
     val offlineFailed by OfflineAudio.failed.collectAsState()
     var menuFor by remember { androidx.compose.runtime.mutableStateOf<SavedSong?>(null) }
+    var creatingFor by remember { androidx.compose.runtime.mutableStateOf<SavedSong?>(null) }
     // The badge follows validated cache coverage, never mere membership in the saves list.
     val readyOffline = remember(savedOffline, offlineStatus) {
         savedOffline.mapNotNull { s -> s.id.takeIf { offlineStatus[it] == OfflineStatus.READY } }.toSet()
@@ -186,15 +187,22 @@ fun SearchScreen(
                     null ->
                         add(com.orismusic.client.ui.components.SongAction("Save for offline") { OfflineAudio.download(appContext, sg); menuFor = null })
                 }
-                if (userPlaylists.isEmpty()) {
-                    add(com.orismusic.client.ui.components.SongAction("Make a playlist first",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant) { menuFor = null })
-                }
+                add(com.orismusic.client.ui.components.SongAction("New playlist") { creatingFor = sg; menuFor = null })
                 userPlaylists.forEach { pl ->
                     add(com.orismusic.client.ui.components.SongAction(pl.name) { playlistStore.add(pl.id, sg); menuFor = null })
                 }
             },
             onDismiss = { menuFor = null },
+        )
+    }
+    creatingFor?.let { sg ->
+        com.orismusic.client.ui.components.CreatePlaylistDialog(
+            onCreate = { name ->
+                val id = playlistStore.create(name)
+                playlistStore.add(id, sg)
+                creatingFor = null
+            },
+            onDismiss = { creatingFor = null },
         )
     }
     // Library mode derives results straight from the query, so edits and clears can never go stale.
