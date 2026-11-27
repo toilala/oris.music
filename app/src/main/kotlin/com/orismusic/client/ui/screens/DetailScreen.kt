@@ -168,7 +168,7 @@ fun DetailScreen(
                 Spacer(Modifier.height(24.dp))
                 repeat(5) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(54.dp).clip(OrisShapes.Thumb).shimmer())
+                        Box(Modifier.size(com.orismusic.client.ui.theme.OrisDimens.ListThumb).clip(OrisShapes.Thumb).shimmer())
                         Spacer(Modifier.width(14.dp))
                         Box(Modifier.width(170.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
                     }

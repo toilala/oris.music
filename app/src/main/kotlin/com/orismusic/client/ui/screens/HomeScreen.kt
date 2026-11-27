@@ -557,7 +557,7 @@ private fun HeroPager(albums: List<com.music.innertube.models.AlbumItem>, onOpen
                         rotationY = off * -14f
                         cameraDistance = 14f * density
                     }
-                    .clip(RoundedCornerShape(30.dp))
+                    .clip(HomeSettings.corners.shape(24))
                     .pressClickable({ album.toDetailTarget()?.let(onOpen) }, 0.98f),
             ) {
                 Artwork(
@@ -619,7 +619,7 @@ private fun SongCard(
             .width(150.dp)
             .pressClickable(onClick),
     ) {
-        Artwork(song.thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), song.title)
+        Artwork(song.thumbnail, Modifier.size(150.dp), HomeSettings.corners.shape(16), song.title)
         Text(
             text = song.title,
             style = MaterialTheme.typography.bodyMedium,
@@ -648,7 +648,7 @@ private fun GenericCard(
         modifier = modifier.width(150.dp)
             .then(if (onClick != null) Modifier.pressClickable(onClick) else Modifier),
     ) {
-        Artwork(thumbnail, Modifier.size(150.dp), RoundedCornerShape(16.dp), title)
+        Artwork(thumbnail, Modifier.size(150.dp), HomeSettings.corners.shape(16), title)
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,

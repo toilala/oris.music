@@ -469,7 +469,7 @@ fun SearchScreen(
                     Spacer(Modifier.height(12.dp))
                     repeat(6) {
                         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(54.dp).clip(OrisShapes.Thumb).shimmer())
+                            Box(Modifier.size(com.orismusic.client.ui.theme.OrisDimens.ListThumb).clip(OrisShapes.Thumb).shimmer())
                             Spacer(Modifier.width(14.dp))
                             Column {
                                 Box(Modifier.width(180.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
@@ -580,7 +580,7 @@ private fun TopResultCard(song: SongItem, playing: Boolean, onClick: () -> Unit,
             }
             Spacer(Modifier.width(8.dp))
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary),
+                Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = MaterialTheme.colorScheme.onTertiary)

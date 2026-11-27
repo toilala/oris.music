@@ -285,12 +285,12 @@ fun LibraryScreen(
                     itemsIndexed(playlists, key = { _, p -> p.id }) { i, p ->
                         Row(
                             modifier = Modifier.fillMaxWidth().entrance(i).padding(horizontal = 12.dp, vertical = 2.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(com.orismusic.client.ui.theme.OrisShapes.Row)
                                 .pressClickable({ openPlaylist = p.id }, 0.98f)
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Artwork(p.songs.firstOrNull()?.thumbnail, Modifier.size(58.dp), RoundedCornerShape(14.dp), px = 300)
+                            Artwork(p.songs.firstOrNull()?.thumbnail, Modifier.size(58.dp), com.orismusic.client.ui.theme.OrisShapes.Row, px = 300)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(p.name, style = MaterialTheme.typography.titleMedium, maxLines = 1,
@@ -360,7 +360,7 @@ fun LibraryScreen(
                                 model = song.thumbnail,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+                                modifier = Modifier.size(48.dp).clip(com.orismusic.client.ui.theme.OrisShapes.Thumb)
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                             )
                             Spacer(Modifier.width(12.dp))
