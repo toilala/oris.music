@@ -387,7 +387,7 @@ fun LibraryScreen(
                 Text(
                     text = when (section) {
                         0 -> "Tap the heart on the player to keep a song here."
-                        3 -> "In the player, tap More, then Save offline to keep a song."
+                        3 -> "In the player, tap More, then Save for offline to keep a song."
                         else -> "Songs you play will show up here."
                     },
                     style = MaterialTheme.typography.bodyLarge,

@@ -139,12 +139,12 @@ internal fun PlayerTray(
                         null -> Icons.Rounded.Download
                     },
                     when (offline) {
-                        com.orismusic.client.playback.OfflineStatus.READY -> "Remove offline"
-                        com.orismusic.client.playback.OfflineStatus.DOWNLOADING -> "Cancel save"
-                        com.orismusic.client.playback.OfflineStatus.FAILED -> "Retry save"
+                        com.orismusic.client.playback.OfflineStatus.READY -> "Remove from offline"
+                        com.orismusic.client.playback.OfflineStatus.DOWNLOADING -> "Cancel download"
+                        com.orismusic.client.playback.OfflineStatus.FAILED -> "Retry download"
                         com.orismusic.client.playback.OfflineStatus.PARTIAL,
-                        com.orismusic.client.playback.OfflineStatus.UNKNOWN -> "Retry save"
-                        null -> "Save offline"
+                        com.orismusic.client.playback.OfflineStatus.UNKNOWN -> "Retry download"
+                        null -> "Save for offline"
                     },
                     offline == com.orismusic.client.playback.OfflineStatus.READY, 68.dp, Modifier.weight(1f),
                 ) {
@@ -233,7 +233,7 @@ private fun ActionTile(
     ) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(if (height >= 80.dp) 30.dp else 24.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
