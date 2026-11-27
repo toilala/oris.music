@@ -9,7 +9,7 @@ import os
 import subprocess
 import time
 
-from playback_check import adb, wait_label, tree, PKG, OUT, pidof
+from playback_check import adb, wait_label, tree, PKG, OUT, pidof, emit_mp4_frames
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -80,4 +80,5 @@ adb('shell', 'rm', '/sdcard/morph-cancel.mp4')
 size = os.path.getsize(OUT + '/morph-cancel.mp4') if os.path.exists(OUT + '/morph-cancel.mp4') else 0
 print('RECORDED morph-cancel.mp4 bytes=' + str(size), flush=True)
 assert size > 20000, 'cancel leg never recorded real frames'
+emit_mp4_frames('morph-cancel', OUT + '/morph-cancel.mp4')
 print('PASS: ACTION_CANCEL settles the sheet back to open', flush=True)

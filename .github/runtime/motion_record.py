@@ -12,7 +12,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from playback_check import (adb, tap, wait_label, screen, tree, restore_setting,
-                            PKG, OUT, pidof)
+                            emit_mp4_frames, PKG, OUT, pidof)
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -78,6 +78,7 @@ def record(name, max_seconds, resolve, confirm):
     size = os.path.getsize(OUT + '/' + name) if os.path.exists(OUT + '/' + name) else 0
     print('RECORDED ' + name + ' bytes=' + str(size)
           + ' destination-confirmed=' + str(confirmed), flush=True)
+    emit_mp4_frames(name[:-4], OUT + '/' + name)
     if size < 20000:
         raise AssertionError(name + ' never recorded real frames (bytes=' + str(size) + ')')
     if not confirmed:

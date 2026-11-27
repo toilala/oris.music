@@ -11,7 +11,7 @@ import re
 import subprocess
 import time
 
-from playback_check import adb, wait_label, screen, tree, PKG, OUT, pidof
+from playback_check import adb, wait_label, screen, tree, PKG, OUT, pidof, emit_mp4_frames
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -63,6 +63,7 @@ def record_stop(name, proc):
     size = os.path.getsize(OUT + '/' + name) if os.path.exists(OUT + '/' + name) else 0
     print('RECORDED ' + name + ' bytes=' + str(size), flush=True)
     assert size > 20000, name + ' never recorded real frames'
+    emit_mp4_frames(name[:-4], OUT + '/' + name)
 
 
 def swipe(x1, y1, x2, y2, ms):

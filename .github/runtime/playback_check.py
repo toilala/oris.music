@@ -17,12 +17,41 @@ os.makedirs(OUT, exist_ok=True)
 def adb(*args):
     return subprocess.check_output(['adb', *args])
 
-def screen(name):
-    data = adb('exec-out', 'screencap', '-p')
-    open(f'{OUT}/{name}.png', 'wb').write(data)
+def emit_image(name, data):
     encoded = base64.b64encode(data).decode()
     for start in range(0, len(encoded), 3000):
         print(f'ORIS_IMAGE {name} {encoded[start:start+3000]}', flush=True)
+
+def screen(name):
+    data = adb('exec-out', 'screencap', '-p')
+    open(f'{OUT}/{name}.png', 'wb').write(data)
+    emit_image(name, data)
+
+def emit_mp4_frames(tag, mp4_path, frames=4):
+    """Key frames of a recorded transition as ORIS_IMAGE chunks, so the motion itself
+    is inspectable from the log rather than only start/end stills or the artifact zip.
+    ffmpeg/ffprobe are present on the runner."""
+    if not os.path.exists(mp4_path):
+        print('FRAMES MISSING ' + tag + ' (' + mp4_path + ')', flush=True)
+        return
+    probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                            '-of', 'csv=p=0', mp4_path], capture_output=True)
+    try:
+        total = float(probe.stdout.decode().strip())
+    except ValueError:
+        total = 0.0
+    if total <= 0:
+        print('FRAMES UNREADABLE ' + tag, flush=True)
+        return
+    for i in range(frames):
+        ts = total * (i + 0.5) / frames
+        png = f'{OUT}/{tag}_f{i}.png'
+        r = subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{ts:.2f}', '-i', mp4_path,
+                            '-frames:v', '1', '-vf', 'scale=540:-1', png], capture_output=True)
+        if r.returncode != 0 or not os.path.exists(png):
+            print('FRAME FAIL ' + tag + ' f' + str(i), flush=True)
+            continue
+        emit_image(f'{tag}_f{i}', open(png, 'rb').read())
 
 def tree():
     for _ in range(2):
@@ -263,7 +292,7 @@ if __name__ == '__main__':
     failures = []
     # offline_check stays last when present: it cuts the radios and keeps them cut as evidence.
     # battery.txt overrides the default set so a focused evidence run can skip the rest.
-    default_battery = ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'playlist_journey_check.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'morph_gesture_check.py', 'morph_cancel_check.py', 'motion_record.py', 'offline_check.py']
+    default_battery = ['recents_check.py', 'lyrics_check.py', 'ui_shots.py', 'playlist_journey_check.py', 'notif_check.py', 'home_picks_check.py', 'eq_check.py', 'large_text_check.py', 'morph_gesture_check.py', 'morph_cancel_check.py', 'motion_record.py', 'light_dock_check.py', 'offline_check.py']
     battery_file = '.github/runtime/battery.txt'
     if os.path.exists(battery_file):
         battery = [line.strip() for line in open(battery_file) if line.strip()]
