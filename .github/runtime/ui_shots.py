@@ -109,6 +109,13 @@ for i in range(8):
         screen('failure')
         raise AssertionError('app crashed while scrolling Home')
 screen('shot_home_scrolled')
+# The scrolled frame above carries the tucked-away nav; settle back at the top for the
+# rested unified cluster (mini player and nav in one shared body, edges aligned).
+adb('shell', 'input', 'swipe', '540', '500', '540', '2000', '500')
+time.sleep(1.2)
+adb('shell', 'input', 'swipe', '540', '500', '540', '2000', '500')
+time.sleep(2.5)
+screen('dock_cluster_rest')
 tap('Library')
 wait_label('Liked (5)')
 screen('shot_library_filled')
@@ -122,6 +129,28 @@ wait_label('Liked (5)')
 tap('Search')
 wait_label('Songs, albums, artists')
 screen('shot_search')
+# Artist detail page through real search: a core screen worth a full capture. Network
+# is required; a miss records evidence and continues rather than costing later passes.
+try:
+    tap('Songs, albums, artists')
+    adb('shell', 'input', 'text', 'Adele')
+    time.sleep(6)
+    back()
+    time.sleep(2)
+    wait_label('Artist', seconds=90)
+    screen('search_results_artist')
+    tap('Adele')
+    wait_label('Shuffle', seconds=90)
+    time.sleep(2)
+    screen('detail_artist')
+    back()
+    wait_label('Songs, albums, artists', seconds=30)
+except Exception as e:
+    print('WARN: artist detail capture failed: ' + str(e), flush=True)
+    screen('detail_artist_fail')
+    back()
+    time.sleep(1)
+    back()
 tap('Library')
 tap('Queue')
 wait_label('Midnight City', seconds=30)
@@ -258,3 +287,16 @@ wait_label('Close lyrics', seconds=30)
 time.sleep(2)
 screen('light_lyrics')
 print('PASS: light theme', flush=True)
+
+# Rested dark home at the end: the theme round-trip returns to the default theme and
+# the rested frame proves the switch-back left no stale surface.
+dark2_xml = ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map>"
+             '<string name="theme">Dark</string></map>')
+adb('shell', 'am', 'force-stop', PKG)
+subprocess.run(['adb', 'shell', f"run-as {PKG} sh -c 'mkdir -p shared_prefs && cat > shared_prefs/appearance.xml'"],
+               input=dark2_xml.encode(), check=True)
+adb('shell', 'am', 'start', '-n', PKG + '/com.orismusic.client.MainActivity')
+wait_greeting()
+time.sleep(2)
+screen('dark_home_rested')
+print('PASS: rested dark home after theme round-trip', flush=True)

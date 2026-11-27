@@ -41,7 +41,9 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -248,6 +250,10 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         var morphVelocity by remember { androidx.compose.runtime.mutableStateOf(0f) }
+                        // Set when a gesture grabs the sheet while a close is animating:
+                        // the grab itself is the changed mind, so releasing it reopens
+                        // unless the finger clearly throws the sheet back down.
+                        var grabbedMidClose by remember { mutableStateOf(false) }
                         val morph = remember { androidx.compose.animation.core.Animatable(0f) }
                         val dragScope = androidx.compose.runtime.rememberCoroutineScope()
                         val dragDeltas = remember { FloatArray(4) }
@@ -268,23 +274,79 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize().nestedScroll(navScroll),
                             contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                             bottomBar = {
-                                Column {
-                                    connection?.let {
-                                        MiniPlayer(
-                                            modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
-                                            connection = it,
-                                            onExpand = { navigation = navigation.openPlayer() },
+                                // One dock cluster while a track is loaded: the mini player and
+                                // the nav share a single tinted body with aligned edges, so the
+                                // bottom of the screen reads as one element, not two stray pills.
+                                // Scrolling tucks the nav row away; the mini player stays put.
+                                val dockMeta = connection?.currentMetadata?.collectAsState()?.value
+                                val dockTint = com.orismusic.client.ui.components.rememberArtworkColor(dockMeta?.artworkUri?.toString())
+                                val dockPlaying = connection?.isPlaying?.collectAsState()?.value == true
+                                val dockScheme = MaterialTheme.colorScheme
+                                val clusterBody by androidx.compose.animation.animateColorAsState(
+                                    dockTint?.let { androidx.compose.ui.graphics.lerp(dockScheme.surfaceContainerHigh, it, if (dockPlaying) 0.40f else 0.26f) }
+                                        ?: dockScheme.surfaceContainerHigh,
+                                    OrisMotion.slow(), label = "cluster body",
+                                )
+                                val navSelect: (MainTab) -> Unit = { tab ->
+                                    detail = null; detailBack = null; navCollapsed = false
+                                    navigation = navigation.select(tab.ordinal)
+                                }
+                                val conn = connection
+                                if (conn != null && dockMeta != null) {
+                                    val navHidden = navCollapsed && com.orismusic.client.settings.NavSettings.hideOnScroll
+                                    Box(
+                                        Modifier.fillMaxWidth().navigationBarsPadding(),
+                                        contentAlignment = androidx.compose.ui.Alignment.Center,
+                                    ) {
+                                        Column(
+                                            Modifier
+                                                .widthIn(max = 340.dp)
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+                                                .background(clusterBody)
+                                                .border(
+                                                    1.dp,
+                                                    dockScheme.outline.copy(alpha = 0.3f),
+                                                    androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                                                ),
+                                        ) {
+                                            MiniPlayer(
+                                                connection = conn,
+                                                onExpand = { navigation = navigation.openPlayer() },
+                                                embedded = true,
+                                            )
+                                            androidx.compose.animation.AnimatedVisibility(
+                                                visible = !navHidden,
+                                                enter = androidx.compose.animation.expandVertically(OrisMotion.soft()) + androidx.compose.animation.fadeIn(OrisMotion.quick()),
+                                                exit = androidx.compose.animation.shrinkVertically(OrisMotion.soft()) + androidx.compose.animation.fadeOut(OrisMotion.micro()),
+                                            ) {
+                                                FloatingNav(
+                                                    selected = selectedTab,
+                                                    collapsed = false,
+                                                    tint = dockTint,
+                                                    onSelect = navSelect,
+                                                    embedded = true,
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Column {
+                                        conn?.let {
+                                            MiniPlayer(
+                                                modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
+                                                connection = it,
+                                                onExpand = { navigation = navigation.openPlayer() },
+                                            )
+                                        }
+                                        FloatingNav(
+                                            selected = selectedTab,
+                                            collapsed = navCollapsed,
+                                            tint = dockTint,
+                                            onSelect = navSelect,
                                         )
                                     }
-                                    FloatingNav(
-                                        selected = selectedTab,
-                                        collapsed = navCollapsed,
-                                        tint = rememberNavTint(connection),
-                                        onSelect = { tab ->
-                                            detail = null; detailBack = null; navCollapsed = false
-                                            navigation = navigation.select(tab.ordinal)
-                                        },
-                                    )
                                 }
                             },
                         ) { innerPadding ->
@@ -386,14 +448,21 @@ class MainActivity : ComponentActivity() {
                                                     onDragStart = {
                                                         // Grabbing the sheet mid-close reasserts open
                                                         // intent, so gesture and navigation never fork.
-                                                        if (!navigation.playerOpen) navigation = navigation.openPlayer()
+                                                        grabbedMidClose = !navigation.playerOpen
+                                                        if (grabbedMidClose) navigation = navigation.openPlayer()
                                                     },
                                                     onDragEnd = {
                                                         dragScope.launch {
                                                             val v = (dragDeltas.average() * 60).toFloat() // px/s, down positive
                                                             dragDeltas.fill(0f)
+                                                            val interruptedClose = grabbedMidClose
+                                                            grabbedMidClose = false
                                                             // Upward flick is opening intent even below the threshold.
-                                                            if (v < -900f || morph.value >= 0.8f) {
+                                                            // A grab that interrupted a closing sheet reopens too,
+                                                            // unless the finger clearly threw it back down.
+                                                            if (v < -900f || morph.value >= 0.8f ||
+                                                                (interruptedClose && v < 900f && morph.value >= 0.35f)
+                                                            ) {
                                                                 morph.animateTo(1f, OrisMotion.smooth(), initialVelocity = (-v / fullH).coerceIn(-12f, 12f))
                                                             } else {
                                                                 // The effect runs the close; hand it the flick speed.
@@ -476,27 +545,31 @@ private fun ComingSoonTab(title: String, modifier: Modifier = Modifier) {
 }
 
 
-/** The dock's share of the artwork colour: present only while music is actually playing. */
-@androidx.compose.runtime.Composable
-private fun rememberNavTint(connection: com.orismusic.client.playback.PlayerConnection?): androidx.compose.ui.graphics.Color? {
-    val meta by (connection?.currentMetadata?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.media3.common.MediaMetadata?>(null) })
-    return com.orismusic.client.ui.components.rememberArtworkColor(meta?.artworkUri?.toString())
-}
-
 /**
  * The floating bar. At rest it is one pill with labels. When the page scrolls
  * down it splits: the current tab pops out as a circle and the other tabs
  * gather in a small pill beside it.
  */
 @androidx.compose.runtime.Composable
-private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compose.ui.graphics.Color?, onSelect: (MainTab) -> Unit) {
+private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compose.ui.graphics.Color?, onSelect: (MainTab) -> Unit, embedded: Boolean = false) {
     val tabs = MainTab.entries.filter { it != MainTab.Queue }
     fun icon(tab: MainTab) = when (tab) {
         MainTab.Home -> Icons.Rounded.Home
         MainTab.Search -> Icons.Rounded.Search
         MainTab.Library -> Icons.Rounded.LibraryMusic
         MainTab.Queue -> Icons.Rounded.QueueMusic
+    }
+    if (embedded) {
+        com.orismusic.client.ui.components.OrisDock(
+            count = tabs.size,
+            selected = tabs.indexOfFirst { it.ordinal == selected },
+            label = { tabs[it].label },
+            icon = { icon(tabs[it]) },
+            onSelect = { onSelect(tabs[it]) },
+            tint = tint,
+            embedded = true,
+        )
+        return
     }
     val hidden = collapsed && com.orismusic.client.settings.NavSettings.hideOnScroll
     // Quick low-overshoot spring: the bar tucks away under the finger instead of bouncing out.

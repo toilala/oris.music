@@ -96,6 +96,12 @@ fun QueueScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                // No filled band: the header sits on the page background like every
+                // other screen, the list alone carries the surface colour.
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
                 title = { Text("Queue") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

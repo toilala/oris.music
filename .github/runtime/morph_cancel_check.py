@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
-"""Gesture-cancel leg for the pill<->player morph: adb shell input cannot emit
-ACTION_CANCEL, so a tiny instrumentation class (MorphCancelTest) injects a real
-DOWN->MOVE->CANCEL stream at the open sheet. The morph's onDragCancel must settle the
-sheet back to fully open: asserted from the uiautomator tree after injection, and the
-whole leg is recorded to mp4."""
+"""Gesture-cancel leg for the player sheet: adb shell input cannot emit ACTION_CANCEL,
+so MorphCancelTest injects a real DOWN->MOVE->CANCEL stream in-process. The test is
+self-contained: it opens the sheet inside the instrumentation lifecycle itself, proves
+the injected drag moved the sheet, captures UiDevice stills and live sheet positions
+pre-injection, post-MOVE and post-CANCEL, and only then asserts the settle. A harness
+restart or a missed gesture surfaces as a SETUP failure, not a product verdict."""
 import glob
 import os
 import subprocess
 import time
 
-from playback_check import adb, wait_label, tree, PKG, OUT, pidof, emit_mp4_frames
+from playback_check import adb, wait_label, tree, PKG, OUT, emit_image
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
 TONE = 'Runtime local tone'
-
-
-def has_label(fragment):
-    return any(fragment in (n.get('text'), n.get('content-desc')) for n in tree().iter('node'))
 
 
 adb('wait-for-device')
@@ -30,58 +27,37 @@ if not apk:
     apk = glob.glob('app/build/outputs/apk/androidTest/foss/debug/*.apk')
 adb('install', '-r', apk[0])
 
+# The app only needs to be running with a loaded track; the test opens the sheet
+# itself, so the injection and the settle assertion share one process lifecycle.
 adb('shell', 'am', 'force-stop', PKG)
 adb('shell', 'am', 'start', '-n', COMPONENT)
 wait_label('Local audio playing', seconds=30)
 time.sleep(2)
 adb('shell', 'am', 'start', '-n', MAIN, '-f', '0x04000000')
 wait_label(TONE, seconds=25)
-# Open the player through the morph, then cancel a drag mid-stream.
-import re
-root = tree()
-parents = {c: p for p in root.iter('node') for c in p}
-pill = None
-for label_node in [n for n in root.iter('node') if n.get('text') == TONE]:
-    node = label_node
-    while node is not None and node.get('clickable') != 'true':
-        node = parents.get(node)
-    if node is None:
-        continue
-    if any(d.get('content-desc') in ('Play', 'Pause', 'Replay') for d in node.iter('node')):
-        x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
-        pill = ((x1 + x2) // 2, (y1 + y2) // 2)
-        break
-assert pill, 'pill never resolved for the cancel leg'
-proc = subprocess.Popen(['adb', 'shell', 'screenrecord', '--time-limit', '14',
-                         '/sdcard/morph-cancel.mp4'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-time.sleep(1.2)
-adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
-wait_label('Collapse player', seconds=10)
+
 result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'class',
                          'com.orismusic.client.morph.MorphCancelTest',
                          PKG + '.test/androidx.test.runner.AndroidJUnitRunner'],
                         capture_output=True, timeout=180)
 out = result.stdout.decode()
-print(out[-600:], flush=True)
-# Evidence before the verdict: stop and pull the recording first, so a failed settle
-# still leaves the motion inspectable instead of dying empty-handed.
-pid = pidof('screenrecord')
-if pid:
-    adb('shell', 'kill', '-2', pid[0])
-try:
-    proc.wait(timeout=25)
-except subprocess.TimeoutExpired:
-    proc.kill()
-    proc.wait(timeout=15)
-adb('pull', '/sdcard/morph-cancel.mp4', OUT + '/morph-cancel.mp4')
-adb('shell', 'rm', '/sdcard/morph-cancel.mp4')
-size = os.path.getsize(OUT + '/morph-cancel.mp4') if os.path.exists(OUT + '/morph-cancel.mp4') else 0
-print('RECORDED morph-cancel.mp4 bytes=' + str(size), flush=True)
-assert size > 20000, 'cancel leg never recorded real frames'
-emit_mp4_frames('morph-cancel', OUT + '/morph-cancel.mp4')
-# No UI assert here: am instrument kills the app process when it finishes, so any
-# post-instrumentation tree is the launcher, not the app. The settle-back-to-open
-# assertion lives inside MorphCancelTest, in the live process, and gates above.
+print(out[-1200:], flush=True)
+
+# Evidence before the verdict: pull the diagnostic stills and the position log the
+# test captured at each stage, whatever the instrumentation outcome was.
+pulled = subprocess.run(['adb', 'pull', '/sdcard/oris-morph-diag/.', OUT + '/cancel-diag/'],
+                        capture_output=True)
+print('DIAG PULL rc=' + str(pulled.returncode), flush=True)
+diag_dir = OUT + '/cancel-diag'
+if os.path.isdir(diag_dir):
+    for name in sorted(os.listdir(diag_dir)):
+        path = os.path.join(diag_dir, name)
+        if name.endswith('.png'):
+            emit_image('cancel-' + name.replace('.png', ''), open(path, 'rb').read())
+        elif name.endswith('.txt'):
+            print('DIAG ' + name + ':', flush=True)
+            print(open(path).read(), flush=True)
+
 assert 'INSTRUMENTATION_CODE: -1' in out or 'OK (1 test)' in out, \
     'cancel injection instrumentation failed; tail printed above'
-print('PASS: ACTION_CANCEL settles the sheet back to open (asserted in-process)', flush=True)
+print('PASS: ACTION_CANCEL settles the sheet back to open (asserted in-process, staged evidence above)', flush=True)

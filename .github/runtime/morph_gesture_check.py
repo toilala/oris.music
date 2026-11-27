@@ -6,12 +6,13 @@ package stays foreground. One honest limit: a tap during the reverse can be swal
 the morph window covering the pill (asserted only for end-state consistency). A true
 gesture CANCEL (ACTION_CANCEL mid-stream) is not scriptable via `adb shell input`; it is
 covered by morph_cancel_check.py through UiAutomation-injected MotionEvents."""
+import glob
 import os
 import re
 import subprocess
 import time
 
-from playback_check import adb, wait_label, screen, tree, PKG, OUT, pidof, emit_mp4_frames
+from playback_check import adb, wait_label, screen, tree, PKG, OUT, pidof, emit_mp4_frames, emit_image
 
 MAIN = PKG + '/com.orismusic.client.MainActivity'
 COMPONENT = PKG + '/com.orismusic.client.debug.LocalPlaybackCheckActivity'
@@ -125,40 +126,6 @@ adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
 wait_label('Collapse player', seconds=10)
 record_stop('morph-leg1-tap-open.mp4', proc)
 
-# Leg 7: a grab DURING the close animation reasserts open intent and settles open.
-if not player_open():
-    pill = pill_visible()
-    adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
-    wait_label('Collapse player', seconds=10)
-# A fixed 0.3s grab loses the race against the close animation on a slow emulator: the
-# sheet is gone before the swipe lands and there is nothing to grab. Slow the close with
-# the animator scale so the grab reliably lands mid-close; the assertion itself is the
-# same product requirement, and the scale is restored before the next leg.
-proc = record_start('morph-leg7-drag-during-close.mp4', 20)
-adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '4')
-adb('shell', 'input', 'keyevent', '4')
-# Wait until the sheet has actually started moving before grabbing: input injection
-# on a loaded emulator can lag the script by seconds, and grabbing a sheet that has
-# not started closing proves nothing about the grab itself.
-end = time.monotonic() + 8
-moved = False
-while time.monotonic() < end and not moved:
-    for n in tree().iter('node'):
-        if n.get('content-desc') == 'Collapse player':
-            top = int(re.findall(r'\d+', n.get('bounds'))[1])
-            if top > 150:
-                moved = True
-                break
-    if not moved:
-        time.sleep(0.2)
-swipe(540, 1600, 540, 700, 250)  # fast upward grab mid-close = reopen intent
-time.sleep(4)
-adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '1')
-ok7 = player_open()
-record_stop('morph-leg7-drag-during-close.mp4', proc)
-if not ok7:
-    screen('leg7_failure')
-assert ok7, 'leg7: grabbing the sheet mid-close must settle back to open'
 
 # Leg 2: short drag below the close threshold settles back to open.
 proc = record_start('morph-leg2-drag-restore.mp4', 12)
@@ -210,4 +177,41 @@ record_stop('morph-leg6-inplayer-scroll.mp4', proc)
 assert ok6, 'leg6: a small in-player scroll must not dismiss the player'
 
 adb('shell', 'input', 'keyevent', '4')
+
+# Leg 7: a grab DURING the close animation reasserts open intent and settles open.
+# Moved in-process (MorphGrabTest): shell BACK/swipe injection lags the loaded emulator
+# by seconds, so the grab used to land on a closed sheet and prove nothing. The test
+# presses BACK itself, catches the sheet past the mid-close point from live bounds,
+# grabs inside them, and captures staged UiDevice stills before asserting the settle.
+if not player_open():
+    pill = pill_visible()
+    adb('shell', 'input', 'tap', str(pill[0]), str(pill[1]))
+    wait_label('Collapse player', seconds=10)
+apk7 = glob.glob('app/build/outputs/apk/androidTest/foss/debug/*.apk')
+if not apk7:
+    print('BUILDING androidTest apk (one-off per job)', flush=True)
+    subprocess.run(['./gradlew', ':app:assembleFossDebugAndroidTest', '--console=plain'], check=True)
+    apk7 = glob.glob('app/build/outputs/apk/androidTest/foss/debug/*.apk')
+adb('install', '-r', apk7[0])
+res7 = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'class',
+                       'com.orismusic.client.morph.MorphGrabTest',
+                       PKG + '.test/androidx.test.runner.AndroidJUnitRunner'],
+                      capture_output=True, timeout=180)
+out7 = res7.stdout.decode()
+print(out7[-1200:], flush=True)
+pulled7 = subprocess.run(['adb', 'pull', '/sdcard/oris-morph-diag/.', OUT + '/grab-diag/'],
+                         capture_output=True)
+print('DIAG PULL rc=' + str(pulled7.returncode), flush=True)
+if os.path.isdir(OUT + '/grab-diag'):
+    for name in sorted(os.listdir(OUT + '/grab-diag')):
+        path = os.path.join(OUT + '/grab-diag', name)
+        if name.endswith('.png'):
+            emit_image('leg7-' + name.replace('.png', ''), open(path, 'rb').read())
+        elif name.endswith('.txt'):
+            print('DIAG ' + name + ':', flush=True)
+            print(open(path).read(), flush=True)
+ok7 = 'INSTRUMENTATION_CODE: -1' in out7 or 'OK (1 test)' in out7
+if not ok7:
+    screen('leg7_failure')
+assert ok7, 'leg7: grabbing the sheet mid-close must settle back to open; tail printed above'
 print('PASS: morph gesture robustness, all seven legs consistent', flush=True)

@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -67,6 +69,7 @@ fun OrisDock(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     tint: Color? = null,
+    embedded: Boolean = false,
 ) {
     val showLabels = NavSettings.labels
     val effect = NavSettings.effect
@@ -102,26 +105,39 @@ fun OrisDock(
     val stretch = effect == NavEffect.Stretch
     val haptic = LocalHapticFeedback.current
     // Compact tabs: each is just wide enough for its icon (and label), the width setting
-    // still shapes how wide the lens sits in its tab.
+    // still shapes how wide the lens sits in its tab. Embedded in the dock cluster the
+    // tabs instead share the cluster's full width, so the nav edges align with the
+    // mini player above them.
     val tabW = (if (showLabels) 76 else 60).dp + (NavSettings.size.extra / 2).dp
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var measuredW by remember { mutableStateOf(0.dp) }
+    val effTabW = if (embedded && measuredW > 0.dp) (measuredW - 8.dp) / count else tabW
     Box(
-        modifier.width(tabW * count + 8.dp),
+        (if (embedded) modifier.fillMaxWidth() else modifier.width(tabW * count + 8.dp))
+            .then(
+                if (embedded) Modifier.onGloballyPositioned { measuredW = with(density) { it.size.width.toDp() } }
+                else Modifier,
+            ),
     ) {
         val lensInset = (12 - NavSettings.width.extra / 4).dp
-        val left by animateDpAsState(tabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
-        val end by animateDpAsState(tabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
+        val left by animateDpAsState(effTabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
+        val end by animateDpAsState(effTabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(body)
-            .border(
-                BorderStroke(
-                    1.dp,
-                    if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)))
-                    else Brush.verticalGradient(listOf(scheme.surfaceContainerLowest.copy(alpha = 0.9f), scheme.outlineVariant.copy(alpha = 0.5f))),
-                ),
-                shape,
+            .then(
+                if (embedded) Modifier
+                else Modifier
+                    .clip(shape)
+                    .background(body)
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            if (dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)))
+                            else Brush.verticalGradient(listOf(scheme.surfaceContainerLowest.copy(alpha = 0.9f), scheme.outlineVariant.copy(alpha = 0.5f))),
+                        ),
+                        shape,
+                    ),
             )
             .padding(4.dp),
     ) {
@@ -138,7 +154,7 @@ fun OrisDock(
             )
         } else if (!none) {
             Box(
-                Modifier.offset(x = left + (tabW - 6.dp) / 2, y = tabH - 7.dp).size(6.dp).clip(CircleShape).background(accent),
+                Modifier.offset(x = left + (effTabW - 6.dp) / 2, y = tabH - 7.dp).size(6.dp).clip(CircleShape).background(accent),
             )
         }
         Row {
@@ -152,7 +168,7 @@ fun OrisDock(
                 val activeTint = if (effect == NavEffect.Dot) accent else onAccent
                 val tint by animateColorAsState(if (active) activeTint else scheme.onSurfaceVariant, label = "tint")
                 Column(
-                    Modifier.width(tabW).height(tabH)
+                    Modifier.width(effTabW).height(tabH)
                         // The tab itself carries the accessible name: a clickable control must
                         // not depend on a child icon's node reaching the a11y tree.
                         .semantics { contentDescription = label(i) }

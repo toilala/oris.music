@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -84,6 +85,7 @@ fun MiniPlayer(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    embedded: Boolean = false,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value
     if (metadata == null) {
@@ -139,8 +141,8 @@ fun MiniPlayer(
     val pillShape = RoundedCornerShape(50)
     Box(
         modifier = modifier
-            .widthIn(max = 340.dp)
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .then(if (embedded) Modifier.fillMaxWidth() else Modifier.widthIn(max = 340.dp))
+            .then(if (embedded) Modifier else Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
             // The resting rect, before any swipe translation: the player morph starts here.
             .onGloballyPositioned { onBounds(it.boundsInRoot()) }
             .graphicsLayer {
@@ -172,9 +174,13 @@ fun MiniPlayer(
                 )
             }
             .heightIn(min = 64.dp)
-            .clip(pillShape)
-            .background(pillColor)
-            .border(1.dp, outline.copy(alpha = 0.3f), pillShape)
+            .then(
+                if (embedded) Modifier
+                else Modifier
+                    .clip(pillShape)
+                    .background(pillColor)
+                    .border(1.dp, outline.copy(alpha = 0.3f), pillShape),
+            )
             .pressClickable(onExpand, 0.985f),
     ) {
         Row(
