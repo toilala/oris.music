@@ -445,7 +445,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             },
                                     ) {
-                                        val contentAlpha = ((t - 0.15f) / 0.6f).coerceIn(0f, 1f)
+                                        val contentAlpha = ((t - 0.7f) / 0.25f).coerceIn(0f, 1f)
                                         // The artwork's own bounds ride the window rect: it grows with
                                         // the pill's frame into the full-bleed backdrop, then crossfades
                                         // into the NowPlaying layout. Tint behind covers image load.

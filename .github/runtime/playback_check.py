@@ -41,7 +41,9 @@ def ensure_ffmpeg():
     print('FFMPEG ' + ('ready' if ok else 'unavailable (apt rc=' + str(r.returncode) + ')'), flush=True)
     return ok
 
-def emit_mp4_frames(tag, mp4_path, frames=4):
+def emit_mp4_frames(tag, mp4_path, frames=10, span=6.0):
+    # The gesture sits at the start of every leg's recording, so sample the first span
+    # seconds densely instead of spreading few frames across a mostly idle tail.
     """Key frames of a recorded transition as ORIS_IMAGE chunks, so the motion itself
     is inspectable from the log rather than only start/end stills or the artifact zip.
     ffmpeg/ffprobe are NOT on this runner, so frame emission is best-effort only and
@@ -61,8 +63,9 @@ def emit_mp4_frames(tag, mp4_path, frames=4):
     if total <= 0:
         print('FRAMES UNREADABLE ' + tag, flush=True)
         return
+    window = min(total, span)
     for i in range(frames):
-        ts = total * (i + 0.5) / frames
+        ts = window * (i + 0.5) / frames
         png = f'{OUT}/{tag}_f{i}.png'
         r = subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{ts:.2f}', '-i', mp4_path,
                             '-frames:v', '1', '-vf', 'scale=540:-1', png], capture_output=True)

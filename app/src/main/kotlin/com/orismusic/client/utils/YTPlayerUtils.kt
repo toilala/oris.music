@@ -32,7 +32,7 @@ object YTPlayerUtils {
 
     // Informed by foundation's anonymous visitor bootstrap and VISIONOS-first
     // strategy. A refusal is not treated as proof that an account is required.
-    private suspend fun directAnonymous(videoId: String, maxKbps: Int): PlaybackData? {
+    private suspend fun directAnonymous(videoId: String, maxKbps: Int, quiet: Boolean): PlaybackData? {
         visitorLock.withLock {
             if (YouTube.visitorData.isNullOrBlank()) {
                 YouTube.refreshVisitorData().onFailure {
@@ -49,7 +49,7 @@ object YTPlayerUtils {
             val status = response.playabilityStatus.status
             val reason = response.playabilityStatus.reason.orEmpty()
                 .replace(Regex("[\\r\\n]+"), " ").take(240)
-            PlaybackDiagnostic.reportFailure("YouTube refused the guest request ($status). $reason")
+            if (!quiet) PlaybackDiagnostic.reportFailure("YouTube refused the guest request ($status). $reason", videoId)
             Timber.tag(TAG).w("Direct client refusal: status=$status reason=$reason")
             if (status == "LOGIN_REQUIRED" && reason.contains("bot", ignoreCase = true)) {
                 throw GuestAccessRefused("YouTube asked this connection to confirm it is not a bot. Automatic retries stopped. This does not mean all songs require sign-in.")
@@ -173,7 +173,7 @@ object YTPlayerUtils {
         // absence, never reachability, so this only short-circuits doomed attempts.
         if (!networkOnline(context)) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: no network (OS)")
-            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. NETWORK")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. NETWORK", videoId)
             throw IOException("Cannot resolve $videoId: no network")
         }
         try {
@@ -182,7 +182,7 @@ object YTPlayerUtils {
             }
         } catch (timeout: TimeoutCancellationException) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: timed out after ${resolveTimeoutMs / 1000}s")
-            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. TIMED OUT")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. TIMED OUT", videoId)
             throw IOException("Cannot resolve $videoId: timed out", timeout)
         }
     }
@@ -194,14 +194,14 @@ object YTPlayerUtils {
         attempt: Int,
     ): PlaybackData {
         try {
-            directAnonymous(videoId, maxKbps)?.let {
+            directAnonymous(videoId, maxKbps, quiet)?.let {
                 PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "ok VISIONOS-direct")
                 if (!quiet) PlaybackDiagnostic.report("Stream resolved through VISIONOS-direct. Listen and check that the playback time advances.")
                 return it
             }
         } catch (refused: GuestAccessRefused) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "refused")
-            if (!quiet) PlaybackDiagnostic.reportFailure(refused.message.orEmpty())
+            if (!quiet) PlaybackDiagnostic.reportFailure(refused.message.orEmpty(), videoId)
             throw refused
         }
         val extracted = try {
@@ -217,7 +217,7 @@ object YTPlayerUtils {
             throw cancelled
         } catch (failure: StreamResolveException) {
             PlaybackDiagnostic.endResolveAttempt(videoId, attempt, "failed: ${failure.reason}")
-            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. ${failure.reason}")
+            if (!quiet) PlaybackDiagnostic.reportFailure("No playable stream came back. ${failure.reason}", videoId)
             Timber.tag(TAG).w("Extraction failed for $videoId: ${failure.reason}")
             failure.diagnostics?.attempts?.forEach { attempt ->
                 Timber.tag(TAG).w(

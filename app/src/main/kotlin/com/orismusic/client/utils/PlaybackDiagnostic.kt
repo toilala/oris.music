@@ -22,6 +22,11 @@ object PlaybackDiagnostic {
     private val _activeFailure = MutableStateFlow<String?>(null)
     val activeFailure = _activeFailure.asStateFlow()
 
+    // The media item the active failure belongs to; null means unattributed and always shown.
+    // A failure owned by one track must not banner over another track that is playing fine.
+    private val _activeFailureFor = MutableStateFlow<String?>(null)
+    val activeFailureFor = _activeFailureFor.asStateFlow()
+
     fun report(text: String) {
         val clean = sanitize(text)
         // Mirror into logcat so CI evidence carries the same timeline as the dialog.
@@ -35,10 +40,11 @@ object PlaybackDiagnostic {
         }
     }
 
-    fun reportFailure(text: String) {
+    fun reportFailure(text: String, mediaId: String? = null) {
         report(text)
         Timber.tag(LOG_TAG).w("failure active: %s", sanitize(text))
         _activeFailure.value = sanitize(text)
+        _activeFailureFor.value = mediaId
     }
 
     /** Cleared only when the player itself reports real playback, never on a tap or prepare. */
@@ -50,6 +56,7 @@ object PlaybackDiagnostic {
             attempt?.let { " (resolve r$it)" } ?: "",
         )
         _activeFailure.value = null
+        _activeFailureFor.value = null
     }
 
     /** Start of one resolve attempt. The sequence tags its result and any playback it yields,

@@ -227,6 +227,7 @@ fun NowPlayingScreen(
 
             var failureDialog by remember { mutableStateOf(false) }
             DiagnosticFailureBanner(
+                currentMediaId = mediaId,
                 onClick = { failureDialog = true },
                 onRetry = {
                     connection.player.prepare()

@@ -23,9 +23,11 @@ import com.orismusic.client.utils.PlaybackDiagnostic
 import com.orismusic.client.utils.diagnosticSummary
 
 @Composable
-fun DiagnosticFailureBanner(onClick: () -> Unit, onRetry: (() -> Unit)? = null) {
+fun DiagnosticFailureBanner(currentMediaId: String?, onClick: () -> Unit, onRetry: (() -> Unit)? = null) {
     val activeFailure by PlaybackDiagnostic.activeFailure.collectAsState()
+    val failureFor by PlaybackDiagnostic.activeFailureFor.collectAsState()
     val failure = activeFailure ?: return
+    if (failureFor != null && failureFor != currentMediaId) return
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),

@@ -111,6 +111,8 @@ fun MiniPlayer(
     val duration by connection.duration.collectAsState()
     val error by connection.error.collectAsState()
     val diagFailure by com.orismusic.client.utils.PlaybackDiagnostic.activeFailure.collectAsState()
+    val diagFailureFor by com.orismusic.client.utils.PlaybackDiagnostic.activeFailureFor.collectAsState()
+    val diagForCurrent = diagFailureFor == null || diagFailureFor == connection.player.currentMediaItem?.mediaId
     val artwork = metadata.artworkUri?.toString()
 
     val primary = MaterialTheme.colorScheme.primary
@@ -223,7 +225,7 @@ fun MiniPlayer(
                     modifier = Modifier
                         .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
                 )
-                androidx.compose.animation.AnimatedVisibility(visible = error != null) {
+                androidx.compose.animation.AnimatedVisibility(visible = error != null && diagForCurrent) {
                     Text(
                         // A genuinely short label: the pill clips even a first sentence.
                         diagFailure?.let { com.orismusic.client.utils.diagnosticShort(it) }
