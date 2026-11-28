@@ -58,7 +58,7 @@ fun HomeSettingsPage(onBack: () -> Unit) {
             ToggleRow("Top banner", "The big artwork banner at the top. Off gives a plain header.", HomeSettings.bannerOn) {
                 HomeSettings.hero = it; if (it) HomeSettings.minimalBanner = true; HomeSettings.save()
             }
-            ChoiceRow("Banner style", HeroStyle.entries, HomeSettings.heroStyle, { it.label }) { HomeSettings.heroStyle = it; HomeSettings.save() }
+            ChoiceRow("Banner style", HeroStyle.entries, HomeSettings.heroStyle, { it.label }) { HomeSettings.chooseHero(it) }
             ToggleRow("YouTube Music shelves", "The shelves from YouTube Music below your own.", HomeSettings.youtube) {
                 HomeSettings.youtube = it; HomeSettings.save()
             }

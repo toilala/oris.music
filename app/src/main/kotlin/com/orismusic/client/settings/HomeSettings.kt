@@ -47,7 +47,7 @@ object HomeSettings {
     var minimalBanner by mutableStateOf(true)
     val bannerOn get() = hero && (!minimal || minimalBanner)
     var youtube by mutableStateOf(true)
-    var heroStyle by mutableStateOf(HeroStyle.Deck)
+    var heroStyle by mutableStateOf(HeroStyle.Banner)
     var shelfStyle by mutableStateOf(ShelfStyle.Scatter)
     var density by mutableStateOf(HomeDensity.Cozy)
     var corners by mutableStateOf(HomeCorners.Soft)
@@ -69,7 +69,7 @@ object HomeSettings {
         hero = p.getBoolean("hero", true)
         minimalBanner = if (p.contains("minimal_banner")) p.getBoolean("minimal_banner", true) else !p.contains("minimal")
         youtube = p.getBoolean("youtube", true)
-        heroStyle = p.enum("hero_style", HeroStyle.Deck)
+        heroStyle = p.enum("hero_style_chosen", p.enum("hero_style", HeroStyle.Banner))
         shelfStyle = p.enum("shelf_style", ShelfStyle.Scatter)
         density = p.enum("density", HomeDensity.Cozy)
         corners = p.enum("corners", HomeCorners.Soft)
@@ -81,6 +81,13 @@ object HomeSettings {
         order.clear(); order.addAll(saved + HomeSection.entries.filter { it !in saved })
         hidden.clear()
         hidden.addAll((p.getString("hidden", "") ?: "").split(",").mapNotNull { n -> HomeSection.entries.firstOrNull { it.name == n } })
+    }
+
+    /** New installs start on Banner; a value saved earlier is kept as the user's choice. */
+    fun chooseHero(style: HeroStyle) {
+        heroStyle = style
+        store?.edit()?.putString("hero_style_chosen", style.name)?.apply()
+        save()
     }
 
     fun visible(s: HomeSection) = s !in hidden
@@ -119,9 +126,10 @@ object HomeSettings {
 
     fun reset() {
         minimal = true
-        shelfStyle = ShelfStyle.Scatter; hero = true; minimalBanner = true; heroStyle = HeroStyle.Deck; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
+        shelfStyle = ShelfStyle.Scatter; hero = true; minimalBanner = true; heroStyle = HeroStyle.Banner; youtube = true; density = HomeDensity.Cozy; corners = HomeCorners.Soft
         coverSize = HomeCoverSize.Medium; jumpStyle = JumpStyle.Tiles; motion = HomeMotion.Lively; becauseCount = 3
         order.clear(); order.addAll(HomeSection.entries); hidden.clear()
+        store?.edit()?.remove("hero_style_chosen")?.apply()
         save()
     }
 }

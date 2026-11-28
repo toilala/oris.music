@@ -295,6 +295,23 @@ fun HomeScreen(
                     }
                 }
             }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val barAlpha by androidx.compose.runtime.remember {
+                androidx.compose.runtime.derivedStateOf {
+                    if (listState.firstVisibleItemIndex > 0) 1f
+                    else ((listState.firstVisibleItemScrollOffset - with(density) { 220.dp.toPx() }) / with(density) { 120.dp.toPx() }).coerceIn(0f, 1f)
+                }
+            }
+            if (barAlpha > 0f) {
+                Box(
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth().graphicsLayer { alpha = barAlpha }
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
+                        .statusBarsPadding().height(52.dp).padding(horizontal = 22.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text("Home", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
 
         }
     }
