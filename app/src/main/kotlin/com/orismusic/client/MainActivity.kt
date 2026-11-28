@@ -295,27 +295,12 @@ class MainActivity : ComponentActivity() {
                                 val conn = connection
                                 if (conn != null && dockMeta != null) {
                                     val navHidden = navCollapsed && com.orismusic.client.settings.NavSettings.hideOnScroll
-                                    Box(
-                                        Modifier.fillMaxWidth().navigationBarsPadding(),
-                                        contentAlignment = androidx.compose.ui.Alignment.Center,
-                                    ) {
-                                        Column(
-                                            Modifier
-                                                .widthIn(max = 340.dp)
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 4.dp)
-                                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
-                                                .background(clusterBody)
-                                                .border(
-                                                    1.dp,
-                                                    dockScheme.outline.copy(alpha = 0.3f),
-                                                    androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                                                ),
-                                        ) {
+                                    Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 16.dp)) {
                                             MiniPlayer(
                                                 connection = conn,
                                                 onExpand = { navigation = navigation.openPlayer() },
-                                                embedded = true,
+                                                wide = true,
                                             )
                                             androidx.compose.animation.AnimatedVisibility(
                                                 visible = !navHidden,
@@ -327,7 +312,7 @@ class MainActivity : ComponentActivity() {
                                                     collapsed = false,
                                                     tint = dockTint,
                                                     onSelect = navSelect,
-                                                    embedded = true,
+                                                    wide = true,
                                                 )
                                             }
                                         }
@@ -544,7 +529,7 @@ private fun ComingSoonTab(title: String, modifier: Modifier = Modifier) {
  * gather in a small pill beside it.
  */
 @androidx.compose.runtime.Composable
-private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compose.ui.graphics.Color?, onSelect: (MainTab) -> Unit, embedded: Boolean = false) {
+private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compose.ui.graphics.Color?, onSelect: (MainTab) -> Unit, embedded: Boolean = false, wide: Boolean = false) {
     val tabs = MainTab.entries.filter { it != MainTab.Queue }
     fun icon(tab: MainTab) = when (tab) {
         MainTab.Home -> Icons.Rounded.Home
@@ -582,6 +567,7 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compos
             icon = { icon(tabs[it]) },
             onSelect = { onSelect(tabs[it]) },
             tint = tint,
+            wide = wide,
         )
     }
 }

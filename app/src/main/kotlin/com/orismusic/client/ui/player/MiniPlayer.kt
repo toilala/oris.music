@@ -86,6 +86,7 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
     onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     embedded: Boolean = false,
+    wide: Boolean = false,
 ) {
     val metadata = connection.currentMetadata.collectAsState().value
     if (metadata == null) {
@@ -141,8 +142,8 @@ fun MiniPlayer(
     val pillShape = RoundedCornerShape(50)
     Box(
         modifier = modifier
-            .then(if (embedded) Modifier.fillMaxWidth() else Modifier.widthIn(max = 340.dp))
-            .then(if (embedded) Modifier else Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+            .then(if (embedded || wide) Modifier.fillMaxWidth() else Modifier.widthIn(max = 340.dp))
+            .then(if (embedded || wide) Modifier else Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
             // The resting rect, before any swipe translation: the player morph starts here.
             .onGloballyPositioned { onBounds(it.boundsInRoot()) }
             .graphicsLayer {
@@ -173,7 +174,7 @@ fun MiniPlayer(
                     },
                 )
             }
-            .heightIn(min = 64.dp)
+            .heightIn(min = if (wide) 60.dp else 64.dp)
             .then(
                 if (embedded) Modifier
                 else Modifier
@@ -246,6 +247,7 @@ fun MiniPlayer(
             Spacer(Modifier.width(4.dp))
             val canSkipPrevious by connection.canSkipPrevious.collectAsState()
             val canSkipNext by connection.canSkipNext.collectAsState()
+            if (!wide) {
             IconButton(
                 enabled = canSkipPrevious,
                 onClick = { connection.seekToPrevious() },
@@ -254,6 +256,7 @@ fun MiniPlayer(
                 Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(20.dp), tint = onSurface)
             }
             Spacer(Modifier.width(12.dp))
+            }
             // Mini orbit play button, matching the full player's disc and satellite dot.
             val ringAlpha by animateFloatAsState(if (isPlaying) 1f else 0f, OrisMotion.standard(easing = LinearEasing), label = "mini orbit ring")
             val spin = rememberInfiniteTransition(label = "mini orbit spin")
@@ -268,7 +271,7 @@ fun MiniPlayer(
                     } else connection.togglePlayPause()
                 },
             ) {
-                Box(Modifier.size(38.dp).clip(CircleShape).background(primary))
+                if (!wide) Box(Modifier.size(38.dp).clip(CircleShape).background(primary))
                 if (ringAlpha > 0.01f) {
                     androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
                         val radius = size.minDimension / 2f - 1.5.dp.toPx()
@@ -294,8 +297,8 @@ fun MiniPlayer(
                     Icon(
                         imageVector = if (ended) Icons.Rounded.Replay else if (active) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (ended) "Replay" else if (active) "Pause" else "Play",
-                        tint = onPrimary,
-                        modifier = Modifier.size(24.dp),
+                        tint = if (wide) onSurface else onPrimary,
+                        modifier = Modifier.size(if (wide) 30.dp else 24.dp),
                     )
                 }
             }

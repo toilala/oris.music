@@ -70,6 +70,7 @@ fun OrisDock(
     modifier: Modifier = Modifier,
     tint: Color? = null,
     embedded: Boolean = false,
+    wide: Boolean = false,
 ) {
     val showLabels = NavSettings.labels
     val effect = NavSettings.effect
@@ -111,11 +112,12 @@ fun OrisDock(
     val tabW = (if (showLabels) 76 else 60).dp + (NavSettings.size.extra / 2).dp
     val density = androidx.compose.ui.platform.LocalDensity.current
     var measuredW by remember { mutableStateOf(0.dp) }
-    val effTabW = if (embedded && measuredW > 0.dp) (measuredW - 8.dp) / count else tabW
+    val shared = embedded || wide
+    val effTabW = if (shared && measuredW > 0.dp) (measuredW - 8.dp) / count else tabW
     Box(
-        (if (embedded) modifier.fillMaxWidth() else modifier.width(tabW * count + 8.dp))
+        (if (shared) modifier.fillMaxWidth() else modifier.width(tabW * count + 8.dp))
             .then(
-                if (embedded) Modifier.onGloballyPositioned { measuredW = with(density) { it.size.width.toDp() } }
+                if (shared) Modifier.onGloballyPositioned { measuredW = with(density) { it.size.width.toDp() } }
                 else Modifier,
             ),
     ) {
