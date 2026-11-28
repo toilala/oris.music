@@ -142,6 +142,9 @@ private suspend fun loadHomeFeed(generation: Int, session: String): HomeFeedStat
         onFailure = { HomeFeedState.Failed(it.message ?: "Could not reach YouTube Music") },
     )
 
+/** True while the banner sits under the status bar, so the system icons need to be light. */
+object HeroBars { var over by androidx.compose.runtime.mutableStateOf(false) }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -222,7 +225,7 @@ fun HomeScreen(
     Scaffold(modifier = modifier) { outerPadding ->
         Box(Modifier.fillMaxSize()
                 .artworkTintBackdrop(heroSongs.firstOrNull()?.thumbnail ?: history.firstOrNull()?.thumbnail)
-                .padding(outerPadding)) {
+                .padding(PaddingValues(start = outerPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr), end = outerPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr), bottom = outerPadding.calculateBottomPadding()))) {
             val auroraTint = com.orismusic.client.ui.components.rememberArtworkColor(history.firstOrNull()?.thumbnail)
             if (heroSongs.isEmpty() && hero !is HeroPick.Pending) Aurora(Modifier.align(Alignment.TopCenter), scroll, auroraTint)
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
@@ -239,7 +242,7 @@ fun HomeScreen(
                     item(key = "top") {
                         val deck = HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Deck
                         val topInset = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                        Box(Modifier.animateContentSize(OrisMotion.standard())) {
+                        Box(Modifier.animateContentSize(OrisMotion.standard()).then(if (heroSongs.isNotEmpty() && !deck) Modifier else Modifier.statusBarsPadding())) {
                         when {
                             heroSongs.isNotEmpty() -> Box {
                                 if (deck) HomeDeck(heroSongs, playerConnection, scroll)
@@ -306,14 +309,27 @@ fun HomeScreen(
                     else ((listState.firstVisibleItemScrollOffset - with(density) { 220.dp.toPx() }) / with(density) { 120.dp.toPx() }).coerceIn(0f, 1f)
                 }
             }
+            val overHero = heroSongs.isNotEmpty() && HomeSettings.heroStyle == com.orismusic.client.settings.HeroStyle.Banner && barAlpha < 0.5f
+            androidx.compose.runtime.DisposableEffect(overHero) {
+                HeroBars.over = overHero
+                onDispose { HeroBars.over = false }
+            }
             if (barAlpha > 0f) {
-                Box(
-                    Modifier.align(Alignment.TopCenter).fillMaxWidth().graphicsLayer { alpha = barAlpha }
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
-                        .statusBarsPadding().height(52.dp).padding(horizontal = 22.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Text("Home", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().graphicsLayer { alpha = barAlpha }) {
+                    Box(
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
+                            .statusBarsPadding().height(52.dp).padding(horizontal = 22.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text("Home", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    Box(
+                        Modifier.fillMaxWidth().height(14.dp).background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(MaterialTheme.colorScheme.background, androidx.compose.ui.graphics.Color.Transparent),
+                            ),
+                        ),
+                    )
                 }
             }
 

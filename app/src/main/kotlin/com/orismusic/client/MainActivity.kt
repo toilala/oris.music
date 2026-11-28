@@ -46,6 +46,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
@@ -204,10 +206,11 @@ class MainActivity : ComponentActivity() {
                         (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                             android.content.res.Configuration.UI_MODE_NIGHT_YES
                 }
+                val heroUnderBars = com.orismusic.client.ui.screens.HeroBars.over
                 androidx.compose.runtime.SideEffect {
                     val bars = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                     bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    bars.isAppearanceLightStatusBars = !appDark
+                    bars.isAppearanceLightStatusBars = !appDark && !heroUnderBars
                     bars.isAppearanceLightNavigationBars = !appDark
                     if (hideBar) bars.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                     else bars.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
@@ -256,6 +259,7 @@ class MainActivity : ComponentActivity() {
                         // unless the finger clearly throws the sheet back down.
                         var grabbedMidClose by remember { mutableStateOf(false) }
                         val morph = remember { androidx.compose.animation.core.Animatable(0f) }
+                        var miniRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
                         val dragScope = androidx.compose.runtime.rememberCoroutineScope()
                         val dragDeltas = remember { FloatArray(4) }
                         var dragDeltaIx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -297,41 +301,66 @@ class MainActivity : ComponentActivity() {
                                     val navHidden = navCollapsed && com.orismusic.client.settings.NavSettings.hideOnScroll
                                     Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                                         Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 16.dp)) {
-                                            MiniPlayer(
-                                                connection = conn,
-                                                onExpand = { navigation = navigation.openPlayer() },
-                                                wide = true,
-                                            )
+                                            Box(
+                                                Modifier
+                                                    .onGloballyPositioned { if (morph.value < 0.01f) miniRect = it.boundsInRoot() }
+                                                    .graphicsLayer { alpha = (1f - morph.value * 6f).coerceIn(0f, 1f) },
+                                            ) {
+                                                MiniPlayer(
+                                                    connection = conn,
+                                                    onExpand = { navigation = navigation.openPlayer() },
+                                                    wide = true,
+                                                )
+                                            }
                                             androidx.compose.animation.AnimatedVisibility(
                                                 visible = !navHidden,
                                                 enter = androidx.compose.animation.expandVertically(OrisMotion.soft()) + androidx.compose.animation.fadeIn(OrisMotion.quick()),
                                                 exit = androidx.compose.animation.shrinkVertically(OrisMotion.soft()) + androidx.compose.animation.fadeOut(OrisMotion.micro()),
                                             ) {
+                                                Box(Modifier.graphicsLayer {
+                                                    translationY = morph.value * 140.dp.toPx()
+                                                    alpha = (1f - morph.value * 2f).coerceIn(0f, 1f)
+                                                }) {
+                                                    FloatingNav(
+                                                        selected = selectedTab,
+                                                        collapsed = false,
+                                                        tint = dockTint,
+                                                        onSelect = navSelect,
+                                                        wide = true,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 16.dp)) {
+                                            conn?.let {
+                                                Box(
+                                                    Modifier
+                                                        .onGloballyPositioned { if (morph.value < 0.01f) miniRect = it.boundsInRoot() }
+                                                        .graphicsLayer { alpha = (1f - morph.value * 6f).coerceIn(0f, 1f) },
+                                                ) {
+                                                    MiniPlayer(
+                                                        connection = it,
+                                                        onExpand = { navigation = navigation.openPlayer() },
+                                                        wide = true,
+                                                    )
+                                                }
+                                            }
+                                            Box(Modifier.graphicsLayer {
+                                                translationY = morph.value * 140.dp.toPx()
+                                                alpha = (1f - morph.value * 2f).coerceIn(0f, 1f)
+                                            }) {
                                                 FloatingNav(
                                                     selected = selectedTab,
-                                                    collapsed = false,
+                                                    collapsed = navCollapsed,
                                                     tint = dockTint,
                                                     onSelect = navSelect,
                                                     wide = true,
                                                 )
                                             }
                                         }
-                                    }
-                                } else {
-                                    Column {
-                                        conn?.let {
-                                            MiniPlayer(
-                                                modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally),
-                                                connection = it,
-                                                onExpand = { navigation = navigation.openPlayer() },
-                                            )
-                                        }
-                                        FloatingNav(
-                                            selected = selectedTab,
-                                            collapsed = navCollapsed,
-                                            tint = dockTint,
-                                            onSelect = navSelect,
-                                        )
                                     }
                                 }
                             },
@@ -411,16 +440,15 @@ class MainActivity : ComponentActivity() {
                                 androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                                     val fullH = constraints.maxHeight.toFloat()
                                     val t = morph.value
-                                    // A standard modal sheet: the player slides up over home and
-                                    // dismisses by drag-down as one fullscreen surface. There is no
-                                    // shrinking hit region, so a grab mid-close always lands on it.
+                                    // The player grows out of the mini player's own rectangle: a window
+                                    // that opens from that pill to the full screen, rounded corners
+                                    // relaxing as it goes. The window follows the same progress value
+                                    // as the drag, so a grab mid-close lands on the visible surface.
+                                    val from = miniRect
                                     androidx.compose.foundation.layout.Box(
                                         Modifier
                                             .fillMaxSize()
-                                            .graphicsLayer {
-                                                translationY = (1f - t) * size.height
-                                                alpha = (t / 0.25f).coerceIn(0f, 1f)
-                                            }
+                                            .clip(com.orismusic.client.ui.player.RevealShape(t, from))
                                             .pointerInput(Unit) {
                                                 detectVerticalDragGestures(
                                                     onDragStart = {
@@ -461,6 +489,8 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             },
                                     ) {
+                                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
+                                        Box(Modifier.fillMaxSize().graphicsLayer { alpha = ((t - 0.2f) / 0.5f).coerceIn(0f, 1f) }) {
                                         NowPlayingScreen(
                                             connection = conn,
                                             onCollapse = { navigation = navigation.closePlayer() },
@@ -473,6 +503,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                         )
+                                        }
                                     }
                                 }
                             }

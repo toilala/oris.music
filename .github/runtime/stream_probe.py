@@ -24,6 +24,10 @@ restart_app('Home', seconds=60)
 # Quick picks are real feed tracks with real video ids: tapping one runs the true
 # resolve path (VISIONOS-direct, then InnerTubeX extraction with PoToken).
 qp = wait_label('Quick picks', seconds=90, pkg=PKG)
+# The banner hero pushes Quick picks under the dock; scroll it into the open first.
+adb('shell', 'input', 'swipe', '540', '1800', '540', '900', '300')
+time.sleep(2)
+qp = wait_label('Quick picks', seconds=20, pkg=PKG)
 points = list(map(int, re.findall(r'\d+', qp.get('bounds'))))
 adb('shell', 'log', '-p', 'i', '-t', 'OrisHarness', 'phase=probe-tap')
 adb('shell', 'input', 'tap', str((points[0] + points[2]) // 2), str(points[3] + 90))
