@@ -61,3 +61,24 @@ fun StyledArtwork(url: String?, title: String?, modifier: Modifier = Modifier,
         }
     }
 }
+
+/** Where the player's artwork ends up for a style, so a flight from the mini cover lands on the same shape. */
+object ArtworkLanding {
+    /** Inset of the visible picture inside the carousel page, in dp. */
+    fun insetDp(style: ArtworkStyle): Float = when (style) {
+        ArtworkStyle.Halo -> 14f
+        ArtworkStyle.Tilt, ArtworkStyle.Float -> 16f
+        else -> 0f
+    }
+
+    /** Corner radii as a share of the picture's short side: top-start, top-end, bottom-end, bottom-start. Null means 6dp. */
+    fun corners(style: ArtworkStyle): FloatArray? = when (style) {
+        ArtworkStyle.Disc, ArtworkStyle.Halo -> floatArrayOf(.5f, .5f, .5f, .5f)
+        ArtworkStyle.Arch -> floatArrayOf(.5f, .5f, .06f, .06f)
+        ArtworkStyle.Soft -> floatArrayOf(.22f, .22f, .22f, .22f)
+        ArtworkStyle.Ticket -> floatArrayOf(.03f, .25f, .03f, .25f)
+        else -> null
+    }
+
+    fun tilt(style: ArtworkStyle): Float = if (style == ArtworkStyle.Tilt) -4f else 0f
+}

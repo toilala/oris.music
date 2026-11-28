@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
@@ -261,6 +262,7 @@ class MainActivity : ComponentActivity() {
                         val morph = remember { androidx.compose.animation.core.Animatable(0f) }
                         var miniRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
                         var miniCover by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                        var flyOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
                         var playerCover by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
                         val dragScope = androidx.compose.runtime.rememberCoroutineScope()
                         val dragDeltas = remember { FloatArray(4) }
@@ -441,7 +443,7 @@ class MainActivity : ComponentActivity() {
 
                         if ((showPlayer || morph.value > 0.005f) && connection != null) {
                             connection?.let { conn ->
-                                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { flyOrigin = it.positionInRoot() }) {
                                     val fullH = constraints.maxHeight.toFloat()
                                     val t = morph.value
                                     // The player grows out of the mini player's own rectangle: a window
@@ -522,19 +524,30 @@ class MainActivity : ComponentActivity() {
                                     val flyArt = conn.currentMetadata.collectAsState().value?.artworkUri?.toString()
                                     if (flyFrom != null && flyTo != null && flyArt != null && flyFrom.width > 1f && t > 0.004f && t < 0.985f) {
                                         val density = androidx.compose.ui.platform.LocalDensity.current
-                                        val l = flyFrom.left + (flyTo.left - flyFrom.left) * t
-                                        val tp = flyFrom.top + (flyTo.top - flyFrom.top) * t
-                                        val w = flyFrom.width + (flyTo.width - flyFrom.width) * t
-                                        val h = flyFrom.height + (flyTo.height - flyFrom.height) * t
-                                        val corner = flyFrom.width / 2f + (with(density) { 6.dp.toPx() } - flyFrom.width / 2f) * t
+                                        val style = com.orismusic.client.settings.PlayerSettings.artworkStyle
+                                        val inset = with(density) { com.orismusic.client.ui.player.ArtworkLanding.insetDp(style).dp.toPx() }
+                                        val endRect = androidx.compose.ui.geometry.Rect(
+                                            flyTo.left + inset, flyTo.top + inset, flyTo.right - inset, flyTo.bottom - inset,
+                                        )
+                                        val l = flyFrom.left + (endRect.left - flyFrom.left) * t - flyOrigin.x
+                                        val tp = flyFrom.top + (endRect.top - flyFrom.top) * t - flyOrigin.y
+                                        val w = flyFrom.width + (endRect.width - flyFrom.width) * t
+                                        val h = flyFrom.height + (endRect.height - flyFrom.height) * t
+                                        val share = com.orismusic.client.ui.player.ArtworkLanding.corners(style)
+                                        val endShort = minOf(endRect.width, endRect.height)
+                                        fun corner(i: Int): androidx.compose.ui.unit.Dp {
+                                            val end = if (share == null) with(density) { 6.dp.toPx() } else share[i] * endShort
+                                            return with(density) { (flyFrom.width / 2f + (end - flyFrom.width / 2f) * t).toDp() }
+                                        }
                                         Box(
                                             Modifier
                                                 .offset { IntOffset(l.toInt(), tp.toInt()) }
-                                                .size(with(density) { w.toDp() }, with(density) { h.toDp() }),
+                                                .size(with(density) { w.toDp() }, with(density) { h.toDp() })
+                                                .graphicsLayer { rotationZ = com.orismusic.client.ui.player.ArtworkLanding.tilt(style) * t },
                                         ) {
                                             com.orismusic.client.ui.components.Artwork(
                                                 flyArt, Modifier.fillMaxSize(),
-                                                androidx.compose.foundation.shape.RoundedCornerShape(with(density) { corner.toDp() }),
+                                                androidx.compose.foundation.shape.RoundedCornerShape(corner(0), corner(1), corner(2), corner(3)),
                                                 null, px = 600,
                                             )
                                         }

@@ -81,6 +81,9 @@ with open(f'{OUT}/stream-probe-logcat.txt', 'w') as f:
 print('PROBE ui-state=' + state + (' fragment=' + frag if frag else ''), flush=True)
 print('PROBE positions p1=' + str(p1) + ' p2=' + str(p2), flush=True)
 print('PROBE sessions=' + repr(sessions()), flush=True)
+for l in lines:
+    if 'OrisDiag' in l and 'resolve r' in l:
+        print('PROBE ' + l.split('OrisDiag:')[1].strip(), flush=True)
 print('PROBE logcat evidence (' + str(len(lines)) + ' lines):', flush=True)
 mark = next((i for i, l in enumerate(lines) if 'phase=probe-tap' in l), None)
 print('PROBE tap marker at kept-line index ' + str(mark) + ' of ' + str(len(lines)), flush=True)
