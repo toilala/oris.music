@@ -499,7 +499,7 @@ class MainActivity : ComponentActivity() {
                                         val startTop = from?.top ?: (fullH - 160f)
                                         Box(
                                             Modifier.fillMaxSize().graphicsLayer {
-                                                alpha = ((t - 0.2f) / 0.5f).coerceIn(0f, 1f)
+                                                alpha = ((t - 0.02f) / 0.1f).coerceIn(0f, 1f)
                                                 translationY = startTop * (1f - t)
                                             },
                                         ) {
@@ -507,7 +507,8 @@ class MainActivity : ComponentActivity() {
                                             connection = conn,
                                             onCollapse = { navigation = navigation.closePlayer() },
                                             onArtworkBounds = { playerCover = it.translate(0f, -startTop * (1f - morph.value)) },
-                                            artworkAlpha = { if (miniCover != null && morph.value < 0.985f) 0f else 1f },
+                                            artworkAlpha = { if (miniCover != null && conn.currentMetadata.value?.artworkUri != null && morph.value < 0.985f) 0f else 1f },
+                                            reveal = { morph.value },
                                             onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
                                             onOpenArtist = { id, name ->
                                                 openScope.launch {

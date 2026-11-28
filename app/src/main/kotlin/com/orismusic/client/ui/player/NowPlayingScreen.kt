@@ -110,6 +110,7 @@ fun NowPlayingScreen(
     onOpenArtist: (String, String) -> Unit = { _, _ -> },
     onArtworkBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     artworkAlpha: () -> Float = { 1f },
+    reveal: () -> Float = { 1f },
 ) {
     val context = LocalContext.current
     val metadata by connection.currentMetadata.collectAsState()
@@ -202,7 +203,7 @@ fun NowPlayingScreen(
             Spacer(Modifier.height(48.dp))
             // Header: collapse control, or a mini artwork + title while lyrics are open.
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(56.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(56.dp).stage(reveal, 0.05f, 0.4f),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (lyricsOpen) {
@@ -256,7 +257,7 @@ fun NowPlayingScreen(
 
             // Title / artist + action cluster.
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp).stage(reveal, 0.25f, 0.6f),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -329,7 +330,7 @@ fun NowPlayingScreen(
             val shownPosition = sliderPosition?.let { (it * safeDuration).toLong() } ?: position.coerceAtLeast(0L)
             val fraction = if (safeDuration > 0) (shownPosition.toFloat() / safeDuration).coerceIn(0f, 1f) else 0f
             if (PlayerSettings.seekBar == PlayerSeekBar.Wave) {
-                Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp).stage(reveal, 0.35f, 0.7f)) {
                     WaveSeekBar(
                         player = player,
                         durationMs = safeDuration,
@@ -358,10 +359,10 @@ fun NowPlayingScreen(
                     },
                     thumb = { InvisibleSliderThumb() },
                     track = { SlimSliderTrack(fraction, Modifier.fillMaxWidth().height(10.dp)) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(20.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(20.dp).stage(reveal, 0.35f, 0.7f),
                 )
                 Spacer(Modifier.height(4.dp))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 36.dp).stage(reveal, 0.35f, 0.7f)) {
                     Text(formatTime(shownPosition), style = MaterialTheme.typography.labelMedium, color = PlayerTextButtonColor.copy(alpha = 0.7f))
                     Spacer(Modifier.weight(1f))
                     Text(
@@ -378,7 +379,7 @@ fun NowPlayingScreen(
 
             // Transport.
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp).stage(reveal, 0.42f, 0.8f),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -418,7 +419,7 @@ fun NowPlayingScreen(
 
             // Essentials only. Secondary actions live in More.
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 12.dp).navigationBarsPadding(),
+                Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 12.dp).navigationBarsPadding().stage(reveal, 0.52f, 0.9f),
                 horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -537,3 +538,11 @@ private fun ArtworkCarousel(
 
 private fun Modifier.androidx_pos(onBounds: (androidx.compose.ui.geometry.Rect) -> Unit): Modifier =
     this.onGloballyPositioned { onBounds(it.boundsInRoot()) }
+
+/** Body rows arrive in order as the sheet opens: fade in and settle up from a short offset. */
+private fun Modifier.stage(reveal: () -> Float, from: Float, to: Float, rise: Float = 18f): Modifier =
+    graphicsLayer {
+        val p = ((reveal() - from) / (to - from)).coerceIn(0f, 1f)
+        alpha = p
+        translationY = (1f - p) * rise * density
+    }

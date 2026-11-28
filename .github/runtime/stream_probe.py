@@ -82,6 +82,8 @@ print('PROBE ui-state=' + state + (' fragment=' + frag if frag else ''), flush=T
 print('PROBE positions p1=' + str(p1) + ' p2=' + str(p2), flush=True)
 print('PROBE sessions=' + repr(sessions()), flush=True)
 for l in lines:
+    if 'Guest refusal ended' in l or 'Player error' in l:
+        print('PROBE err ' + l[-300:], flush=True)
     if 'OrisDiag' in l and 'resolve r' in l:
         print('PROBE ' + l.split('OrisDiag:')[1].strip(), flush=True)
 print('PROBE logcat evidence (' + str(len(lines)) + ' lines):', flush=True)

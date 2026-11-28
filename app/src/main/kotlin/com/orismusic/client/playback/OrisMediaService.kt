@@ -952,6 +952,8 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             // Known refusal (bot check): the loader already declines retries, and automatic
             // re-prepares would storm the same refusal. resolveFresh has already surfaced
             // the human message; only a user action starts a new attempt.
+            val chain = generateSequence<Throwable>(error) { it.cause }.take(6).joinToString(" <- ") { it::class.simpleName.orEmpty() }
+            com.orismusic.client.utils.PlaybackDiagnostic.report("Guest refusal ended ${id ?: "unknown"}: ${error.errorCodeName} [$chain]; no automatic retry.")
             return
         }
         if (id != errorMediaId) { errorMediaId = id; errorRetries = 0 }
