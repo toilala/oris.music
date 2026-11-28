@@ -69,6 +69,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -200,7 +202,7 @@ fun NowPlayingScreen(
         Box(Modifier.fillMaxSize().background(playerBase.copy(alpha = if (backgroundStyle == PlayerBackgroundStyle.Blur) 0.6f else 0.2f)))
 
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(6.dp))
             // Header: collapse control, or a mini artwork + title while lyrics are open.
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 32.dp).height(56.dp).stage(reveal, 0.05f, 0.4f),
@@ -247,7 +249,7 @@ fun NowPlayingScreen(
                     if (open) {
                         LyricsPane(connection, onClose = { lyricsOpen = false }, embedded = true)
                     } else {
-                        val side = min(maxWidth.value - 64f, maxHeight.value).coerceAtLeast(120f).dp
+                        val side = min(maxWidth.value - 40f, maxHeight.value).coerceAtLeast(120f).dp
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             ArtworkCarousel(connection, side, onArtworkBounds, artworkAlpha)
                         }
@@ -265,7 +267,7 @@ fun NowPlayingScreen(
                     Crossfade(targetState = title, label = "title fade") { t ->
                         Text(
                             t,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             color = PlayerTextButtonColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -276,7 +278,7 @@ fun NowPlayingScreen(
                     Crossfade(targetState = artist, label = "artist fade") { a ->
                         Text(
                             a,
-                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
                             color = PlayerTextButtonColor.copy(alpha = 0.7f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -415,23 +417,17 @@ fun NowPlayingScreen(
                 )
             }
 
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(20.dp))
 
             // Essentials only. Secondary actions live in More.
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 12.dp).navigationBarsPadding().stage(reveal, 0.52f, 0.9f),
-                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp).navigationBarsPadding().stage(reveal, 0.52f, 0.9f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ClusterButton(onClick = onQueue, icon = Icons.Rounded.QueueMusic, contentDescription = "Queue", shape = PlayerChipShape)
-                ClusterButton(
-                    onClick = { lyricsOpen = !lyricsOpen },
-                    icon = Icons.Rounded.Lyrics,
-                    contentDescription = "Lyrics",
-                    shape = PlayerChipShape,
-                    active = lyricsOpen,
-                )
-                ClusterButton(onClick = { trayOpen = true }, icon = Icons.Rounded.MoreVert, contentDescription = "More", shape = PlayerChipShape)
+                ActionPill(Icons.Rounded.QueueMusic, "Up next", false, Modifier.weight(1f), onQueue)
+                ActionPill(Icons.Rounded.Lyrics, "Lyrics", lyricsOpen, Modifier.weight(1f)) { lyricsOpen = !lyricsOpen }
+                ActionPill(Icons.Rounded.MoreVert, "More", false, Modifier.weight(1f)) { trayOpen = true }
             }
         }
     }
@@ -546,3 +542,23 @@ private fun Modifier.stage(reveal: () -> Float, from: Float, to: Float, rise: Fl
         alpha = p
         translationY = (1f - p) * rise * density
     }
+
+@Composable
+private fun ActionPill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val container by androidx.compose.animation.animateColorAsState(
+        if (active) PlayerTextButtonColor else PlayerTextButtonColor.copy(alpha = 0.12f), OrisMotion.quick(), label = "pill bg",
+    )
+    val content = if (active) PlayerIconButtonColor else PlayerTextButtonColor
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = container,
+        modifier = modifier.height(48.dp).semantics { contentDescription = if (label == "Up next") "Queue" else label },
+    ) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(icon, null, Modifier.size(20.dp), tint = content)
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1)
+        }
+    }
+}
