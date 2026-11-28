@@ -212,15 +212,31 @@ fun NowPlayingScreen(
                 if (lyricsOpen) {
                     Artwork(art, Modifier.size(56.dp), com.orismusic.client.ui.theme.OrisShapes.Thumb, title, px = 200)
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-                        color = PlayerTextButtonColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).basicMarquee(),
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                            color = PlayerTextButtonColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.basicMarquee(),
+                        )
+                        Text(
+                            artist,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = PlayerTextButtonColor.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
+                    ClusterButton(
+                        onClick = { offsetDialog = true },
+                        icon = Icons.Rounded.MoreVert,
+                        contentDescription = "Lyrics options",
+                        shape = CircleShape,
+                    )
+                    Spacer(Modifier.width(8.dp))
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
@@ -259,7 +275,7 @@ fun NowPlayingScreen(
             }
 
             // Title / artist + action cluster.
-            Row(
+            if (!lyricsOpen) Row(
                 Modifier.fillMaxWidth().padding(horizontal = 32.dp).stage(reveal, 0.25f, 0.6f),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
