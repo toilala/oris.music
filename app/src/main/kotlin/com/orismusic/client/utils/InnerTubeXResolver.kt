@@ -294,7 +294,7 @@ object InnerTubeXResolver {
         videoId = videoId,
         hints =
           ContentHints()
-            .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+            .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true, allowProgressive = true),
         excludedClients = excludedFor(videoId) + skipClients,
         audioQuality =
           when {

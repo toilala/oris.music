@@ -692,6 +692,12 @@ class OrisMediaService : MediaLibraryService(), Player.Listener, PlaybackStatsLi
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory())
                 .setLoadErrorHandlingPolicy(OrisLoadErrorPolicy()))
             .build()
+            .apply {
+                // A muxed fallback stream carries a video track this app never shows.
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+                    .build()
+            }
     }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
