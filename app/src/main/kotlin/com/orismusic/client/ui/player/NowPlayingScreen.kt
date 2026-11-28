@@ -135,6 +135,7 @@ fun NowPlayingScreen(
 
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var trayOpen by remember { mutableStateOf(false) }
+    var queueOpen by remember { mutableStateOf(false) }
     var offsetDialog by remember { mutableStateOf(false) }
     // "Finish current song": pause when the track changes or the queue ends.
     var stopAfterSongId by remember { mutableStateOf<String?>(null) }
@@ -425,7 +426,7 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ActionPill(Icons.Rounded.QueueMusic, "Up next", false, Modifier.weight(1f), onQueue)
+                ActionPill(Icons.Rounded.QueueMusic, "Up next", queueOpen, Modifier.weight(1f)) { queueOpen = true }
                 ActionPill(Icons.Rounded.Lyrics, "Lyrics", lyricsOpen, Modifier.weight(1f)) { lyricsOpen = !lyricsOpen }
                 ActionPill(Icons.Rounded.MoreVert, "More", false, Modifier.weight(1f)) { trayOpen = true }
             }
@@ -435,7 +436,20 @@ fun NowPlayingScreen(
     if (trayOpen) {
         PlayerTray(connection, stopAfterSongActive = stopAfterSongId != null,
             onStopAfterSong = { SleepTimer.cancel(); stopAfterSongId = mediaId },
-            onCancelStopAfterSong = { stopAfterSongId = null }, onQueue = { trayOpen = false; onQueue() }, onDismiss = { trayOpen = false })
+            onCancelStopAfterSong = { stopAfterSongId = null }, onQueue = { trayOpen = false; queueOpen = true }, onDismiss = { trayOpen = false })
+    }
+    if (queueOpen) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { queueOpen = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            com.orismusic.client.ui.screens.QueueScreen(
+                connection = connection,
+                modifier = Modifier.fillMaxWidth().height(520.dp),
+                onBack = { queueOpen = false },
+                onOpenPlayer = { queueOpen = false },
+            )
+        }
     }
     if (offsetDialog) {
         androidx.compose.material3.AlertDialog(
