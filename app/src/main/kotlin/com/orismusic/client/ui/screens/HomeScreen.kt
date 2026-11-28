@@ -246,6 +246,10 @@ fun HomeScreen(
                                 else HomeHero(heroSongs, playerConnection, scroll)
                                 HomeHeader(scroll, overArtwork = !deck)
                             }
+                            hero is HeroPick.Pending && !deck -> Box {
+                                Box(Modifier.fillMaxWidth().height(520.dp + topInset).shimmer())
+                                HomeHeader(scroll)
+                            }
                             else -> HomeHeader(scroll)
                         }
                         }
@@ -402,11 +406,13 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
                             0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f),
                             0.22f to androidx.compose.ui.graphics.Color.Transparent,
                             0.5f to androidx.compose.ui.graphics.Color.Transparent,
+                            0.62f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f),
+                            0.9f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f),
                             1f to bg,
                         ),
                     ),
                 )
-                Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 40.dp)) {
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 64.dp)) {
                     Text("Picked for you", style = MaterialTheme.typography.labelLarge,
                         color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
                     Text(song.title, style = MaterialTheme.typography.headlineMedium,
@@ -432,7 +438,7 @@ private fun HomeHero(songs: List<SongItem>, connection: PlayerConnection?, scrol
                 }
             }
         }
-        Row(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 52.dp)) {
+        Row(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 76.dp)) {
             repeat(songs.size) { i ->
                 val active = pager.currentPage == i
                 val w by androidx.compose.animation.core.animateDpAsState(
