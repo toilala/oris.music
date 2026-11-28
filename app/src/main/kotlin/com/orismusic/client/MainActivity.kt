@@ -490,7 +490,13 @@ class MainActivity : ComponentActivity() {
                                             },
                                     ) {
                                         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
-                                        Box(Modifier.fillMaxSize().graphicsLayer { alpha = ((t - 0.2f) / 0.5f).coerceIn(0f, 1f) }) {
+                                        val startTop = from?.top ?: (fullH - 160f)
+                                        Box(
+                                            Modifier.fillMaxSize().graphicsLayer {
+                                                alpha = ((t - 0.2f) / 0.5f).coerceIn(0f, 1f)
+                                                translationY = startTop * (1f - t)
+                                            },
+                                        ) {
                                         NowPlayingScreen(
                                             connection = conn,
                                             onCollapse = { navigation = navigation.closePlayer() },
