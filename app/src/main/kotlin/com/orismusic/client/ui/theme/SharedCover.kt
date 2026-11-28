@@ -2,7 +2,12 @@
 
 package com.orismusic.client.ui.theme
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
@@ -10,9 +15,14 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import com.orismusic.client.ui.screens.DetailTarget
@@ -37,6 +47,29 @@ fun coverKey(target: DetailTarget): String? =
 fun SharedCoverHost(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     SharedTransitionLayout(modifier) {
         CompositionLocalProvider(LocalCoverScope provides this) { content() }
+    }
+}
+
+/** Home and a detail page, one in front of the other, sharing covers. The detail page keeps its last target so its exit still has content to move. */
+@Composable
+fun DetailStage(detail: DetailTarget?, detailPage: @Composable (DetailTarget) -> Unit, home: @Composable () -> Unit) {
+    var lastDetail by remember { mutableStateOf<DetailTarget?>(null) }
+    if (detail != null) lastDetail = detail
+    SharedCoverHost(Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = detail != null,
+            enter = fadeIn(OrisMotion.standard()) + slideInVertically(OrisMotion.smooth()) { it / 40 },
+            exit = fadeOut(OrisMotion.quick()) + slideOutVertically(OrisMotion.smooth()) { it / 40 },
+        ) {
+            CoverVisibility { lastDetail?.let { detailPage(it) } }
+        }
+        AnimatedVisibility(
+            visible = detail == null,
+            enter = fadeIn(OrisMotion.quick(delayMillis = 60)),
+            exit = fadeOut(OrisMotion.micro()),
+        ) {
+            CoverVisibility { home() }
+        }
     }
 }
 

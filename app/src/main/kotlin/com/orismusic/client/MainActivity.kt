@@ -351,36 +351,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         ) { innerPadding ->
-                            val openDetail = detail
-                            // The last shown page, so the exit slide still has content to move.
-                            var lastDetail by remember { mutableStateOf<com.orismusic.client.ui.screens.DetailTarget?>(null) }
                             androidx.compose.runtime.CompositionLocalProvider(com.orismusic.client.ui.LocalBottomInset provides innerPadding.calculateBottomPadding()) {
-                            // Detail pages open out of the cover that was tapped and fold back into it.
-                            if (openDetail != null) lastDetail = openDetail
-                            com.orismusic.client.ui.theme.SharedCoverHost(Modifier.fillMaxSize()) {
-                            AnimatedVisibility(
-                                visible = openDetail != null,
-                                enter = fadeIn(OrisMotion.standard()) + androidx.compose.animation.slideInVertically(OrisMotion.smooth()) { it / 40 },
-                                exit = fadeOut(OrisMotion.quick()) + androidx.compose.animation.slideOutVertically(OrisMotion.smooth()) { it / 40 },
+                            com.orismusic.client.ui.theme.DetailStage(
+                                detail = detail,
+                                detailPage = { d ->
+                                    com.orismusic.client.ui.screens.DetailScreen(
+                                        target = d,
+                                        connection = connection,
+                                        onBack = { detail = detailBack; detailBack = null },
+                                        onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = d; detail = it } } },
+                                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                                    )
+                                },
                             ) {
-                                CoverVisibility {
-                                lastDetail?.let { d ->
-                                com.orismusic.client.ui.screens.DetailScreen(
-                                    target = d,
-                                    connection = connection,
-                                    onBack = { detail = detailBack; detailBack = null },
-                                    onOpen = { next -> openScope.launch { com.orismusic.client.ui.screens.openOrPlay(next, connection) { detailBack = d; detail = it } } },
-                                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
-                                )
-                                }
-                                }
-                            }
-                            AnimatedVisibility(
-                                visible = openDetail == null,
-                                enter = fadeIn(OrisMotion.quick(delayMillis = 60)),
-                                exit = fadeOut(OrisMotion.micro()),
-                            ) {
-                            CoverVisibility {
                             androidx.compose.animation.AnimatedContent(
                                 targetState = selectedTab,
                                 transitionSpec = {
@@ -423,8 +406,6 @@ class MainActivity : ComponentActivity() {
                                         .fillMaxSize()
                                         .statusBarsPadding(),
                                 )
-                            }
-                            }
                             }
                             }
                             }
