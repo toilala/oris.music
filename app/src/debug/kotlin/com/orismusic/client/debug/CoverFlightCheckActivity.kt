@@ -67,9 +67,9 @@ class CoverFlightCheckActivity : ComponentActivity() {
             OrisTheme {
                 var detail by rememberSaveable { mutableStateOf<DetailTarget?>(null) }
                 BackHandler(enabled = detail != null) { detail = null }
-                val loaded by produceState(0) {
+                val loaded by produceState("") {
                     while (true) {
-                        value = playlists.count { LoadedCovers.has(it.thumbnail) }
+                        value = playlists.indices.filter { LoadedCovers.has(playlists[it].thumbnail) }.joinToString(",")
                         delay(200)
                     }
                 }
@@ -84,7 +84,7 @@ class CoverFlightCheckActivity : ComponentActivity() {
                     ) {
                         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().padding(top = 28.dp)) {
                             Text("Cover flight fixture", modifier = Modifier.padding(horizontal = 20.dp))
-                            Text("covers loaded $loaded of ${playlists.size}", modifier = Modifier.padding(horizontal = 20.dp))
+                            Text("covers loaded [$loaded]", modifier = Modifier.padding(horizontal = 20.dp))
                             Spacer(Modifier.height(20.dp))
                             CommunityPlaylistsSection(playlists, onOpen = { detail = it })
                         }

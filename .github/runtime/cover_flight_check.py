@@ -153,6 +153,17 @@ def wait_text(text, seconds):
     return False
 
 
+def wait_loaded(idx, seconds):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        for l in labels():
+            m = re.search(r'covers loaded \[([\d,]*)\]', l)
+            if m and str(idx) in m.group(1).split(','):
+                return True
+        time.sleep(1.5)
+    return False
+
+
 def launch_fixture(theme):
     stop_app()
     prefs('appearance', APPEARANCE % theme)
@@ -162,8 +173,8 @@ def launch_fixture(theme):
 def flight_leg(theme):
     tag = theme.lower()
     launch_fixture(theme)
-    if not wait_text('covers loaded 4 of 4', 45):
-        print('PREREQ FAILED %s: covers did not all report a successful load; labels=%s' % (tag, sorted(labels())[:12]), flush=True)
+    if not wait_loaded(0, 45):
+        print('PREREQ FAILED %s: the tapped cover (0) never reported a successful load; labels=%s' % (tag, sorted(labels())[:12]), flush=True)
         shot(tag + '_fixture_notready')
         return
     time.sleep(1)
@@ -202,8 +213,8 @@ def interrupted_leg():
     inside the opening motion. The script prints how long after the tap that was; the sheet is the
     evidence that the picture was mid-flight."""
     launch_fixture('Light')
-    if not wait_text('covers loaded 4 of 4', 45):
-        print('PREREQ FAILED interrupted: covers not loaded', flush=True)
+    if not wait_loaded(1, 45):
+        print('PREREQ FAILED interrupted: the tapped cover (1) never reported a successful load', flush=True)
         return
     time.sleep(1)
     card = fixture_card('Fixture playlist 1')
