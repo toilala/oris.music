@@ -39,7 +39,16 @@ class MorphGrabTest {
             diagWarn = "diag probe failed: ${e.message}"
         }
 
-        fun sheetTop(): Int? = device.findObject(By.desc("Collapse player"))?.visibleBounds?.top
+        fun sheetTop(): Int? {
+            repeat(3) {
+                try {
+                    return device.findObject(By.desc("Collapse player"))?.visibleBounds?.top
+                } catch (stale: androidx.test.uiautomator.StaleObjectException) {
+                    // The node was recycled mid-animation; ask again.
+                }
+            }
+            return null
+        }
         fun settleTop(): Int? {
             var last: Int? = null
             var stable = 0

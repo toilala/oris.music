@@ -445,7 +445,7 @@ fun NowPlayingScreen(
         ) {
             com.orismusic.client.ui.screens.QueueScreen(
                 connection = connection,
-                modifier = Modifier.fillMaxWidth().height(520.dp),
+                modifier = Modifier.fillMaxWidth().height((androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp).navigationBarsPadding(),
                 onBack = { queueOpen = false },
                 onOpenPlayer = { queueOpen = false },
             )

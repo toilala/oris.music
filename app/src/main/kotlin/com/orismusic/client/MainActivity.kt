@@ -549,7 +549,7 @@ class MainActivity : ComponentActivity() {
                                             com.orismusic.client.ui.components.Artwork(
                                                 flyArt, Modifier.fillMaxSize(),
                                                 androidx.compose.foundation.shape.RoundedCornerShape(corner(0), corner(1), corner(2), corner(3)),
-                                                null, px = 600,
+                                                null, px = 200,
                                             )
                                         }
                                     }
