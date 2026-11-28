@@ -60,6 +60,7 @@ class DetailCoverTest {
             }
         }
         rule.waitForIdle()
+        settleCover()
         val loading = rule.onNodeWithTag("detail-cover").fetchSemanticsNode().id
         rule.runOnIdle { state = ready }
         rule.waitForIdle()
@@ -67,6 +68,13 @@ class DetailCoverTest {
         rule.runOnIdle { state = DetailState.Failed }
         rule.waitForIdle()
         assertEquals(loading, rule.onNodeWithTag("detail-cover").fetchSemanticsNode().id)
+    }
+
+    // The fixture url never resolves, so Artwork swaps to its stand-in once Coil reports the error.
+    // Measure only after that has happened, or the swap lands mid-test and looks like a recreation.
+    private fun settleCover() {
+        rule.waitUntil(10_000) { !LoadedCovers.has(target.thumbnail!!) }
+        rule.waitForIdle()
     }
 
     private fun widths(tag: String) =
