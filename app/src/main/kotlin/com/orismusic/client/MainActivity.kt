@@ -556,7 +556,7 @@ private fun FloatingNav(selected: Int, collapsed: Boolean, tint: androidx.compos
     )
     androidx.compose.foundation.layout.Box(
         Modifier.fillMaxWidth().navigationBarsPadding()
-            .padding(top = 4.dp, bottom = com.orismusic.client.settings.NavSettings.lift.bottom.dp)
+            .padding(top = if (wide) 10.dp else 4.dp, bottom = com.orismusic.client.settings.NavSettings.lift.bottom.dp)
             .graphicsLayer { translationY = slide * (size.height + 80.dp.toPx()) },
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {

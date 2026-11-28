@@ -94,8 +94,9 @@ fun OrisDock(
     }
     // While a song is loaded the dock wears the same artwork colour as the mini player
     // above it, a step quieter, so the stack reads as one set instead of two stray pills.
+    val solidBase = if (wide && NavSettings.style != NavStyle.Clear) bodyBase.copy(alpha = 1f) else bodyBase
     val body by animateColorAsState(
-        tint?.let { androidx.compose.ui.graphics.lerp(bodyBase, it, 0.24f) } ?: bodyBase,
+        tint?.let { androidx.compose.ui.graphics.lerp(solidBase, it.copy(alpha = solidBase.alpha), 0.24f) } ?: solidBase,
         OrisMotion.slow(), label = "dock body",
     )
     val none = selected < 0
@@ -121,7 +122,7 @@ fun OrisDock(
                 else Modifier,
             ),
     ) {
-        val lensInset = (12 - NavSettings.width.extra / 4).dp
+        val lensInset = if (wide) 20.dp else (12 - NavSettings.width.extra / 4).dp
         val left by animateDpAsState(effTabW * sel, spring(0.6f, if (stretch && right) 220f else if (stretch) 1000f else 420f), label = "lens left")
         val end by animateDpAsState(effTabW * (sel + 1), spring(0.6f, if (stretch && right) 1000f else if (stretch) 220f else 420f), label = "lens right")
     Box(
