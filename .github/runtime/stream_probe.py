@@ -14,10 +14,27 @@ FAIL_FRAGMENTS = ['refused', 'not a bot', 'No playable stream', 'TIMED OUT', 'NE
 KEEP = ('OrisDiag', 'YTPlayerUtils', 'BitChord', 'InnerTube', 'PoToken', 'poToken', 'BotGuard',
         'AndroidRuntime', 'ExoPlayer', 'visitor', 'ITX', 'OrisHarness')
 
-def media_position():
+def sessions():
+    # One entry per app media session: title as the session reports it, state and position.
     out = adb('shell', 'dumpsys', 'media_session').decode(errors='replace')
-    vals = [int(m) for m in re.findall(r'position=(\d+)', out)]
-    return max(vals) if vals else None
+    found = []
+    for block in re.split(r'\n(?=\s{2}\S)', out):
+        if PKG not in block:
+            continue
+        desc = re.search(r'description=([^\n]*)', block)
+        pos = re.search(r'position=(\d+)', block)
+        st = re.search(r'state=(\d+)', block)
+        found.append((desc.group(1).strip() if desc else '?', int(st.group(1)) if st else None,
+                      int(pos.group(1)) if pos else None))
+    return found
+
+
+def media_position():
+    # Only a session that is not the local tone counts as the tapped track.
+    for title, st, pos in sessions():
+        if 'Runtime local tone' not in title and pos is not None:
+            return pos
+    return None
 
 restart_app('Home', seconds=60)
 
@@ -63,6 +80,7 @@ with open(f'{OUT}/stream-probe-logcat.txt', 'w') as f:
     f.write('\n'.join(lines) + '\n')
 print('PROBE ui-state=' + state + (' fragment=' + frag if frag else ''), flush=True)
 print('PROBE positions p1=' + str(p1) + ' p2=' + str(p2), flush=True)
+print('PROBE sessions=' + repr(sessions()), flush=True)
 print('PROBE logcat evidence (' + str(len(lines)) + ' lines):', flush=True)
 mark = next((i for i, l in enumerate(lines) if 'phase=probe-tap' in l), None)
 print('PROBE tap marker at kept-line index ' + str(mark) + ' of ' + str(len(lines)), flush=True)
