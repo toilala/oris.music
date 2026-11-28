@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import com.orismusic.client.ui.theme.OrisShapes
@@ -74,7 +75,7 @@ fun YTItem.toDetailTarget(): DetailTarget? = when (this) {
     else -> null
 }
 
-private class DetailContent(
+internal class DetailContent(
     val title: String,
     val subtitle: String?,
     val thumbnail: String?,
@@ -82,7 +83,7 @@ private class DetailContent(
     val more: List<Pair<String, List<YTItem>>>,
 )
 
-private sealed interface DetailState {
+internal sealed interface DetailState {
     data object Loading : DetailState
     class Ready(val content: DetailContent) : DetailState
     data object Failed : DetailState
@@ -144,6 +145,37 @@ fun DetailScreen(
         )
     }
 
+    DetailPage(target, state, connection, onBack, onOpen, onRetry = { attempt++ }, modifier = modifier)
+}
+
+/** The page for one loading state. The cover is registered once, whatever the state, so a load finishing mid-flight does not replace it. */
+@Composable
+internal fun DetailPage(
+    target: DetailTarget,
+    state: DetailState,
+    connection: PlayerConnection?,
+    onBack: () -> Unit,
+    onOpen: (DetailTarget) -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ready = (state as? DetailState.Ready)?.content
+    val coverUrl = target.thumbnail ?: ready?.thumbnail
+    val coverShape = if (target.kind == "artist") CircleShape else OrisShapes.Panel
+    fun play(content: DetailContent, start: Int, shuffle: Boolean = false) {
+        val c = connection ?: return
+        val ordered = if (shuffle) content.songs.shuffled() else content.songs
+        c.playQueue(ListQueue(title = content.title, items = ordered.map { it.toMediaItem() },
+            startIndex = if (shuffle) 0 else start))
+        com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
+    }
+    // A single or one-track release is just a song: play it now instead of showing a page.
+    androidx.compose.runtime.LaunchedEffect(ready) {
+        if (ready != null && target.kind != "artist" && ready.songs.size == 1 && connection != null) {
+            play(ready, 0)
+            onBack()
+        }
+    }
     val tint by androidx.compose.animation.animateColorAsState(
         targetValue = com.orismusic.client.ui.components.rememberArtworkColor(target.thumbnail)
             ?: MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -153,100 +185,81 @@ fun DetailScreen(
     Column(
         modifier = modifier
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                listOf(tint.copy(alpha = 0.65f), MaterialTheme.colorScheme.background), endY = 1400f))
-            ,
+                listOf(tint.copy(alpha = 0.65f), MaterialTheme.colorScheme.background), endY = 1400f)),
     ) {
         IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
-        when (val s = state) {
-            DetailState.Loading -> Column(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                val loadingShape = if (target.kind == "artist") CircleShape else OrisShapes.Panel
-                if (target.thumbnail != null) com.orismusic.client.ui.components.Artwork(
-                    url = target.thumbnail,
-                    shape = loadingShape,
-                    modifier = Modifier.sharedCover(coverKey(target)).size(220.dp).shadow(20.dp, loadingShape),
-                )
-                else Box(Modifier.size(220.dp).clip(loadingShape).shimmer())
-                Spacer(Modifier.height(16.dp))
-                Box(Modifier.width(200.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).shimmer())
-                Spacer(Modifier.height(24.dp))
-                repeat(5) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
+            item(key = "header") {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (coverUrl != null) com.orismusic.client.ui.components.Artwork(
+                        url = coverUrl,
+                        shape = coverShape,
+                        modifier = Modifier.sharedCover(coverKey(target)).testTag("detail-cover").size(220.dp)
+                            .shadow(20.dp, coverShape),
+                    )
+                    else Box(Modifier.size(220.dp).clip(coverShape).shimmer())
+                    if (ready != null) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(ready.title, style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        ready.subtitle?.let {
+                            Text(it, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        if (ready.songs.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { play(ready, 0) }, enabled = connection != null) {
+                                    Icon(Icons.Filled.PlayArrow, null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Play")
+                                }
+                                OutlinedButton(onClick = { play(ready, 0, shuffle = true) }, enabled = connection != null) {
+                                    Icon(Icons.Filled.Shuffle, null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Shuffle")
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    } else if (state is DetailState.Loading) {
+                        Spacer(Modifier.height(16.dp))
+                        Box(Modifier.width(200.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).shimmer())
+                        Spacer(Modifier.height(24.dp))
+                    }
+                }
+            }
+            when (state) {
+                DetailState.Loading -> items(5, key = { "loading-$it" }) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Box(Modifier.size(com.orismusic.client.ui.theme.OrisDimens.ListThumb).clip(OrisShapes.Thumb).shimmer())
                         Spacer(Modifier.width(14.dp))
                         Box(Modifier.width(170.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
                     }
                 }
-            }
-            DetailState.Failed -> com.orismusic.client.ui.components.AsyncError(
-                title = "This page could not load",
-                body = "Check your connection and try again.",
-                onRetry = { attempt++ },
-            )
-            is DetailState.Ready -> {
-                val content = s.content
-                fun play(start: Int, shuffle: Boolean = false) {
-                    val c = connection ?: return
-                    val ordered = if (shuffle) content.songs.shuffled() else content.songs
-                    c.playQueue(ListQueue(title = content.title, items = ordered.map { it.toMediaItem() },
-                        startIndex = if (shuffle) 0 else start))
-                    com.orismusic.client.ui.navigation.PlayerLaunch.maybeOpen()
+                DetailState.Failed -> item(key = "failed") {
+                    com.orismusic.client.ui.components.AsyncError(
+                        title = "This page could not load",
+                        body = "Check your connection and try again.",
+                        onRetry = onRetry,
+                    )
                 }
-                // A single or one-track release is just a song: play it now instead of showing a page.
-                androidx.compose.runtime.LaunchedEffect(content) {
-                    if (target.kind != "artist" && content.songs.size == 1 && connection != null) {
-                        play(0)
-                        onBack()
-                    }
-                }
-                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = com.orismusic.client.ui.bottomInsetPadding()) {
-                    item(key = "header") {
-                        Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            val artShape = if (target.kind == "artist") CircleShape else OrisShapes.Panel
-                            com.orismusic.client.ui.components.Artwork(
-                                url = target.thumbnail ?: content.thumbnail,
-                                shape = artShape,
-                                modifier = Modifier.sharedCover(coverKey(target)).size(220.dp)
-                                    .shadow(20.dp, artShape),
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(content.title, style = MaterialTheme.typography.headlineSmall,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            content.subtitle?.let {
-                                Text(it, style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            if (content.songs.isNotEmpty()) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(onClick = { play(0) }, enabled = connection != null) {
-                                        Icon(Icons.Filled.PlayArrow, null)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Play")
-                                    }
-                                    OutlinedButton(onClick = { play(0, shuffle = true) }, enabled = connection != null) {
-                                        Icon(Icons.Filled.Shuffle, null)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Shuffle")
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                        }
-                    }
+                is DetailState.Ready -> {
+                    val content = state.content
                     itemsIndexed(content.songs, key = { index, song -> "song-$index-${song.id}" }) { index, song ->
                         DetailRow(
                             title = song.title,
                             subtitle = song.artists.joinToString { it.name },
                             thumbnail = song.thumbnail,
-                            onClick = { play(index) },
+                            onClick = { play(content, index) },
                         )
                     }
                     content.more.forEachIndexed { sectionIndex, (heading, items) ->
