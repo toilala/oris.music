@@ -35,6 +35,8 @@ import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lyrics
@@ -106,6 +108,8 @@ fun NowPlayingScreen(
     modifier: Modifier = Modifier,
     onQueue: () -> Unit = {},
     onOpenArtist: (String, String) -> Unit = { _, _ -> },
+    onArtworkBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    artworkAlpha: () -> Float = { 1f },
 ) {
     val context = LocalContext.current
     val metadata by connection.currentMetadata.collectAsState()
@@ -244,7 +248,7 @@ fun NowPlayingScreen(
                     } else {
                         val side = min(maxWidth.value - 64f, maxHeight.value).coerceAtLeast(120f).dp
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            ArtworkCarousel(connection, side)
+                            ArtworkCarousel(connection, side, onArtworkBounds, artworkAlpha)
                         }
                     }
                 }
@@ -460,7 +464,12 @@ fun NowPlayingScreen(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose.ui.unit.Dp) {
+private fun ArtworkCarousel(
+    connection: PlayerConnection,
+    side: androidx.compose.ui.unit.Dp,
+    onBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    alphaOf: () -> Float,
+) {
     val player = connection.player
     val index by connection.currentMediaItemIndex.collectAsState()
     val pagerState = rememberPagerState(initialPage = 1) { 3 }
@@ -482,7 +491,10 @@ private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose
 
     HorizontalPager(
         state = pagerState,
-        modifier = Modifier.size(side),
+        modifier = Modifier
+            .size(side)
+            .androidx_pos(onBounds)
+            .graphicsLayer { alpha = alphaOf() },
         pageSpacing = 16.dp,
         flingBehavior = PagerDefaults.flingBehavior(
             state = pagerState,
@@ -522,3 +534,6 @@ private fun ArtworkCarousel(connection: PlayerConnection, side: androidx.compose
         }
     }
 }
+
+private fun Modifier.androidx_pos(onBounds: (androidx.compose.ui.geometry.Rect) -> Unit): Modifier =
+    this.onGloballyPositioned { onBounds(it.boundsInRoot()) }

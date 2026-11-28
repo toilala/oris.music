@@ -85,6 +85,7 @@ fun MiniPlayer(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     embedded: Boolean = false,
     wide: Boolean = false,
 ) {
@@ -207,7 +208,7 @@ fun MiniPlayer(
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(40.dp).clip(CircleShape).border(1.dp, outline.copy(alpha = 0.3f), CircleShape),
+                    modifier = Modifier.size(40.dp).onGloballyPositioned { onCoverBounds(it.boundsInRoot()) }.clip(CircleShape).border(1.dp, outline.copy(alpha = 0.3f), CircleShape),
                 ) {
                     Artwork(artwork, Modifier.size(40.dp), CircleShape, metadata.title?.toString(), px = 200)
                 }

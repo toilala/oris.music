@@ -41,7 +41,7 @@ def ensure_ffmpeg():
     print('FFMPEG ' + ('ready' if ok else 'unavailable (apt rc=' + str(r.returncode) + ')'), flush=True)
     return ok
 
-def emit_mp4_frames(tag, mp4_path, frames=10, span=6.0):
+def emit_mp4_frames(tag, mp4_path, frames=10, span=6.0, width=540):
     # The gesture sits at the start of every leg's recording, so sample the first span
     # seconds densely instead of spreading few frames across a mostly idle tail.
     """Key frames of a recorded transition as ORIS_IMAGE chunks, so the motion itself
@@ -68,7 +68,7 @@ def emit_mp4_frames(tag, mp4_path, frames=10, span=6.0):
         ts = window * (i + 0.5) / frames
         png = f'{OUT}/{tag}_f{i}.png'
         r = subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{ts:.2f}', '-i', mp4_path,
-                            '-frames:v', '1', '-vf', 'scale=540:-1', png], capture_output=True)
+                            '-frames:v', '1', '-vf', f'scale={width}:-1', png], capture_output=True)
         if r.returncode != 0 or not os.path.exists(png):
             print('FRAME FAIL ' + tag + ' f' + str(i), flush=True)
             continue

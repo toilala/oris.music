@@ -260,6 +260,8 @@ class MainActivity : ComponentActivity() {
                         var grabbedMidClose by remember { mutableStateOf(false) }
                         val morph = remember { androidx.compose.animation.core.Animatable(0f) }
                         var miniRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                        var miniCover by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                        var playerCover by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
                         val dragScope = androidx.compose.runtime.rememberCoroutineScope()
                         val dragDeltas = remember { FloatArray(4) }
                         var dragDeltaIx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -309,6 +311,7 @@ class MainActivity : ComponentActivity() {
                                                 MiniPlayer(
                                                     connection = conn,
                                                     onExpand = { navigation = navigation.openPlayer() },
+                                                    onCoverBounds = { if (morph.value < 0.01f) miniCover = it },
                                                     wide = true,
                                                 )
                                             }
@@ -344,6 +347,7 @@ class MainActivity : ComponentActivity() {
                                                     MiniPlayer(
                                                         connection = it,
                                                         onExpand = { navigation = navigation.openPlayer() },
+                                                        onCoverBounds = { if (morph.value < 0.01f) miniCover = it },
                                                         wide = true,
                                                     )
                                                 }
@@ -500,6 +504,8 @@ class MainActivity : ComponentActivity() {
                                         NowPlayingScreen(
                                             connection = conn,
                                             onCollapse = { navigation = navigation.closePlayer() },
+                                            onArtworkBounds = { playerCover = it.translate(0f, -startTop * (1f - morph.value)) },
+                                            artworkAlpha = { if (miniCover != null && morph.value < 0.985f) 0f else 1f },
                                             onQueue = { navigation = navigation.select(MainTab.Queue.ordinal).closePlayer() },
                                             onOpenArtist = { id, name ->
                                                 openScope.launch {
@@ -509,6 +515,28 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                         )
+                                        }
+                                    }
+                                    val flyFrom = miniCover
+                                    val flyTo = playerCover
+                                    val flyArt = conn.currentMetadata.collectAsState().value?.artworkUri?.toString()
+                                    if (flyFrom != null && flyTo != null && flyArt != null && flyFrom.width > 1f && t > 0.004f && t < 0.985f) {
+                                        val density = androidx.compose.ui.platform.LocalDensity.current
+                                        val l = flyFrom.left + (flyTo.left - flyFrom.left) * t
+                                        val tp = flyFrom.top + (flyTo.top - flyFrom.top) * t
+                                        val w = flyFrom.width + (flyTo.width - flyFrom.width) * t
+                                        val h = flyFrom.height + (flyTo.height - flyFrom.height) * t
+                                        val corner = flyFrom.width / 2f + (with(density) { 6.dp.toPx() } - flyFrom.width / 2f) * t
+                                        Box(
+                                            Modifier
+                                                .offset { IntOffset(l.toInt(), tp.toInt()) }
+                                                .size(with(density) { w.toDp() }, with(density) { h.toDp() }),
+                                        ) {
+                                            com.orismusic.client.ui.components.Artwork(
+                                                flyArt, Modifier.fillMaxSize(),
+                                                androidx.compose.foundation.shape.RoundedCornerShape(with(density) { corner.toDp() }),
+                                                null, px = 600,
+                                            )
                                         }
                                     }
                                 }

@@ -75,7 +75,8 @@ def record_stop(name, proc):
         # are the verdicts and they run on the live UI regardless.
         print('RECORD THIN ' + name + ' (evidence lost, assertions unaffected)', flush=True)
         return
-    emit_mp4_frames(name[:-4], OUT + '/' + name)
+    dense = name.startswith(('morph-leg1', 'morph-leg4'))
+    emit_mp4_frames(name[:-4], OUT + '/' + name, frames=36 if dense else 10, span=5.4 if dense else 6.0, width=270 if dense else 540)
 
 
 def swipe(x1, y1, x2, y2, ms):

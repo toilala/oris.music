@@ -12,7 +12,7 @@ from playback_check import adb, tree, wait_label, screen, restart_app, PKG, OUT
 
 FAIL_FRAGMENTS = ['refused', 'not a bot', 'No playable stream', 'TIMED OUT', 'NETWORK', 'no connection']
 KEEP = ('OrisDiag', 'YTPlayerUtils', 'BitChord', 'InnerTube', 'PoToken', 'poToken', 'BotGuard',
-        'AndroidRuntime', 'ExoPlayer', 'visitor', 'ITX', 'OrisHarness')
+        'AndroidRuntime', 'ExoPlayer', 'MediaCodec', 'HttpDataSource', 'OrisPlayer', 'PlaybackException', 'Player', 'visitor', 'ITX', 'OrisHarness')
 
 def sessions():
     # One entry per app media session: title as the session reports it, state and position.
